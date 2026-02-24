@@ -1,0 +1,752 @@
+import { ref, computed, nextTick } from 'vue';
+import { storeToRefs } from 'pinia';
+import axios from 'axios';
+import * as pdfjsLib from 'pdfjs-dist';
+import { fabric } from 'fabric';
+import { useEditorStore } from '../stores/editorStore';
+
+export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
+  const { resetHistory, saveHistory, setHistoryLock } = canvasHelpers;
+  const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+  // Use Pinia Store
+  const editorStore = useEditorStore();
+  const {
+    variables,
+    templates,
+    pages,
+    currentPageIndex,
+    currentTemplateId,
+    currentReportId,
+    templateName,
+    isPreviewMode,
+    isSidebarOpen,
+    groupedVariables
+  } = storeToRefs(editorStore);
+
+  // Local state that doesn't need to be global
+  const customVarName = ref('');
+  const currentBackground = ref(null);
+  const originalObjectStates = ref({});
+
+  // --- HELPER FUNCTIONS ---
+
+  const cleanFabricObject = (obj) => {
+    if (!obj) return obj;
+    if (obj.textBaseline === 'alphabetical') obj.textBaseline = 'alphabetic';
+    if (obj.styles && typeof obj.styles === 'object') {
+      for (const lineKey in obj.styles) {
+        const line = obj.styles[lineKey];
+        for (const charKey in line) {
+          const charStyle = line[charKey];
+          if (charStyle && charStyle.textBaseline === 'alphabetical')
+            charStyle.textBaseline = 'alphabetic';
+        }
+      }
+    }
+    if ((obj.type === 'group' || obj.type === 'activeSelection') && Array.isArray(obj.objects)) {
+      obj.objects = obj.objects.map(cleanFabricObject);
+    }
+    // Always ensure objects are interactive after save/restore.
+    // applyPreviewDataToCanvas() sets selectable/editable/evented=false — those
+    // states must never be persisted to the saved JSON, or re-import breaks editing.
+    obj.selectable = true;
+    obj.evented = true;
+    if (['textbox', 'text', 'i-text'].includes(obj.type)) {
+      obj.editable = true;
+    }
+    return obj;
+  };
+
+  const sanitizePagesData = (rawPages) => {
+    if (!Array.isArray(rawPages)) return [];
+    return rawPages.map((page) => ({
+      ...page,
+      objects: (page.objects || []).map((obj) => cleanFabricObject(JSON.parse(JSON.stringify(obj))))
+    }));
+  };
+
+  const preparePagesForSave = () => {
+    return pages.value.map((page) => ({
+      id: page.id,
+      background: page.background,
+      originalBackgroundType: page.originalBackgroundType, // Save metadata
+      objects: page.objects.map((obj) => {
+        const serialized = JSON.parse(JSON.stringify(obj));
+        const clean = cleanFabricObject(serialized);
+        clean.left = Math.round(clean.left * 100) / 100;
+        clean.top = Math.round(clean.top * 100) / 100;
+        clean.width = Math.round(clean.width * 100) / 100;
+        clean.height = Math.round(clean.height * 100) / 100;
+        return clean;
+      })
+    }));
+  };
+
+  const sanitizeTemplateName = (name) => {
+    return (name || 'Untitled')
+      .replace(/<[^>]*>/g, '')
+      .trim()
+      .substring(0, 50)
+      .replace(/[^a-z0-9\u0E00-\u0E7F _-]/gi, '_'); // Allow Thai, English, numbers, space, _, -
+  };
+
+  const getMachineId = editorStore.getMachineId;
+
+  const isWorkspaceEmpty = () => {
+    if (!pages.value || pages.value.length === 0) return true;
+    if (pages.value.length > 1) return false;
+    const p = pages.value[0];
+    return !p.background && (!p.objects || p.objects.length === 0);
+  };
+
+  const checkIsGeneratedPdf = async (file) => {
+    // 1. Try Server Check first
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      // BUG-008 fix: corrected endpoint from '/check-pdf' to '/check-pdf-type'
+      const res = await axios.post(`${SERVER_URL}/check-pdf-type`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      // Return embeddedLayout if available
+      return {
+        id: res.data.id,
+        type: res.data.type,
+        embeddedLayout: res.data.embeddedLayout
+      };
+    } catch (e) {
+      console.warn('Server Check PDF skipped/failed. Trying Client-side...', e);
+    }
+
+    // 2. Client-side Fallback (Robust)
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      const metadata = await pdf.getMetadata();
+
+      if (metadata && metadata.info) {
+        // Check Subject for 'layout:' prefix
+        const subject = metadata.info.Subject;
+        if (subject && subject.startsWith('layout:')) {
+          const base64Str = subject.substring(7); // Remove 'layout:'
+          try {
+            // Robust Base64 Decoding that handles binary/escaped content
+            const binaryString = atob(base64Str);
+            let jsonStr;
+
+            // Check for UTF-16BE BOM (FE FF)
+            if (binaryString.charCodeAt(0) === 0xFE && binaryString.charCodeAt(1) === 0xFF) {
+              const buf = new Uint8Array(binaryString.length - 2);
+              for (let i = 2; i < binaryString.length; i++) buf[i - 2] = binaryString.charCodeAt(i);
+              // Swap for little-endian if needed or use TextDecoder
+              jsonStr = new TextDecoder('utf-16be').decode(buf);
+            } else {
+              // Try UTF-8 (URL safe)
+              try {
+                jsonStr = decodeURIComponent(escape(binaryString));
+              } catch {
+                jsonStr = binaryString; // Raw
+              }
+            }
+
+            const layout = JSON.parse(jsonStr);
+            console.log('Client-side: Found embedded layout in Subject');
+            return { embeddedLayout: layout };
+          } catch (parseErr) {
+            console.error('Failed to parse client-side layout:', parseErr);
+          }
+        }
+      }
+    } catch (clientErr) {
+      console.error('Client-side PDF check failed:', clientErr);
+    }
+
+    return null;
+  };
+
+  const processPdfToImages = async (file) => {
+    const images = [];
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2 });
+        const cvs = document.createElement('canvas');
+        cvs.width = viewport.width;
+        cvs.height = viewport.height;
+        await page.render({ canvasContext: cvs.getContext('2d'), viewport }).promise;
+        images.push(cvs.toDataURL('image/jpeg', 0.8));
+      }
+    } catch (e) {
+      console.error(e);
+      throw new Error('Failed to process PDF');
+    }
+    return images;
+  };
+
+  // --- ACTIONS (Delegated to Store or Logic) ---
+
+  const fetchVariables = editorStore.fetchVariables;
+  const fetchTemplates = editorStore.fetchTemplates;
+
+  const saveReport = async (isSilent = false) => {
+    if (!canvas.value) return;
+    if (typeof window !== 'undefined' && window.saveCurrentPageState) window.saveCurrentPageState();
+
+    const pagesData = preparePagesForSave();
+    const payload = {
+      id: currentReportId.value,
+      templateId: currentTemplateId.value,
+      name: templateName.value || 'Untitled Project',
+      pages: pagesData,
+      status: 'DRAFT'
+    };
+
+    try {
+      const res = await axios.post(`${SERVER_URL}/save-report`, payload);
+      currentReportId.value = res.data.id;
+      if (!isSilent) alert('Project Saved Successfully');
+    } catch (e) {
+      alert('Save Project failed: ' + (e.response?.data?.error || e.message));
+      throw e;
+    }
+  };
+
+  const saveTemplate = async (isSilent = false) => {
+    if (!canvas.value) return;
+    if (typeof window !== 'undefined' && window.saveCurrentPageState) window.saveCurrentPageState();
+
+    const pagesData = preparePagesForSave();
+    const payload = {
+      name: templateName.value || 'Untitled Template',
+      pages: pagesData,
+      userId: getMachineId()
+    };
+
+    try {
+      if (currentTemplateId.value) {
+        await axios.put(`${SERVER_URL}/templates/${currentTemplateId.value}`, payload);
+        if (!isSilent) alert('Template Updated successfully');
+      } else {
+        const response = await axios.post(`${SERVER_URL}/templates`, payload);
+        currentTemplateId.value = response.data.id;
+        if (!isSilent) alert('Template Saved successfully');
+      }
+      await fetchTemplates();
+    } catch (e) {
+      alert('Save Template failed: ' + (e.response?.data || e.message));
+      throw e;
+    }
+  };
+
+  const loadTemplate = async (t) => {
+    if (!canvas.value) return;
+
+    currentTemplateId.value = t._id || t.id;
+    currentReportId.value = null;
+    templateName.value = t.name;
+    isPreviewMode.value = false;
+    originalObjectStates.value = {};
+
+    try {
+      if (t.pages && Array.isArray(t.pages) && t.pages.length > 0) {
+        pages.value = sanitizePagesData(JSON.parse(JSON.stringify(t.pages)));
+      } else {
+        pages.value = [{ id: 0, background: t.background || null, objects: t.objects || [] }];
+      }
+      currentPageIndex.value = 0;
+      if (resetHistory) resetHistory();
+    } catch (error) {
+      console.error('Error loading template:', error);
+    }
+  };
+
+  const loadReportById = async (id) => {
+    try {
+      const res = await axios.get(`${SERVER_URL}/reports/${id}?t=${Date.now()}`);
+      if (res.data) {
+        const r = res.data;
+        currentReportId.value = r.id;
+        currentTemplateId.value = r.templateId;
+        templateName.value = r.name;
+        if (r.pages && Array.isArray(r.pages)) {
+          pages.value = sanitizePagesData(JSON.parse(JSON.stringify(r.pages)));
+          currentPageIndex.value = 0;
+        }
+        if (resetHistory) resetHistory();
+      }
+    } catch (e) {
+      throw e;
+    }
+  };
+
+  const resetCanvas = async () => {
+    if (!canvas.value) return;
+    editorStore.resetState();
+    originalObjectStates.value = {};
+    canvas.value.clear();
+    canvas.value.setBackgroundColor(null, null);
+    if (resetHistory) resetHistory();
+  };
+
+  const togglePreview = (forceMode) => {
+    isPreviewMode.value = forceMode !== undefined ? forceMode : !isPreviewMode.value;
+    if (!canvas.value) return;
+    canvas.value.discardActiveObject();
+    canvas.value.requestRenderAll();
+  };
+
+  // Uses Store Action
+  const addBlankPage = () => {
+    if (pages.value.length > 0 && typeof window !== 'undefined' && window.saveCurrentPageState) {
+      window.saveCurrentPageState();
+    }
+    editorStore.addBlankPage();
+  };
+
+  // Uses Store Action
+  const deleteTemplate = async (id) => {
+    if (!confirm('Delete this template?')) return;
+    try {
+      await axios.delete(`${SERVER_URL}/templates/${id}`);
+      await fetchTemplates();
+      if (currentTemplateId.value === id) await resetCanvas();
+    } catch (e) {
+      alert('Delete failed');
+    }
+  };
+
+  const handleImportWorkspace = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (!isWorkspaceEmpty()) {
+      if (!confirm('⚠️ The workspace is not empty. Replace it?')) return;
+    }
+
+    await resetCanvas();
+
+    if (file.type === 'application/pdf') {
+      const metadata = await checkIsGeneratedPdf(file);
+      let loaded = false;
+
+      // 1. Try to load from Server by ID
+      if (metadata && metadata.id) {
+        if (metadata.type === 'report') {
+          try {
+            await loadReportById(metadata.id);
+            loaded = true;
+          } catch (err) {
+            console.log('Report not found on server');
+          }
+        }
+        if (!loaded) {
+          try {
+            const tRes = await axios.get(`${SERVER_URL}/templates/${metadata.id}?t=${Date.now()}`);
+            if (tRes.data) {
+              await loadTemplate(tRes.data);
+              loaded = true;
+            }
+          } catch (err) {
+            console.log('Template not found on server');
+          }
+        }
+      }
+
+      // 2. Fallback: Use Embedded Layout (Offline Mode)
+      if (!loaded && metadata && metadata.embeddedLayout) {
+        try {
+          console.log('Using embedded layout from PDF...');
+          pages.value = sanitizePagesData(metadata.embeddedLayout);
+          currentPageIndex.value = 0;
+          loaded = true;
+          alert('⚠️ Original template not found. Loaded from PDF metadata (Editable).');
+        } catch (err) {
+          console.error('Failed to load embedded layout', err);
+        }
+      }
+
+      if (loaded) {
+        if (resetHistory) resetHistory();
+        return;
+      }
+
+      try {
+        const images = await processPdfToImages(file);
+        if (images.length > 0) {
+          pages.value = images.map((img, idx) => ({
+            id: Date.now() + idx,
+            background: img,
+            objects: [],
+            originalBackgroundType: 'PDF' // Persist type
+          }));
+        }
+      } catch (err) {
+        alert('Failed to process PDF');
+      }
+    } else if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (f) => {
+        pages.value[0].background = f.target.result;
+        pages.value[0].originalBackgroundType = 'Picture'; // Explicitly set type
+      };
+      reader.readAsDataURL(file);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (resetHistory) resetHistory();
+  };
+
+  const handleImportAppend = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (pages.value.length > 0 && typeof window !== 'undefined' && window.saveCurrentPageState) {
+      window.saveCurrentPageState();
+    }
+
+    const insertIndex = currentPageIndex.value + 1;
+    let newPages = [];
+
+    if (file.type === 'application/pdf') {
+      const images = await processPdfToImages(file);
+      newPages = images.map((img, idx) => ({
+        id: Date.now() + Math.random() + idx,
+        background: img,
+        objects: [],
+        originalBackgroundType: 'PDF' // Persist type
+      }));
+    } else if (file.type.startsWith('image/')) {
+      await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (f) => {
+          newPages.push({
+            id: Date.now(),
+            background: f.target.result,
+            objects: [],
+            originalBackgroundType: 'Picture' // Explicitly set type
+          });
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (newPages.length > 0) {
+      pages.value.splice(insertIndex, 0, ...newPages);
+      currentPageIndex.value = insertIndex;
+    }
+  };
+
+  const addCustomVariable = () => {
+    // BUG-010 fix: validate variable name and deduplicate
+    const name = prompt('Enter variable name (letters, numbers, underscores only):');
+    if (!name) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+      alert(`Invalid variable name "${trimmed}". Use letters, numbers, and underscores only. Must start with a letter or underscore.`);
+      return;
+    }
+    const alreadyExists = variables.value.some((v) => v.key === trimmed);
+    if (alreadyExists) {
+      alert(`Variable "${trimmed}" already exists.`);
+      return;
+    }
+    variables.value.push({ category: 'Custom', label: trimmed, key: trimmed });
+  };
+
+  const togglePagesSidebar = () => {
+    isPagesSidebarOpen.value = !isPagesSidebarOpen.value;
+  };
+
+  const getDefaultPageImage = (index) => {
+    return `data:image/svg+xml;base64,${btoa('<svg width="79" height="112" xmlns="http://www.w3.org/2000/svg"><rect width="79" height="112" fill="white"/></svg>')}`;
+  };
+
+  // --- Unified Workflow (Phase 3) ---
+
+  const currentFileHandle = ref(null);
+
+  const getFullProjectData = () => {
+    return {
+      name: templateName.value || 'Untitled Project',
+      pages: preparePagesForSave(),
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      type: 'hybrid-project'
+    };
+  };
+
+  const unifiedSave = async (generatePdfFn, variableMap = null) => {
+    // 0. Ensure we have a handle immediately to preserve User Gesture (Critical for Save As)
+    if (window.showSaveFilePicker && !currentFileHandle.value) {
+      try {
+        const options = {
+          suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`,
+          types: [
+            {
+              description: 'Hybrid PDF Project',
+              accept: { 'application/pdf': ['.pdf'] }
+            }
+          ]
+        };
+        currentFileHandle.value = await window.showSaveFilePicker(options);
+      } catch (err) {
+        if (err.name === 'AbortError') return; // User cancelled
+        console.error('File picker failed:', err);
+        return;
+      }
+    }
+
+    try {
+      await saveReport(true); // Silent save to DB
+    } catch (e) {
+      console.warn('Silent DB save failed:', e);
+      // Non-blocking: we still proceed with the local file save.
+      // Show a non-blocking warning in the console so developers can diagnose.
+    }
+
+    // 2. Save to Local File (Hybrid PDF)
+    if (!window.showSaveFilePicker) {
+      alert('Your browser does not support local file saving. Project saved to History only.');
+      return;
+    }
+
+    try {
+      const projectData = getFullProjectData();
+      const pdfBlob = await generatePdfFn(pages.value, projectData, variableMap);
+
+      if (!pdfBlob) throw new Error('Failed to generate Hybrid PDF');
+
+      const fileHandle = currentFileHandle.value;
+      if (!fileHandle) return; // Should not happen if step 0 succeeded
+
+      // Create a writable stream to the file
+      let writable;
+      try {
+        // Attempt to silently overwrite the existing file
+        writable = await fileHandle.createWritable();
+      } catch (writeErr) {
+        console.warn('The file was modified externally or locked. Requesting new save location...', writeErr);
+
+        // 1. Clear the broken shortcut
+        currentFileHandle.value = null;
+
+        // 2. Open the "Save As" dialog again so the user can re-select the file or pick a new name
+        const options = {
+          suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`,
+          types: [{ description: 'Hybrid PDF Project', accept: { 'application/pdf': ['.pdf'] } }]
+        };
+        currentFileHandle.value = await window.showSaveFilePicker(options);
+
+        // 3. Create the writable stream with the fresh handle
+        writable = await currentFileHandle.value.createWritable();
+      }
+
+      // Write the file and close it
+      await writable.write(pdfBlob);
+      await writable.close();
+
+      alert('Project saved successfully as Hybrid PDF!');
+    } catch (err) {
+      console.error('Unified Save Failed:', err);
+      alert('Failed to save local file: ' + err.message);
+    }
+  };
+
+  const handleUnifiedImport = async () => {
+    // Open File Picker
+    if (!window.showOpenFilePicker) {
+      alert('Browser not supported.');
+      return;
+    }
+
+    try {
+      const [fileHandle] = await window.showOpenFilePicker({
+        types: [
+          {
+            description: 'All Supported Configuration',
+            accept: {
+              'application/pdf': ['.pdf'],
+              'application/json': ['.json', '.drt'],
+              'image/*': ['.png', '.jpg', '.jpeg']
+            }
+          }
+        ],
+        multiple: false
+      });
+
+      const file = await fileHandle.getFile();
+      currentFileHandle.value = fileHandle; // Keep handle for saving back
+
+      if (!isWorkspaceEmpty()) {
+        if (!confirm('Replace current workspace?')) return;
+      }
+
+      // 1. JSON Project
+      if (
+        file.type === 'application/json' ||
+        file.name.endsWith('.json') ||
+        file.name.endsWith('.drt')
+      ) {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        await loadProjectData(data, file.name);
+        return;
+      }
+
+      // 2. PDF (Check for Hybrid)
+      if (file.type === 'application/pdf') {
+        await resetCanvas();
+        const metadata = await checkIsGeneratedPdf(file);
+
+        // Hybrid PDF Check?
+        if (metadata && metadata.embeddedLayout) {
+          // PRIORITIZE HYBRID DATA
+          console.log('Hybrid PDF Detected. Loading Project Data...');
+          let projectData = metadata.embeddedLayout;
+
+          // If it's Base64 string from Subject (New Format)
+          if (typeof projectData === 'string') {
+            try {
+              // It might be double encoded or just base64?
+              // server/pdfController returns parsed JSON if it was in subject 'layout:'
+              // But if we used the new client-side embedding, it might be raw string
+              // Let's assume server normalized it, OR we parse it here if needed.
+              // Actually, checkIsGeneratedPdf implementation in useTemplate (above)
+              // returns res.data.embeddedLayout which IS parsed JSON from server.
+            } catch (e) { }
+          }
+
+          // Compatibility with Server Response
+          if (Array.isArray(projectData)) {
+            // Old style (just pages)
+            pages.value = sanitizePagesData(projectData);
+            currentPageIndex.value = 0;
+          } else if (projectData.pages) {
+            // New style (full project)
+            await loadProjectData(projectData, file.name);
+          }
+          alert('Loaded Hybrid Project from PDF');
+        } else {
+          // Standard PDF Import (Backgrounds)
+          const images = await processPdfToImages(file);
+          if (images.length > 0) {
+            pages.value = images.map((img, idx) => ({
+              id: Date.now() + idx,
+              background: img,
+              objects: [],
+              originalBackgroundType: 'PDF'
+            }));
+            currentPageIndex.value = 0;
+          }
+          alert('Imported PDF as Backgrounds');
+        }
+        return;
+      }
+
+      // 3. Image
+      if (file.type.startsWith('image/')) {
+        await resetCanvas();
+        const reader = new FileReader();
+        reader.onload = (f) => {
+          pages.value = [
+            {
+              id: Date.now(),
+              background: f.target.result,
+              objects: [],
+              originalBackgroundType: 'Picture'
+            }
+          ];
+          currentPageIndex.value = 0;
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Import Failed', err);
+        alert('Import Failed: ' + err.message);
+      }
+    }
+  };
+
+  const loadProjectData = async (data, filename) => {
+    await resetCanvas();
+    templateName.value = data.name || filename.replace(/\.(json|pdf|drt)$/i, '');
+    currentTemplateId.value = null; // Detached
+    currentReportId.value = null;
+    isPreviewMode.value = false;
+
+    if (data.pages) {
+      pages.value = sanitizePagesData(data.pages);
+    }
+    currentPageIndex.value = 0;
+    if (resetHistory) resetHistory();
+  };
+
+  const ensureFileHandle = async () => {
+    if (window.showSaveFilePicker && !currentFileHandle.value) {
+      try {
+        const options = {
+          suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`,
+          types: [
+            {
+              description: 'Hybrid PDF Project',
+              accept: { 'application/pdf': ['.pdf'] }
+            }
+          ]
+        };
+        currentFileHandle.value = await window.showSaveFilePicker(options);
+        return !!currentFileHandle.value;
+      } catch (err) {
+        if (err.name === 'AbortError') return false;
+        console.error('File picker failed:', err);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  return {
+    variables,
+    templates,
+    customVarName,
+    templateName,
+    currentBackground,
+    currentTemplateId,
+    currentReportId,
+    isPreviewMode,
+    originalObjectStates,
+    pages,
+    currentPageIndex,
+    isSidebarOpen,
+    groupedVariables,
+
+    fetchVariables,
+    fetchTemplates,
+    saveTemplate,
+    saveReport,
+    loadTemplate,
+    deleteTemplate,
+    resetCanvas,
+    togglePreview,
+    handleImportWorkspace,
+    handleImportAppend,
+    addBlankPage,
+    addCustomVariable,
+    togglePagesSidebar,
+    getDefaultPageImage,
+    cleanFabricObject,
+    preparePagesForSave,
+    sanitizePagesData, // BUG-006 fix: exported so EditorView can use it in openReportFromHistory
+    // Unified Exports
+    unifiedSave,
+    handleUnifiedImport,
+    ensureFileHandle
+
+  };
+}
