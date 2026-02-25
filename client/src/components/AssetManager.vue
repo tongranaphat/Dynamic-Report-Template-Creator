@@ -31,15 +31,16 @@ const assets = ref([]);
 const loading = ref(false);
 
 const fetchAssets = async () => {
-  // In a real app, fetch from API.
-  // For this prototype, we might just store links in localStorage or use a simple API if we build one.
-  // Let's assume we just show what we upload for now in session/local storage or mock it.
-  // Wait, the plan said "create upload route". So let's use that.
-
-  // For now, since we don't have a 'list assets' API in the plan (oops),
-  // I will mock the list with what we upload in this session or localStorage.
-  const stored = localStorage.getItem('user_assets');
-  if (stored) assets.value = JSON.parse(stored);
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  loading.value = true;
+  try {
+    const res = await axios.get(`${apiUrl}/api/assets`);
+    assets.value = res.data;
+  } catch (err) {
+    console.error('Failed to load assets', err);
+  } finally {
+    loading.value = false;
+  }
 };
 
 const uploadAsset = async (event) => {
@@ -58,11 +59,11 @@ const uploadAsset = async (event) => {
 
     const newAsset = {
       url: res.data.url,
-      name: file.name
+      name: file.name,
+      id: res.data.id
     };
 
     assets.value.unshift(newAsset);
-    saveAssets();
   } catch (err) {
     console.error('Upload failed', err);
     alert('อัปโหลดล้มเหลว');
@@ -71,14 +72,25 @@ const uploadAsset = async (event) => {
   }
 };
 
-const deleteAsset = (asset) => {
+const deleteAsset = async (asset) => {
   if (!confirm('ยืนยันระบบกำจัดการลบรูปภาพนี้?')) return;
-  assets.value = assets.value.filter((a) => a !== asset);
-  saveAssets();
-};
-
-const saveAssets = () => {
-  localStorage.setItem('user_assets', JSON.stringify(assets.value));
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  
+  const targetId = asset.id || asset.url.split('/').pop();
+  if (targetId) {
+    try {
+      await axios.delete(`${apiUrl}/api/assets/${targetId}`);
+      assets.value = assets.value.filter((a) => a.id !== targetId && !a.url.endsWith(targetId));
+    } catch (err) {
+      console.error('Failed to delete asset', err);
+      // Remove from UI anyway if it's already deleted in the database (404)
+      if (err.response && err.response.status === 404) {
+        assets.value = assets.value.filter((a) => a.id !== targetId && !a.url.endsWith(targetId));
+      } else {
+        alert('ลบรูปภาพล้มเหลว');
+      }
+    }
+  }
 };
 
 const emit = defineEmits(['select-asset']);

@@ -472,8 +472,9 @@ export function useEditablePdf() {
                     else if (obj.type === 'image' && obj.src) {
                         try {
                             let imgBytes;
-                            let isPng = obj.src.toLowerCase().endsWith('.png');
-                            const isGif = obj.src.toLowerCase().endsWith('.gif');
+                            const srcLower = obj.src.toLowerCase();
+                            let isPng = srcLower.endsWith('.png') || srcLower.startsWith('data:image/png');
+                            const isGif = srcLower.endsWith('.gif') || srcLower.startsWith('data:image/gif');
 
                             if (isGif) {
                                 // PDF-lib doesn't support GIF. Convert to static PNG via Canvas.
@@ -491,13 +492,17 @@ export function useEditablePdf() {
                                     img.onerror = reject;
                                     img.src = obj.src;
                                 });
-                                const imgRes = await fetch(staticUrl);
-                                imgBytes = await imgRes.arrayBuffer();
+                                imgBytes = dataUrlToBytes(staticUrl);
                                 isPng = true;
                             } else {
-                                const imgRes = await fetch(obj.src);
-                                if (!imgRes.ok) continue;
-                                imgBytes = await imgRes.arrayBuffer();
+                                if (srcLower.startsWith('data:')) {
+                                    imgBytes = dataUrlToBytes(obj.src);
+                                    if (!imgBytes) continue;
+                                } else {
+                                    const imgRes = await fetch(obj.src);
+                                    if (!imgRes.ok) continue;
+                                    imgBytes = await imgRes.arrayBuffer();
+                                }
                             }
 
                             let pdfImg;
