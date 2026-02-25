@@ -72,3 +72,11 @@ model Variable {
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 }
+
+model Asset {
+  id        String   @id @default(uuid())
+  filename  String
+  mimetype  String
+  data      Bytes
+  createdAt DateTime @default(now())
+}

@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
 const { asyncHandler } = require('../utils/errorHandler');
+const prisma = require('../prismaClient');
 
 // Enhanced logging utility
 const logger = {
@@ -27,27 +28,32 @@ const logger = {
     }
 };
 
-// Configure multer
-const storage = multer.diskStorage({
-    destination: './uploads/',
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
+// Configure multer to use memory storage
+const storage = multer.memoryStorage();
 
-const upload = multer({ storage });
+const upload = multer({
+    storage,
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 // 1. Check PDF Type & Metadata (Smart Import)
 const checkPdfType = asyncHandler(async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file' });
 
-        const filePath = req.file.path;
-        const fileUrl = `${req.protocol}://${req.get('host')}/${filePath.replace(/\\/g, '/')}`;
+        // Save file to database as asset
+        const asset = await prisma.asset.create({
+            data: {
+                filename: req.file.originalname,
+                mimetype: req.file.mimetype,
+                data: req.file.buffer
+            }
+        });
 
-        // Load PDF to check metadata
-        const fs = require('fs');
-        const existingPdfBytes = fs.readFileSync(filePath);
+        const fileUrl = `${req.protocol}://${req.get('host')}/api/assets/${asset.id}`;
+
+        // Load PDF from buffer to check metadata
+        const existingPdfBytes = req.file.buffer;
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
 
         // --- Safe Metadata Reading ---
@@ -155,19 +161,85 @@ const checkPdfType = asyncHandler(async (req, res) => {
         });
     } catch (error) {
         logger.error('Failed to check PDF:', error);
-        // BUG-009 fix: always delete the uploaded temp file to prevent disk leaks
-        try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch (_) { }
         res.json({ isGenerated: false, url: null });
     }
 });
 
-// 2. Upload Normal Background
-const uploadBackground = (req, res) => {
+// 2. Upload Normal Background / Asset
+const uploadBackground = asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    logger.success('Background uploaded:', fileUrl);
-    res.json({ url: fileUrl });
-};
+
+    const asset = await prisma.asset.create({
+        data: {
+            filename: req.file.originalname,
+            mimetype: req.file.mimetype,
+            data: req.file.buffer
+        }
+    });
+
+    const fileUrl = `${req.protocol}://${req.get('host')}/api/assets/${asset.id}`;
+    logger.success('Asset uploaded to DB:', fileUrl);
+    res.json({ url: fileUrl, id: asset.id });
+});
+
+// GET Asset from DB
+const getAssetFromDb = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const asset = await prisma.asset.findUnique({
+        where: { id }
+    });
+
+    if (!asset) {
+        return res.status(404).json({ error: 'Asset not found' });
+    }
+
+    res.set({
+        'Content-Type': asset.mimetype,
+        'Cache-Control': 'public, max-age=31536000',
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin'
+    });
+    res.end(asset.data); // Use res.end for raw binary buffer
+});
+
+// GET All Assets Metadata
+const getAllAssets = asyncHandler(async (req, res) => {
+    const assets = await prisma.asset.findMany({
+        select: {
+            id: true,
+            filename: true,
+            createdAt: true
+        },
+        orderBy: {
+            createdAt: 'desc'
+        }
+    });
+
+    const formattedAssets = assets.map(asset => ({
+        url: `${req.protocol}://${req.get('host')}/api/assets/${asset.id}`,
+        name: asset.filename,
+        id: asset.id
+    }));
+
+    res.json(formattedAssets);
+});
+
+// DELETE Asset from DB
+const deleteAssetFromDb = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    // Check if it exists
+    const existingAsset = await prisma.asset.findUnique({ where: { id } });
+    if (!existingAsset) {
+        return res.status(404).json({ error: 'Asset not found' });
+    }
+
+    await prisma.asset.delete({
+        where: { id }
+    });
+
+    res.json({ message: 'Asset deleted successfully' });
+});
 
 // 3. Generate PDF (Embed ID, Type & Layout Data)
 const generatePDF = asyncHandler(async (req, res) => {
@@ -304,8 +376,11 @@ const generatePDF = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-    uploadBackground,
-    generatePDF,
     upload,
-    checkPdfType
+    uploadBackground,
+    checkPdfType,
+    generatePDF,
+    getAssetFromDb,
+    getAllAssets,
+    deleteAssetFromDb
 };

@@ -464,14 +464,14 @@ const handleClickOutside = (e) => {
   }
   // Close spacing popup
   const spacingPopup = document.querySelector('.spacing-popup');
-  const spacingBtn = document.querySelector('button[title="Spacing"]');
+  const spacingBtn = document.querySelector('button[title="ระยะห่างตัวอักษรและบรรทัด"]');
   if (e.target.type === 'range') return;
-  if (showSpacing.value && spacingPopup && !spacingPopup.contains(e.target) && !spacingBtn.contains(e.target)) {
+  if (showSpacing.value && spacingPopup && !spacingPopup.contains(e.target) && (!spacingBtn || !spacingBtn.contains(e.target))) {
     showSpacing.value = false;
   }
   const opacityPopup = document.querySelector('.opacity-popup');
-  const opacityBtn = document.querySelector('button[title="Opacity"]');
-  if (showOpacity.value && opacityPopup && !opacityPopup.contains(e.target) && !opacityBtn.contains(e.target)) {
+  const opacityBtn = document.querySelector('button[title="ความโปร่งใส"]');
+  if (showOpacity.value && opacityPopup && !opacityPopup.contains(e.target) && (!opacityBtn || !opacityBtn.contains(e.target))) {
     showOpacity.value = false;
   }
 };

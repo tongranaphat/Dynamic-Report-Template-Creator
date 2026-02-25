@@ -43,6 +43,23 @@ export function useCanvas() {
   const viewportRef = ref(null);
   let isRendering = false;
 
+  const convertUrlToBase64 = async (url) => {
+    if (!url || url.startsWith('data:')) return url;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Failed to convert image to base64', error);
+      return url; // Fallback to original url
+    }
+  };
+
   const setHistoryLock = (status) => {
     isHistoryLocked.value = status;
   };
@@ -206,10 +223,11 @@ export function useCanvas() {
     }
   };
 
-  const setCanvasBackground = (dataUrl) => {
+  const setCanvasBackground = async (dataUrl) => {
     if (!canvas.value) return;
+    const base64Url = await convertUrlToBase64(dataUrl);
     fabric.Image.fromURL(
-      dataUrl,
+      base64Url,
       (img) => {
         img.scaleToWidth(CANVAS_CONSTANTS.PAGE_WIDTH);
         canvas.value.setBackgroundImage(img, () => {
@@ -253,10 +271,11 @@ export function useCanvas() {
     }
   };
 
-  const addImageToCanvas = (url, options = {}) => {
+  const addImageToCanvas = async (url, options = {}) => {
     if (!canvas.value) return;
+    const base64Url = await convertUrlToBase64(url);
     fabric.Image.fromURL(
-      url,
+      base64Url,
       (img) => {
         const defaultLeft =
           options.left !== undefined ? options.left : CANVAS_CONSTANTS.DEFAULT_LEFT;
@@ -300,26 +319,28 @@ export function useCanvas() {
     const imageUrl = e.dataTransfer.getData('image-url');
 
     if (type === 'image' && imageUrl) {
-      fabric.Image.fromURL(
-        imageUrl,
-        (img) => {
-          img.set({
-            id: uuidv4(),
-            left: pointer.x,
-            top: pointer.y,
-            originX: 'center',
-            originY: 'center'
-          });
-          if (img.width > 300) img.scaleToWidth(300);
-          img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false });
+      convertUrlToBase64(imageUrl).then((base64Url) => {
+        fabric.Image.fromURL(
+          base64Url,
+          (img) => {
+            img.set({
+              id: uuidv4(),
+              left: pointer.x,
+              top: pointer.y,
+              originX: 'center',
+              originY: 'center'
+            });
+            if (img.width > 300) img.scaleToWidth(300);
+            img.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false });
 
-          canvas.value.add(img);
-          canvas.value.setActiveObject(img);
-          canvas.value.requestRenderAll();
-          saveHistory();
-        },
-        { crossOrigin: 'anonymous' }
-      );
+            canvas.value.add(img);
+            canvas.value.setActiveObject(img);
+            canvas.value.requestRenderAll();
+            saveHistory();
+          },
+          { crossOrigin: 'anonymous' }
+        );
+      });
       return;
     }
 

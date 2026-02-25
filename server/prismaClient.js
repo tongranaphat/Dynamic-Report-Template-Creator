@@ -1,9 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 
-const globalForPrisma = globalThis;
+// Removing globalThis caching so that nodemon restarts pick up schema changes
+const prisma = new PrismaClient();
 
-if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = new PrismaClient();
-}
-
-module.exports = globalForPrisma.prisma;
+module.exports = prisma;

@@ -10,6 +10,23 @@ export function useCanvasCore() {
   const zoomLevel = ref(1);
   const viewportRef = ref(null);
 
+  const convertUrlToBase64 = async (url) => {
+    if (!url || url.startsWith('data:')) return url;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Failed to convert image to base64', error);
+      return url; // Fallback to original url
+    }
+  };
+
   // Initialize canvas
   const initCanvas = () => {
     const canvasElement = document.getElementById('c');
@@ -81,11 +98,12 @@ export function useCanvasCore() {
   };
 
   // Canvas utility functions
-  const setCanvasBackground = (dataUrl) => {
+  const setCanvasBackground = async (dataUrl) => {
     if (!canvas.value) return;
 
+    const base64Url = await convertUrlToBase64(dataUrl);
     fabric.Image.fromURL(
-      dataUrl,
+      base64Url,
       (img) => {
         img.scaleToWidth(CANVAS_CONSTANTS.PAGE_WIDTH); // A4_WIDTH
         canvas.value.setBackgroundImage(img, canvas.value.renderAll.bind(canvas.value));
