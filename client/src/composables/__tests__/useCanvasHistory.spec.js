@@ -2,16 +2,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ref } from 'vue';
 import { useCanvasHistory } from '../useCanvasHistory.js';
 
+// Shared canvas ref — singleton, same instance returned every time
+const mockCanvas = ref({
+  toJSON: vi.fn(() => ({ objects: [] })),
+  loadFromJSON: vi.fn((json, callback) => {
+    if (callback) callback();
+  }),
+  renderAll: vi.fn()
+});
+
 // Mock useCanvasCore
 vi.mock('../useCanvasCore.js', () => ({
   useCanvasCore: () => ({
-    canvas: ref({
-      toJSON: vi.fn(() => ({ objects: [] })),
-      loadFromJSON: vi.fn((json, callback) => {
-        if (callback) callback();
-      }),
-      renderAll: vi.fn()
-    })
+    canvas: mockCanvas
   })
 }));
 
@@ -19,8 +22,17 @@ describe('useCanvasHistory', () => {
   let history;
 
   beforeEach(() => {
-    // Reset all mocks before each test
     vi.clearAllMocks();
+
+    // Reset mock canvas methods
+    mockCanvas.value = {
+      toJSON: vi.fn(() => ({ objects: [] })),
+      loadFromJSON: vi.fn((json, callback) => {
+        if (callback) callback();
+      }),
+      renderAll: vi.fn()
+    };
+
     history = useCanvasHistory();
   });
 
@@ -32,8 +44,8 @@ describe('useCanvasHistory', () => {
     });
 
     it('should have correct computed properties', () => {
-      expect(history.canUndo.value).toBe(false); // No history yet
-      expect(history.canRedo.value).toBe(false); // No redo states yet
+      expect(history.canUndo.value).toBe(false);
+      expect(history.canRedo.value).toBe(false);
     });
   });
 
@@ -46,14 +58,11 @@ describe('useCanvasHistory', () => {
     });
 
     it('should clear redo stack when new history is saved', () => {
-      // First save some history
       history.saveHistory();
 
-      // Simulate undo to populate redo stack
       history.historyStack.value.push({ objects: [{ id: 'test' }] });
       history.redoStack.value.push({ objects: [] });
 
-      // Save new history
       history.saveHistory();
 
       expect(history.redoStack.value).toHaveLength(0);
@@ -62,7 +71,6 @@ describe('useCanvasHistory', () => {
     it('should limit history size to maxHistorySize', () => {
       const maxSize = 50;
 
-      // Add more than max size
       for (let i = 0; i < maxSize + 10; i++) {
         history.saveHistory();
       }
@@ -79,8 +87,7 @@ describe('useCanvasHistory', () => {
     });
 
     it('should not save history when canvas is null', () => {
-      const { canvas } = useCanvasHistory();
-      canvas.value = null;
+      mockCanvas.value = null;
 
       history.saveHistory();
 
@@ -90,10 +97,9 @@ describe('useCanvasHistory', () => {
 
   describe('undo', () => {
     beforeEach(() => {
-      // Setup initial history
-      history.saveHistory(); // Initial state
-      history.saveHistory(); // First action
-      history.saveHistory(); // Second action
+      history.saveHistory();
+      history.saveHistory();
+      history.saveHistory();
     });
 
     it('should undo to previous state', () => {
@@ -107,7 +113,6 @@ describe('useCanvasHistory', () => {
     });
 
     it('should not undo if history has only initial state', () => {
-      // Reset to only initial state
       history.historyStack.value = [{ objects: [] }];
 
       history.undo();
@@ -128,9 +133,7 @@ describe('useCanvasHistory', () => {
     it('should set isHistoryProcessing during undo operation', () => {
       let processingState = [];
 
-      // Override loadFromJSON to check processing state
-      const { canvas } = useCanvasHistory();
-      canvas.value.loadFromJSON = vi.fn((json, callback) => {
+      mockCanvas.value.loadFromJSON = vi.fn((json, callback) => {
         processingState.push(history.isHistoryProcessing.value);
         if (callback) callback();
       });
@@ -144,10 +147,9 @@ describe('useCanvasHistory', () => {
 
   describe('redo', () => {
     beforeEach(() => {
-      // Setup history with undo operation
-      history.saveHistory(); // Initial state
-      history.saveHistory(); // First action
-      history.undo(); // Creates redo state
+      history.saveHistory();
+      history.saveHistory();
+      history.undo();
     });
 
     it('should redo to next state', () => {
@@ -172,9 +174,7 @@ describe('useCanvasHistory', () => {
     it('should set isHistoryProcessing during redo operation', () => {
       let processingState = [];
 
-      // Override loadFromJSON to check processing state
-      const { canvas } = useCanvasHistory();
-      canvas.value.loadFromJSON = vi.fn((json, callback) => {
+      mockCanvas.value.loadFromJSON = vi.fn((json, callback) => {
         processingState.push(history.isHistoryProcessing.value);
         if (callback) callback();
       });
@@ -217,10 +217,8 @@ describe('useCanvasHistory', () => {
 
       history.initializeHistory();
 
-      // Should not save immediately
       expect(history.historyStack.value).toHaveLength(0);
 
-      // After 100ms delay
       vi.advanceTimersByTime(100);
 
       expect(history.historyStack.value).toHaveLength(1);
@@ -231,8 +229,7 @@ describe('useCanvasHistory', () => {
 
   describe('Error Handling', () => {
     it('should handle saveHistory errors gracefully', () => {
-      const { canvas } = useCanvasHistory();
-      canvas.value.toJSON = vi.fn(() => {
+      mockCanvas.value.toJSON = vi.fn(() => {
         throw new Error('Serialization error');
       });
 
@@ -241,29 +238,23 @@ describe('useCanvasHistory', () => {
     });
 
     it('should handle undo errors gracefully', () => {
-      const { canvas } = useCanvasHistory();
-      canvas.value.toJSON = vi.fn(() => {
+      mockCanvas.value.toJSON = vi.fn(() => {
         throw new Error('Serialization error');
       });
 
-      // Setup history first
-      history.saveHistory();
-      history.saveHistory();
+      history.historyStack.value = [{ objects: [] }, { objects: [{ id: 'test' }] }];
 
       expect(() => history.undo()).not.toThrow();
       expect(history.isHistoryProcessing.value).toBe(false);
     });
 
     it('should handle redo errors gracefully', () => {
-      const { canvas } = useCanvasHistory();
-      canvas.value.loadFromJSON = vi.fn(() => {
+      mockCanvas.value.loadFromJSON = vi.fn(() => {
         throw new Error('Deserialization error');
       });
 
-      // Setup redo state
-      history.saveHistory();
-      history.saveHistory();
-      history.undo();
+      history.historyStack.value = [{ objects: [] }];
+      history.redoStack.value = [{ objects: [{ id: 'test' }] }];
 
       expect(() => history.redo()).not.toThrow();
       expect(history.isHistoryProcessing.value).toBe(false);

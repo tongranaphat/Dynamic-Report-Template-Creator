@@ -506,10 +506,15 @@ export function useEditablePdf() {
                             }
 
                             let pdfImg;
-                            if (isPng) {
-                                pdfImg = await pdfDoc.embedPng(imgBytes);
-                            } else {
+                            try {
                                 pdfImg = await pdfDoc.embedJpg(imgBytes);
+                            } catch (error) {
+                                try {
+                                    pdfImg = await pdfDoc.embedPng(imgBytes);
+                                } catch (fallbackErr) {
+                                    console.warn('Failed to embed asset as JPG or PNG', fallbackErr);
+                                    continue;
+                                }
                             }
 
                             const sx = obj.scaleX || 1;

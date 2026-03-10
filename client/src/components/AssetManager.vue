@@ -75,7 +75,7 @@ const uploadAsset = async (event) => {
 const deleteAsset = async (asset) => {
   if (!confirm('ยืนยันระบบกำจัดการลบรูปภาพนี้?')) return;
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  
+
   const targetId = asset.id || asset.url.split('/').pop();
   if (targetId) {
     try {
@@ -96,9 +96,9 @@ const deleteAsset = async (asset) => {
 const emit = defineEmits(['select-asset']);
 
 const onDragStart = (e, asset) => {
-  // We pass the URL as 'image-url' type or just plain text
+  // We pass the URL as 'asset' type to match the new engine drop handler
   e.dataTransfer.setData('type', 'image');
-  e.dataTransfer.setData('image-url', asset.url);
+  e.dataTransfer.setData('asset', asset.url);
 };
 
 const selectAsset = (asset) => {

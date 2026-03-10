@@ -517,15 +517,10 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     }
 
     try {
-      const projectData = getFullProjectData();
-      const pdfBlob = await generatePdfFn(pages.value, projectData, variableMap);
-
-      if (!pdfBlob) throw new Error('Failed to generate Hybrid PDF');
-
       const fileHandle = currentFileHandle.value;
       if (!fileHandle) return; // Should not happen if step 0 succeeded
 
-      // Create a writable stream to the file
+      // 1. Create a writable stream FIRST (preserves User Gesture if Save As is needed immediately)
       let writable;
       try {
         // Attempt to silently overwrite the existing file
@@ -533,28 +528,58 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       } catch (writeErr) {
         console.warn('The file was modified externally or locked. Requesting new save location...', writeErr);
 
-        // 1. Clear the broken shortcut
+        // Clear the broken shortcut
         currentFileHandle.value = null;
 
-        // 2. Open the "Save As" dialog again so the user can re-select the file or pick a new name
+        // Open the "Save As" dialog again
         const options = {
           suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`,
           types: [{ description: 'Hybrid PDF Project', accept: { 'application/pdf': ['.pdf'] } }]
         };
         currentFileHandle.value = await window.showSaveFilePicker(options);
 
-        // 3. Create the writable stream with the fresh handle
-        writable = await currentFileHandle.value.createWritable();
+        try {
+          // Create the writable stream with the fresh handle
+          writable = await currentFileHandle.value.createWritable();
+        } catch (secondErr) {
+          currentFileHandle.value = null;
+          if (secondErr.name === 'InvalidStateError' || secondErr.name === 'NotAllowedError') {
+            throw new Error('The selected file is locked by another program (e.g., Adobe Acrobat) or cannot be written to. Please close the file in other applications and try saving again.');
+          }
+          throw secondErr;
+        }
       }
 
-      // Write the file and close it
+      // 2. NOW generate the PDF with the stream safely open
+      const projectData = getFullProjectData();
+      let pdfBlob;
+      try {
+        pdfBlob = await generatePdfFn(pages.value, projectData, variableMap);
+      } catch (genErr) {
+        // Discard the temporary .crswap file without mutating the real file
+        await writable.abort();
+        throw genErr;
+      }
+
+      if (!pdfBlob) {
+        await writable.abort();
+        throw new Error('Failed to generate Hybrid PDF');
+      }
+
+      // 3. Write the file and commit changes
       await writable.write(pdfBlob);
       await writable.close();
 
       alert('Project saved successfully as Hybrid PDF!');
     } catch (err) {
       console.error('Unified Save Failed:', err);
-      alert('Failed to save local file: ' + err.message);
+
+      if (err.name === 'InvalidStateError') {
+        currentFileHandle.value = null;
+        alert('Failed to save: The file state is invalid. It might be locked by another program. Please "Save As" a different name.');
+      } else {
+        alert('Failed to save local file: ' + err.message);
+      }
     }
   };
 

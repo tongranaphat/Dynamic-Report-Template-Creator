@@ -20,28 +20,13 @@
           </div>
         </div>
         <div class="report-actions">
-          <button
-            @click="editReport(instance)"
-            class="btn-edit"
-            :disabled="!isCanvasReady"
-            title="แก้ไขข้อมูล"
-          >
+          <button @click="editReport(instance)" class="btn-edit" :disabled="!isCanvasReady" title="แก้ไขข้อมูล">
             ✏️ แก้ไขข้อมูล
           </button>
-          <button
-            v-if="instance.pdfUrl"
-            @click="downloadReport(instance)"
-            class="btn-download"
-            title="ดาวน์โหลด PDF"
-          >
+          <button v-if="instance.pdfUrl" @click="downloadReport(instance)" class="btn-download" title="ดาวน์โหลด PDF">
             📥 ดาวน์โหลด
           </button>
-          <button
-            @click="deleteReport(instance)"
-            class="btn-delete"
-            :disabled="!isCanvasReady"
-            title="ลบรายงาน"
-          >
+          <button @click="deleteReport(instance)" class="btn-delete" :disabled="!isCanvasReady" title="ลบรายงาน">
             🗑️ ลบ
           </button>
         </div>
@@ -51,7 +36,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+
 
 const props = defineProps({
   reportInstances: {

@@ -307,7 +307,8 @@ const onAppendFileChange = (e) => {
 };
 
 const onDragStart = (e, key) => {
-  e.dataTransfer.setData('text/plain', key);
+  e.dataTransfer.setData('variable', key);
+  e.dataTransfer.effectAllowed = 'copy';
 };
 
 const sanitizeTemplateName = (name) => {
