@@ -155,52 +155,6 @@ export function useCanvasCore() {
     }
   };
 
-  // Apply preview data to canvas
-  const applyPreviewDataToCanvas = () => {
-    if (!canvas.value) return;
-
-    const mockData = {
-      school_name: 'โรงเรียนเวทย์มนตร์',
-      school_year: '2580',
-      student_name: 'ด.ช. แฮรี่ พอตเตอร์',
-      student_id: '80001',
-      gpa: '5.00',
-      class_level: 'ม.7/1',
-      teacher_name: 'ครูสเนป โหด',
-      comment: 'เก่งมาก'
-    };
-
-    canvas.value.getObjects().forEach((obj) => {
-      // Include 'textbox' — this is the main variable text type used in the editor
-      if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
-        let newText = obj.text;
-
-        // Replace variables with mock data
-        Object.keys(mockData).forEach((key) => {
-          const variablePattern = new RegExp(`{{${key}}}`, 'g');
-          newText = newText.replace(variablePattern, mockData[key]);
-        });
-
-        // Update text without modifying the pages array
-        if (newText !== obj.text) {
-          obj.set('text', newText);
-        }
-
-        // Lock object in preview mode
-        obj.set('selectable', false);
-        obj.set('editable', false);
-        obj.set('evented', false);
-      }
-    });
-
-    canvas.value.renderAll();
-    console.log('Applied preview data to canvas');
-  };
-
-  // BUG-016 fix: applyPreviewDataToCanvas removed from this file — it was a duplicate
-  // of the same function in EditorView.vue. EditorView's copy is used exclusively.
-  // Having two copies with slightly different mockData sets was a maintenance hazard.
-
   return {
     // Canvas instance
     canvas,

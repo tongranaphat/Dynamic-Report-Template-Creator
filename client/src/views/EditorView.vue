@@ -80,6 +80,7 @@ import { useTemplate } from '../composables/useTemplate';
 import { useCanvasEvents } from '../composables/useCanvasEvents';
 import { useRealTime } from '../composables/useRealTime';
 import { useEditablePdf } from '../composables/useEditablePdf';
+import { usePreviewData } from '../composables/usePreviewData';
 import { CANVAS_CONSTANTS } from '../constants/canvas';
 
 const PAGE_WIDTH_CONST = CANVAS_CONSTANTS.PAGE_WIDTH;
@@ -179,10 +180,12 @@ const {
   setHistoryLock,
   saveHistory,
   resetHistory,
-  loadFromSocket,
   undo,
   redo,
-  addImageToCanvas
+  addImageToCanvas,
+  addVariableToCanvas,
+  setHistoryContext,
+  isRemoteUpdating
 } = useCanvas();
 
 const canvasHelpers = { resetHistory, saveHistory, setHistoryLock };
@@ -221,6 +224,8 @@ const {
   ensureFileHandle
 } = useTemplate(canvas, zoomLevel, canvasHelpers);
 
+if (setHistoryContext) setHistoryContext(pages, currentPageIndex);
+
 const { initCanvasEvents } = useCanvasEvents(
   canvas,
   pages,
@@ -230,6 +235,7 @@ const { initCanvasEvents } = useCanvasEvents(
 );
 const { connect, emitUpdate } = useRealTime();
 const { generateHybridPdfBlob } = useEditablePdf();
+const { getMockData } = usePreviewData();
 
 watch(zoomLevel, (newZoom) => {
   if (canvas.value && canvasBaseDimensions.value) {
@@ -376,19 +382,6 @@ const resetCanvasWrapper = async () => {
   saveHistory();
 };
 
-const togglePreviewWrapper = async () => {
-  if (!isPreviewMode.value) {
-    saveCurrentPageState();
-  }
-  togglePreview();
-  await nextTick();
-  if (isPreviewMode.value) {
-    applyPreviewDataToCanvas();
-  } else {
-    if (canvas.value) canvas.value.selection = true;
-    await renderAllPages();
-  }
-};
 
 const handleImportWorkspaceWrapper = async () => {
   // Unified Import (File Picker)
@@ -416,6 +409,44 @@ const addBlankPageWrapper = async () => {
 
 // --- CORE RENDER FUNCTION ---
 
+// เพิ่ม cleanup function เพื่อป้องกัน memory leaks
+const cleanupCanvasObjects = () => {
+  if (!canvas.value) return;
+  
+  const objects = canvas.value.getObjects();
+  let cleanedCount = 0;
+  
+  objects.forEach(obj => {
+    try {
+      // Clear clipPath อย่างปลอดภัย
+      if (obj.clipPath) {
+        if (obj.clipPath.dispose && typeof obj.clipPath.dispose === 'function') {
+          obj.clipPath.dispose();
+        }
+        obj.clipPath = null;
+      }
+      
+      // Clear event listeners
+      if (obj.off && typeof obj.off === 'function') {
+        obj.off();
+      }
+      
+      // Dispose custom objects
+      if (obj.dispose && typeof obj.dispose === 'function') {
+        obj.dispose();
+      }
+      
+      cleanedCount++;
+    } catch (e) {
+      console.warn('Error cleaning up object:', e);
+    }
+  });
+  
+  if (cleanedCount > 0) {
+    console.log(`Cleaned up ${cleanedCount} objects`);
+  }
+};
+
 const renderAllPages = async () => {
   if (!canvas.value) return;
   if (isRendering) return;
@@ -423,6 +454,9 @@ const renderAllPages = async () => {
   isRendering = true;
   setHistoryLock(true);
   try {
+    // Cleanup ก่อน clear เพื่อป้องกัน memory leaks
+    cleanupCanvasObjects();
+    
     if (!pages.value || !Array.isArray(pages.value) || pages.value.length === 0) {
       pages.value = [{ id: 0, background: null, objects: [] }];
     }
@@ -518,7 +552,7 @@ const renderAllPages = async () => {
               canvas.value.add(obj);
               forceUnlockObject(obj);
 
-              // ASSET CORS FIX: Re-load image objects with crossOrigin:'anonymous'.
+              // ASSET CORS FIX: Re-load image objects with crossOrigin:'anonymous' พร้อม error handling.
               // enlivenObjects creates img elements without CORS headers, which taints
               // the canvas and makes canvas.toDataURL() return a blank image for PDF export.
               // We replace the image source after adding to force a clean CORS-safe load.
@@ -532,10 +566,20 @@ const renderAllPages = async () => {
                       if (freshImg._element) {
                         obj.setElement(freshImg._element);
                         obj.dirty = true;
+                      } else {
+                        console.warn(`Failed to load image: ${src} - No element returned`);
+                        // Fallback: ใช้ image เดิมแทน
                       }
                       imgResolve();
                     },
-                    { crossOrigin: 'anonymous' }
+                    { 
+                      crossOrigin: 'anonymous',
+                      // Add timeout and error callback
+                      onError: (err) => {
+                        console.error(`CORS/Network error loading image: ${src}`, err);
+                        imgResolve(); // Continue without image reload
+                      }
+                    }
                   );
                 });
                 imageReloadPromises.push(p);
@@ -543,7 +587,10 @@ const renderAllPages = async () => {
             });
 
             // Wait for all image re-loads before resolving the page
-            Promise.all(imageReloadPromises).then(() => {
+            Promise.all(imageReloadPromises).catch((err) => {
+              console.error('Some images failed to load:', err);
+              // Continue even if some images fail
+            }).then(() => {
               if (canvas.value) canvas.value.requestRenderAll();
               resolve();
             });
@@ -648,16 +695,42 @@ const handleGenerateEditablePDF = async () => {
       canvas.value.renderAll();
 
       const topOffset = i * (P_H + GAP) * zoomLevel.value;
-      const canvasImage = canvas.value.toDataURL({
-        format: 'jpeg',
-        quality: 0.92,
-        multiplier: qualityMultiplier / zoomLevel.value,
-        left: 0,
-        top: topOffset,
-        width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
-        height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
-      });
-      if (canvasImage.length > 100) canvasImages.push(canvasImage);
+      
+      // Safe canvas capture with CORS fallback
+      let canvasImage = null;
+      try {
+        canvasImage = canvas.value.toDataURL({
+          format: 'jpeg',
+          quality: 0.92,
+          multiplier: qualityMultiplier / zoomLevel.value,
+          left: 0,
+          top: topOffset,
+          width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
+          height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
+        });
+      } catch (canvasError) {
+        console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
+        
+        // Fallback: create minimal canvas with just background
+        try {
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
+          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
+          const fallbackCtx = fallbackCanvas.getContext('2d');
+          
+          // White background
+          fallbackCtx.fillStyle = '#ffffff';
+          fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+          
+          canvasImage = fallbackCanvas.toDataURL('image/jpeg', 0.92);
+        } catch (fallbackError) {
+          console.error(`Even fallback failed for page ${i + 1}:`, fallbackError);
+        }
+      }
+      
+      if (canvasImage && canvasImage.length > 100) {
+        canvasImages.push(canvasImage);
+      }
 
       // Restore visibility
       hiddenForCapture.forEach((obj) => { obj.visible = true; });
@@ -720,6 +793,18 @@ const scrollToPage = (index) => {
 const forceUnlockObject = (obj) => {
   if (!obj) return;
   const isText = ['i-text', 'textbox', 'text'].includes(obj.type);
+  
+  // เก็บ original state ก่อนทำการแก้ไข (ถ้ายังไม่ได้เก็บไว้)
+  if (!obj._originalState) {
+    obj._originalState = {
+      selectable: obj.selectable,
+      evented: obj.evented,
+      editable: obj.editable,
+      hasControls: obj.hasControls,
+      hasBorders: obj.hasBorders
+    };
+  }
+  
   obj.set({
     selectable: true,
     evented: true,
@@ -753,112 +838,70 @@ const forceUnlockObject = (obj) => {
   obj.setCoords();
 };
 
-const addVariableToCanvas = (key) => {
-  if (!canvas.value) return;
-  const PAGE_HEIGHT = CANVAS_CONSTANTS.PAGE_HEIGHT;
-  const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-
-  let targetPageIndex = currentPageIndex.value;
-  if (viewportRef.value) {
-    const scrollTop = viewportRef.value.scrollTop;
-    const viewCenter = scrollTop + viewportRef.value.clientHeight / 2;
-    targetPageIndex = Math.floor(viewCenter / ((PAGE_HEIGHT + GAP) * zoomLevel.value));
-  }
-
-  targetPageIndex = Math.max(0, Math.min(targetPageIndex, pages.value.length - 1));
-  let newTop = targetPageIndex * (PAGE_HEIGHT + GAP) + CANVAS_CONSTANTS.DEFAULT_TOP;
-
-  const text = new fabric.IText(`{{${key}}}`, {
-    left: CANVAS_CONSTANTS.DEFAULT_LEFT,
-    top: newTop,
-    fontSize: CANVAS_CONSTANTS.DEFAULT_FONT_SIZE,
-    fill: 'black',
-    fontFamily: 'Sarabun',
-    lineHeight: 1.4,
-    originX: 'left',
-    originY: 'top',
-    textBaseline: 'alphabetic'
-  });
-
-  const pageBottom = targetPageIndex * (PAGE_HEIGHT + GAP) + PAGE_HEIGHT;
-  if (text.top + text.height > pageBottom)
-    text.top = pageBottom - text.height - CANVAS_CONSTANTS.DEFAULT_BOTTOM_MARGIN;
-
-  canvas.value.add(text);
-  canvas.value.setActiveObject(text);
-  forceUnlockObject(text);
-
-  currentPageIndex.value = targetPageIndex;
-  canvas.value.requestRenderAll();
-  saveHistory();
-};
 
 // [ADDED] Wrapper for adding images with smart placement
 const addImageToCanvasWrapper = (url) => {
-  if (!canvas.value) return;
-  const PAGE_HEIGHT = CANVAS_CONSTANTS.PAGE_HEIGHT;
-  const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-
-  let targetPageIndex = currentPageIndex.value;
-  let scrollTop = 0;
-
-  if (viewportRef.value) {
-    scrollTop = viewportRef.value.scrollTop;
-    const viewCenter = scrollTop + viewportRef.value.clientHeight / 2;
-    targetPageIndex = Math.floor(viewCenter / ((PAGE_HEIGHT + GAP) * zoomLevel.value));
-  }
-
-  targetPageIndex = Math.max(0, Math.min(targetPageIndex, pages.value.length - 1));
-
-  // Center the image on the page
-  let pageTop = targetPageIndex * (PAGE_HEIGHT + GAP);
-  let top = pageTop + PAGE_HEIGHT / 2;
-  let left = CANVAS_CONSTANTS.PAGE_WIDTH / 2;
-
-  addImageToCanvas(url, { top, left });
+  if (!url) return;
+  addImageToCanvas(url);
 };
 
+// เพิ่ม state saving lock เพื่อป้องกัน race condition
+let isSavingState = false;
+
 const saveCurrentPageState = () => {
-  if (isPreviewMode.value || !canvas.value) return;
-  const allObjects = canvas.value.getObjects();
-  const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-  const GAP = CANVAS_CONSTANTS.PAGE_GAP;
+  if (isPreviewMode.value || !canvas.value || isSavingState) return;
+  
+  isSavingState = true;
+  try {
+    const allObjects = canvas.value.getObjects();
+    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
+    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
 
-  // BUG-002 fix: build page objects map first, then assign atomically.
-  // The old code wiped pages.value[i].objects = [] on ALL pages upfront,
-  // leaving them empty if any async interruption occurred during refill.
-  const pageObjectMap = pages.value.map(() => []);
+    // BUG-002 fix: build page objects map first, then assign atomically.
+    // The old code wiped pages.value[i].objects = [] on ALL pages upfront,
+    // leaving them empty if any async interruption occurred during refill.
+    const pageObjectMap = pages.value.map(() => []);
 
-  allObjects.forEach((obj) => {
-    if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
-    if (typeof obj.top !== 'number' || isNaN(obj.top)) return;
+    allObjects.forEach((obj) => {
+      if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
+      if (typeof obj.top !== 'number' || isNaN(obj.top)) return;
 
-    // Use Center Point for Page Assignment ("Half in more")
-    const center = obj.getCenterPoint();
-    let pageIndex = Math.floor(center.y / (P_H + GAP));
+      // Use Center Point for Page Assignment ("Half in more") - zoom-aware
+      const center = obj.getCenterPoint();
+      const actualCenterY = center.y / (zoomLevel.value || 1);
+      let pageIndex = Math.floor(actualCenterY / (P_H + GAP));
 
-    // Boundary checks
-    if (pageIndex < 0) pageIndex = 0;
-    if (pageIndex >= pages.value.length) pageIndex = pages.value.length - 1;
+      // Boundary checks
+      if (pageIndex < 0) pageIndex = 0;
+      if (pageIndex >= pages.value.length) pageIndex = pages.value.length - 1;
 
-    try {
-      const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline']);
-      const pageTopY = pageIndex * (P_H + GAP);
-      serialized.left = Math.round(obj.left * 100) / 100;
-      serialized.top = Math.round((obj.top - pageTopY) * 100) / 100;
-      serialized.width = Math.round(obj.width * 100) / 100;
-      serialized.height = Math.round(obj.height * 100) / 100;
-      if (serialized.textBaseline === 'alphabetical') serialized.textBaseline = 'alphabetic';
-      pageObjectMap[pageIndex].push(serialized);
-    } catch (e) {
-      console.error(e);
-    }
-  });
+      try {
+        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline']);
+        const pageTopY = pageIndex * (P_H + GAP);
+        
+        // Zoom-independent coordinates
+        const actualTop = obj.top / (zoomLevel.value || 1);
+        const actualLeft = obj.left / (zoomLevel.value || 1);
+        
+        serialized.left = Math.round(actualLeft * 100) / 100;
+        serialized.top = Math.round((actualTop - pageTopY) * 100) / 100;
+        serialized.width = Math.round((obj.width || 0) / (zoomLevel.value || 1) * 100) / 100;
+        serialized.height = Math.round((obj.height || 0) / (zoomLevel.value || 1) * 100) / 100;
+        
+        if (serialized.textBaseline === 'alphabetical') serialized.textBaseline = 'alphabetic';
+        pageObjectMap[pageIndex].push(serialized);
+      } catch (e) {
+        console.error('Failed to serialize object:', e);
+      }
+    });
 
-  // Atomic assignment: only update after all objects are processed successfully
-  pages.value.forEach((p, i) => {
-    if (p) p.objects = pageObjectMap[i];
-  });
+    // Atomic assignment: only update after all objects are processed successfully
+    pages.value.forEach((p, i) => {
+      if (p) p.objects = pageObjectMap[i];
+    });
+  } finally {
+    isSavingState = false;
+  }
 };
 
 const setCanvasBackground = async (dataUrl) => {
@@ -871,16 +914,9 @@ const setCanvasBackground = async (dataUrl) => {
 
 const applyPreviewDataToCanvas = () => {
   if (!canvas.value) return;
-  const mockData = {
-    school_name: 'โรงเรียนเวทย์มนตร์',
-    school_year: '2580',
-    student_name: 'ด.ช. แฮรี่ พอตเตอร์',
-    student_id: '80001',
-    gpa: '5.00',
-    class_level: 'ม.7/1',
-    teacher_name: 'ครูสเนป โหด',
-    comment: 'เก่งมาก'
-  };
+  
+  // ใช้ mock data จาก composable แทน hardcoded
+  const mockData = getMockData();
 
   canvas.value.selection = false;
   canvas.value.discardActiveObject();
@@ -899,11 +935,99 @@ const applyPreviewDataToCanvas = () => {
     // 2. Lock ALL objects (images, text, shapes) so they can't be selected/hovered/dragged
     // Only exclude background elements if they have a specific ID, but usually they are already evented=false
     if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-      obj.set({ selectable: false, evented: false });
+      obj.set({ 
+        selectable: false, 
+        evented: false,
+        hasControls: false,
+        hasBorders: false
+      });
     }
   });
 
   canvas.value.requestRenderAll();
+};
+
+// Safe toggle with template backup
+const togglePreviewWrapper = async () => {
+  // บันทึก state ก่อนเปลี่ยน mode เสมอ - ทั้งเข้าและออก preview
+  saveCurrentPageState();
+  
+  const wasPreview = isPreviewMode.value;
+  
+  try {
+    if (!wasPreview) {
+      // Entering preview - backup templates first
+      const textObjects = canvas.value.getObjects().filter(obj => 
+        ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text
+      );
+      
+      // Store original templates in window for recovery
+      window.__originalTemplates = textObjects.map(obj => ({
+        id: obj.id || `${obj.type}_${obj.left}_${obj.top}`,
+        text: obj.text,
+        editable: obj.editable,
+        selectable: obj.selectable,
+        evented: obj.evented
+      }));
+    }
+    
+    togglePreview();
+    await nextTick();
+    
+    if (isPreviewMode.value) {
+      applyPreviewDataToCanvas();
+    } else {
+      // Exiting preview - restore templates
+      if (canvas.value && window.__originalTemplates) {
+        canvas.value.selection = true;
+        
+        canvas.value.getObjects().forEach(obj => {
+          if (['textbox', 'text', 'i-text'].includes(obj.type)) {
+            const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
+            const backup = window.__originalTemplates.find(t => t.id === objId);
+            
+            if (backup) {
+              try {
+                obj.set('text', backup.text);
+                obj.set('editable', backup.editable);
+                obj.set('selectable', backup.selectable);
+                obj.set('evented', backup.evented);
+                
+                if (obj.textBaseline === 'alphabetical') {
+                  obj.set('textBaseline', 'alphabetic');
+                }
+              } catch (e) {
+                console.warn('Failed to restore template:', e);
+              }
+            }
+          }
+        });
+        
+        // Clear backup
+        window.__originalTemplates = null;
+      }
+      
+      if (canvas.value) canvas.value.selection = true;
+      await renderAllPages();
+    }
+  } catch (error) {
+    console.error('Preview toggle failed:', error);
+    
+    // Rollback on error
+    try {
+      if (!wasPreview && window.__originalTemplates) {
+        // Failed to enter preview, restore edit mode
+        togglePreview();
+        isPreviewMode.value = false;
+        window.__originalTemplates = null;
+      } else {
+        // Failed to exit preview, stay in preview
+        isPreviewMode.value = true;
+      }
+    } catch (rollbackError) {
+      console.error('Rollback failed:', rollbackError);
+    }
+  }
 };
 
 const loadPageToCanvas = async (index) => {
@@ -979,8 +1103,49 @@ const handlePageDrop = async ({ sourceIndex, targetIndex, position }) => {
 };
 
 const onDrop = (e) => {
-  const key = e.dataTransfer.getData('text/plain');
-  if (key) onDropCore(e);
+  e.preventDefault();
+
+  console.log("[DROP EVENT]", {
+    variable: e.dataTransfer.getData('variable'),
+    asset: e.dataTransfer.getData('asset')
+  });
+
+  const variable = e.dataTransfer.getData('variable');
+  const asset = e.dataTransfer.getData('asset');
+
+  let x = 0;
+  let y = 0;
+
+  if (canvas.value && typeof canvas.value.getPointer === 'function') {
+    const pointer = canvas.value.getPointer(e);
+    x = pointer.x;
+    y = pointer.y;
+    console.log("[DROP TRACE] calculated via getPointer:", { x, y });
+  } else {
+    const canvasContainer = document.querySelector('.canvas-container');
+    const rect = canvasContainer ? canvasContainer.getBoundingClientRect() : (e.currentTarget ? e.currentTarget.getBoundingClientRect() : { left: 0, top: 0 });
+    x = e.clientX - rect.left;
+    y = e.clientY - rect.top;
+
+    // Fallback requires applying zoomLevel manually
+    if (typeof zoomLevel !== 'undefined' && zoomLevel.value) {
+      x = x / zoomLevel.value;
+      y = y / zoomLevel.value;
+    }
+    console.log("[DROP TRACE] calculated via bounding box:", { x, y });
+  }
+
+  if (variable) {
+    if (typeof addVariableToCanvas !== 'undefined') {
+      addVariableToCanvas(variable, x, y)
+    }
+  }
+
+  if (asset) {
+    if (typeof addImageToCanvas !== 'undefined') {
+      addImageToCanvas(asset, x, y);
+    }
+  }
 };
 
 onMounted(async () => {
@@ -1021,7 +1186,10 @@ onMounted(async () => {
   connectionStatus.value = 'connected';
   if (canvas.value) {
     canvas.value.on('canvas:changed-by-user', (e) => {
-      emitUpdate(roomId, e.json);
+      // Only emit local changes, not remote ones
+      if (!isRemoteUpdating) {
+        emitUpdate(roomId, e.json);
+      }
     });
   }
 
