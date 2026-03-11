@@ -20,7 +20,8 @@
       <div class="navbar-right">
         <button @click="togglePreviewWrapper"
           :class="['mode-toggle-btn', isPreviewMode ? 'preview-active' : 'edit-active']" :disabled="isGenerating">
-          {{ isGenerating ? '⏳ กำลังสร้าง...' : (isPreviewMode ? '👁️ ดูตัวอย่าง' : '📝 แก้ไข') }}
+          {{ isGenerating ? '⏳ กำลังสร้าง...' : (isPreviewMode ? '📝 แก้ไข' : '👁️ ดูตัวอย่าง') }}
+
         </button>
         <div v-if="connectionStatus"
           :class="['connection-status-pill', connectionStatus === 'connected' ? 'online' : 'offline']"
@@ -36,11 +37,11 @@
       :pdfQuality="pdfQuality" :pages="pages" :currentPageIndex="currentPageIndex" @toggle="toggleSidebar"
       @open="isSidebarOpen = true" @close="isSidebarOpen = false" @load-template="loadTemplateWrapper"
       @delete-template="deleteTemplate" @update:templateName="templateName = $event"
-      @update:pdfQuality="pdfQuality = $event" @save-template="saveTemplateWrapper" @reset-canvas="resetCanvasWrapper"
+      @update:pdfQuality="pdfQuality = $event" @save-template="handleSaveTemplate" @reset-canvas="resetCanvasWrapper"
       @toggle-preview="togglePreviewWrapper" @import-workspace="handleImportWorkspaceWrapper"
-      @add-variable="addVariableToCanvas" @addImage="addImageToCanvasWrapper" @save-report="saveReportWrapper"
-      @generate-pdf="handleGenerateEditablePDF" @open-history="openHistoryModal"
-      @generate-editable-pdf="handleGenerateEditablePDF" @delete-page="deletePage" @add-page="addBlankPageWrapper"
+      @add-variable="addVariableToCanvas" @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject"
+      @generate-pdf="handleExport" @open-history="openHistoryModal"
+      @generate-editable-pdf="handleExport" @delete-page="deletePage" @add-page="addBlankPageWrapper"
       @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
@@ -81,7 +82,9 @@ import { useCanvasEvents } from '../composables/useCanvasEvents';
 import { useRealTime } from '../composables/useRealTime';
 import { useEditablePdf } from '../composables/useEditablePdf';
 import { usePreviewData } from '../composables/usePreviewData';
+import { useEditorStore } from '../stores/editorStore';
 import { CANVAS_CONSTANTS } from '../constants/canvas';
+import { showNotification } from '../utils/notifications';
 
 const PAGE_WIDTH_CONST = CANVAS_CONSTANTS.PAGE_WIDTH;
 const PAGE_HEIGHT_CONST = CANVAS_CONSTANTS.PAGE_HEIGHT;
@@ -196,6 +199,7 @@ const {
   templateName,
   currentTemplateId,
   currentReportId,
+  currentFileHandle, // File System Access API handle
   isPreviewMode,
   pages,
   currentPageIndex,
@@ -236,6 +240,7 @@ const { initCanvasEvents } = useCanvasEvents(
 const { connect, emitUpdate } = useRealTime();
 const { generateHybridPdfBlob } = useEditablePdf();
 const { getMockData } = usePreviewData();
+const editorStore = useEditorStore();
 
 watch(zoomLevel, (newZoom) => {
   if (canvas.value && canvasBaseDimensions.value) {
@@ -248,124 +253,355 @@ watch(zoomLevel, (newZoom) => {
   }
 });
 
-// --- WRAPPERS ---
+// --- 3 DISTINCT HANDLERS FOR 3 DISTINCT ACTIONS ---
 
-const saveReportWrapper = async () => {
-  // Save Project = same quality as Export Hybrid PDF:
-  // render canvas images first so the saved file has the visual background layer.
-  if (!canvas.value) {
-    await unifiedSave(generateHybridPdfBlob); // fallback — no canvas
-    saveHistory();
-    return;
-  }
-
-  saveCurrentPageState();
-
-  // ── STEP 0: Collect template data BEFORE entering preview mode ──────────
-  const pagesData = preparePagesForSave();
-  const projectData = {
-    name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
-    pages: pagesData,
-    version: '1.0',
-    timestamp: new Date().toISOString(),
-    type: 'hybrid-project'
-  };
-  const variableMap = {
-    school_name: 'โรงเรียนเวทย์มนตร์',
-    school_year: '2580',
-    student_name: 'ด.ช. แฮรี่ พอตเตอร์',
-    student_id: '80001',
-    gpa: '5.00',
-    class_level: 'ม.7/1',
-    teacher_name: 'ครูสเนป โหด',
-    comment: 'เก่งมาก',
-    date: new Date().toLocaleDateString('th-TH')
-  };
-  if (variables.value) {
-    variables.value.forEach((v) => { if (v.key && v.value) variableMap[v.key] = v.value; });
-  }
-
-  const wasPreview = isPreviewMode.value;
-  const originalPage = currentPageIndex.value;
-  const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-  const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-  const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-  const qualityMultiplier = parseFloat(pdfQuality.value) || 2;
-
+// 1. Save Template: ONLY saves JSON to database, refreshes sidebar
+const handleSaveTemplate = async () => {
   try {
-    // ── STEP 1: Render pages as text-free JPEG images ───────────────────
-    canvas.value.requestRenderAll();
-    if (!wasPreview) saveCurrentPageState();
-    isPreviewMode.value = true;
-    await renderAllPages();
-    await nextTick();
-    applyPreviewDataToCanvas();
-    await nextTick();
-
-    const canvasImages = [];
-    for (let i = 0; i < pages.value.length; i++) {
-      const allObjects = canvas.value.getObjects();
-      const hiddenForCapture = [];
-      allObjects.forEach((obj) => {
-        const center = obj.getCenterPoint();
-        const objPage = Math.floor(center.y / (P_H + GAP));
-        if ((objPage !== i || TEXT_TYPES.includes(obj.type)) && obj.visible) {
-          obj.visible = false;
-          hiddenForCapture.push(obj);
-        }
-      });
-      canvas.value.renderAll();
-
-      const topOffset = i * (P_H + GAP) * zoomLevel.value;
-      const img = canvas.value.toDataURL({
-        format: 'jpeg', quality: 0.92,
-        multiplier: qualityMultiplier / zoomLevel.value,
-        left: 0, top: topOffset,
-        width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
-        height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
-      });
-      if (img.length > 100) canvasImages.push(img);
-      hiddenForCapture.forEach((obj) => { obj.visible = true; });
-    }
-    canvas.value.requestRenderAll();
-
-    // ── STEP 2: Save via unifiedSave ────────────────────────────────────
-    const hybridFn = async () =>
-      await generateHybridPdfBlob(canvasImages, projectData, variableMap);
-    await unifiedSave(hybridFn);
-
+    await saveTemplate(false); // false = show notifications
+    await editorStore.fetchTemplates(); // Refresh sidebar
+    saveHistory();
   } catch (e) {
-    console.error('Save Project error:', e);
-    alert('บันทึกไม่สำเร็จ: ' + e.message);
-  } finally {
-    // Restore canvas to editable state
-    if (canvas.value) {
-      canvas.value.selection = true;
-      canvas.value.getObjects().forEach((obj) => {
-        if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-          obj.set({ selectable: true, evented: true, visible: true });
-          if (TEXT_TYPES.includes(obj.type)) obj.set('editable', true);
-        }
-      });
-      canvas.value.renderAll();
-    }
-    if (!wasPreview) {
-      isPreviewMode.value = false;
-      await nextTick();
-      pages.value = pagesData;
-      await nextTick();
-      loadPageToCanvas(originalPage);
-    } else {
-      loadPageToCanvas(originalPage);
-    }
+    console.error('Save Template failed:', e);
   }
-
-  saveHistory();
 };
 
-const saveTemplateWrapper = async () => {
-  await saveTemplate(false);
-  saveHistory();
+// 2. Save Project: STRICT Overwrite ONLY (no file picker)
+const handleSaveProject = async () => {
+  if (!canvas.value) return;
+  
+  // STRICT: Only allow overwrite if file is already linked
+  if (!currentFileHandle.value) {
+    showNotification('No local file linked.', 'error');
+    return;
+  }
+  
+  try {
+    // Collect data for PDF generation
+    const pagesData = preparePagesForSave();
+    const projectData = {
+      name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
+      pages: pagesData,
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      type: 'hybrid-project'
+    };
+    
+    const variableMap = {
+      school_name: 'โรงเรียนเวทย์มนตร์',
+      school_year: '2580',
+      student_name: 'ด.ช. แฮรี่ พอตเตอร์',
+      student_id: '80001',
+      gpa: '5.00',
+      class_level: 'ม.7/1',
+      teacher_name: 'ครูสเนป โหด',
+      comment: 'เก่งมาก',
+      date: new Date().toLocaleDateString('th-TH')
+    };
+    if (variables.value) {
+      variables.value.forEach((v) => {
+        if (v.key && v.value) variableMap[v.key] = v.value;
+      });
+    }
+    
+    // Capture canvas images first
+    const canvasImages = [];
+    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
+    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
+    const qualityMultiplier = 2;
+    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    
+    // Enter preview mode for capture
+    const wasPreview = isPreviewMode.value;
+    const originalPage = currentPageIndex.value;
+    
+    try {
+      canvas.value.requestRenderAll();
+      if (!wasPreview) saveCurrentPageState();
+      isPreviewMode.value = true;
+      await renderAllPages();
+      await nextTick();
+      applyPreviewDataToCanvas();
+      await nextTick();
+      
+      // Capture each page as image
+      for (let i = 0; i < pages.value.length; i++) {
+        const allObjects = canvas.value.getObjects();
+        const hiddenForCapture = [];
+        
+        // Hide overlay objects for clean background capture
+        allObjects.forEach((obj) => {
+          const center = obj.getCenterPoint();
+          const objPageIndex = Math.floor(center.y / (P_H + GAP));
+          const isWrongPage = objPageIndex !== i;
+          const isOverlay = TEXT_TYPES.includes(obj.type) &&
+            obj.id !== 'page-bg-image' &&
+            obj.id !== 'page-bg';
+          
+          if ((isWrongPage || isOverlay) && obj.visible) {
+            obj.visible = false;
+            hiddenForCapture.push(obj);
+          }
+        });
+        canvas.value.renderAll();
+        
+        const topOffset = i * (P_H + GAP) * zoomLevel.value;
+        
+        try {
+          const canvasImage = canvas.value.toDataURL({
+            format: 'jpeg',
+            quality: 0.92,
+            multiplier: qualityMultiplier / zoomLevel.value,
+            left: 0,
+            top: topOffset,
+            width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
+            height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
+          });
+          
+          if (canvasImage && canvasImage.length > 100) {
+            canvasImages.push(canvasImage);
+          }
+        } catch (canvasError) {
+          console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
+          // Use fallback image
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
+          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
+          const fallbackCtx = fallbackCanvas.getContext('2d');
+          fallbackCtx.fillStyle = '#ffffff';
+          fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+          const fallbackImage = fallbackCanvas.toDataURL('image/jpeg', 0.92);
+          if (fallbackImage.length > 100) {
+            canvasImages.push(fallbackImage);
+          }
+        }
+        
+        // Restore visibility
+        hiddenForCapture.forEach((obj) => { obj.visible = true; });
+      }
+      canvas.value.requestRenderAll();
+      
+      if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
+      
+      // Generate PDF blob with canvas images
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, projectData, variableMap);
+      
+      // STRICT: Only overwrite existing file
+      const writable = await currentFileHandle.value.createWritable();
+      await writable.write(pdfBlob);
+      await writable.close();
+      
+      showNotification('Project saved successfully!', 'success');
+      saveHistory();
+    } finally {
+      // Restore canvas state
+      if (canvas.value) {
+        canvas.value.selection = true;
+        canvas.value.getObjects().forEach((obj) => {
+          if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
+            obj.set({ selectable: true, evented: true, visible: true });
+            if (TEXT_TYPES.includes(obj.type)) obj.set('editable', true);
+          }
+        });
+        canvas.value.renderAll();
+      }
+      
+      if (!wasPreview) {
+        isPreviewMode.value = false;
+        await nextTick();
+        loadPageToCanvas(originalPage);
+      } else {
+        loadPageToCanvas(originalPage);
+      }
+    }
+  } catch (e) {
+    console.error('Save Project failed:', e);
+    showNotification('Save Project failed: ' + e.message, 'error');
+  }
+};
+
+// 3. Export: Save As + DB Registration
+const handleExport = async () => {
+  if (!canvas.value) return;
+  
+  try {
+    // Collect data for PDF generation
+    const pagesData = preparePagesForSave();
+    const projectData = {
+      name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
+      pages: pagesData,
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      type: 'hybrid-project'
+    };
+    
+    const variableMap = {
+      school_name: 'โรงเรียนเวทย์มนตร์',
+      school_year: '2580',
+      student_name: 'ด.ช. แฮรี่ พอตเตอร์',
+      student_id: '80001',
+      gpa: '5.00',
+      class_level: 'ม.7/1',
+      teacher_name: 'ครูสเนป โหด',
+      comment: 'เก่งมาก',
+      date: new Date().toLocaleDateString('th-TH')
+    };
+    if (variables.value) {
+      variables.value.forEach((v) => {
+        if (v.key && v.value) variableMap[v.key] = v.value;
+      });
+    }
+    
+    // Capture canvas images first
+    const canvasImages = [];
+    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
+    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
+    const qualityMultiplier = 2;
+    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    
+    // Enter preview mode for capture
+    const wasPreview = isPreviewMode.value;
+    const originalPage = currentPageIndex.value;
+    
+    try {
+      canvas.value.requestRenderAll();
+      if (!wasPreview) saveCurrentPageState();
+      isPreviewMode.value = true;
+      await renderAllPages();
+      await nextTick();
+      applyPreviewDataToCanvas();
+      await nextTick();
+      
+      // Capture each page as image
+      for (let i = 0; i < pages.value.length; i++) {
+        const allObjects = canvas.value.getObjects();
+        const hiddenForCapture = [];
+        
+        // Hide overlay objects for clean background capture
+        allObjects.forEach((obj) => {
+          const center = obj.getCenterPoint();
+          const objPageIndex = Math.floor(center.y / (P_H + GAP));
+          const isWrongPage = objPageIndex !== i;
+          const isOverlay = TEXT_TYPES.includes(obj.type) &&
+            obj.id !== 'page-bg-image' &&
+            obj.id !== 'page-bg';
+          
+          if ((isWrongPage || isOverlay) && obj.visible) {
+            obj.visible = false;
+            hiddenForCapture.push(obj);
+          }
+        });
+        canvas.value.renderAll();
+        
+        const topOffset = i * (P_H + GAP) * zoomLevel.value;
+        
+        try {
+          const canvasImage = canvas.value.toDataURL({
+            format: 'jpeg',
+            quality: 0.92,
+            multiplier: qualityMultiplier / zoomLevel.value,
+            left: 0,
+            top: topOffset,
+            width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
+            height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
+          });
+          
+          if (canvasImage && canvasImage.length > 100) {
+            canvasImages.push(canvasImage);
+          }
+        } catch (canvasError) {
+          console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
+          // Use fallback image
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
+          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
+          const fallbackCtx = fallbackCanvas.getContext('2d');
+          fallbackCtx.fillStyle = '#ffffff';
+          fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+          const fallbackImage = fallbackCanvas.toDataURL('image/jpeg', 0.92);
+          if (fallbackImage.length > 100) {
+            canvasImages.push(fallbackImage);
+          }
+        }
+        
+        // Restore visibility
+        hiddenForCapture.forEach((obj) => { obj.visible = true; });
+      }
+      canvas.value.requestRenderAll();
+      
+      if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
+      
+      // Step 1: Generate PDF blob
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, projectData, variableMap);
+      
+      // Step 2: Use file picker for Save As
+      const options = {
+        suggestedName: `${templateName.value || 'report'}.pdf`
+      };
+      const newHandle = await window.showSaveFilePicker(options);
+      
+      // Step 3: Write PDF blob to new handle
+      const writable = await newHandle.createWritable();
+      await writable.write(pdfBlob);
+      await writable.close();
+      
+      // Step 4: CRITICAL - Reassign handle for future saves
+      currentFileHandle.value = newHandle;
+      
+      // Step 5: Register new instance in database
+      try {
+        // Import apiService dynamically to avoid circular dependencies
+        const { default: apiService } = await import('../services/apiService');
+        
+        const reportInstanceData = {
+          name: templateName.value || 'Untitled Report',
+          templateId: currentTemplateId.value || null,
+          projectData: projectData,
+          filePath: newHandle.name || `${templateName.value || 'report'}.pdf`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        const response = await apiService.createReportInstance(reportInstanceData);
+        
+        if (response && response.data) {
+          currentReportId.value = response.data.id;
+          showNotification('Report exported and registered successfully!', 'success');
+        }
+        // else {
+        //   showNotification('Report exported but failed to register in database', 'warning');
+        // }
+      } catch (dbError) {
+        console.error('Failed to register report instance:', dbError);
+        showNotification('Report exported but database registration failed', 'warning');
+      }
+      
+      saveHistory();
+    } finally {
+      // Restore canvas state
+      if (canvas.value) {
+        canvas.value.selection = true;
+        canvas.value.getObjects().forEach((obj) => {
+          if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
+            obj.set({ selectable: true, evented: true, visible: true });
+            if (TEXT_TYPES.includes(obj.type)) obj.set('editable', true);
+          }
+        });
+        canvas.value.renderAll();
+      }
+      
+      if (!wasPreview) {
+        isPreviewMode.value = false;
+        await nextTick();
+        loadPageToCanvas(originalPage);
+      } else {
+        loadPageToCanvas(originalPage);
+      }
+    }
+  } catch (e) {
+    console.error('Export failed:', e);
+    showNotification('Export failed: ' + e.message, 'error');
+  }
 };
 
 const loadTemplateWrapper = async (t) => {
@@ -518,7 +754,8 @@ const renderAllPages = async () => {
               });
               img.scaleToWidth(P_W);
               canvas.value.add(img);
-              // pagePaper.set({ fill: 'transparent' }); // [FIX] Keep white background
+              // Bug Fix: Explicitly render canvas after background is set
+              canvas.value.requestRenderAll();
               resolve();
             },
             { crossOrigin: 'anonymous' }
@@ -608,179 +845,6 @@ const renderAllPages = async () => {
   }
 };
 
-
-const handleGenerateEditablePDF = async () => {
-  if (!canvas.value) return;
-
-  const hasHandle = await ensureFileHandle();
-  if (!hasHandle) return;
-
-  saveCurrentPageState();
-
-  // ── STEP 0: Collect data in EDITOR STATE (before preview mode) ─────────
-  // Must run BEFORE preview to keep {{ }} template form in metadata for re-import.
-  // Running it in preview would bake resolved values into pages.value, breaking restore.
-  const pagesData = preparePagesForSave();
-  const projectData = {
-    name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
-    pages: pagesData,
-    version: '1.0',
-    timestamp: new Date().toISOString(),
-    type: 'hybrid-project'
-  };
-
-  // Variable map for resolving {{ }} placeholders in the vector text layer
-  const variableMap = {
-    school_name: 'โรงเรียนเวทย์มนตร์',
-    school_year: '2580',
-    student_name: 'ด.ช. แฮรี่ พอตเตอร์',
-    student_id: '80001',
-    gpa: '5.00',
-    class_level: 'ม.7/1',
-    teacher_name: 'ครูสเนป โหด',
-    comment: 'เก่งมาก',
-    date: new Date().toLocaleDateString('th-TH')
-  };
-  if (variables.value) {
-    variables.value.forEach((v) => {
-      if (v.key && v.value) variableMap[v.key] = v.value;
-    });
-  }
-
-  isGenerating.value = true;
-  const wasPreview = isPreviewMode.value;
-  const originalPage = currentPageIndex.value;
-
-  try {
-    // ── STEP 1: Enter Preview mode & render all pages to canvas ────────────
-    canvas.value.requestRenderAll();
-    if (!wasPreview) saveCurrentPageState();
-
-    isPreviewMode.value = true;
-    await renderAllPages();
-    await nextTick();
-    applyPreviewDataToCanvas(); // replaces {{ }} with values, locks text objects
-    await nextTick();
-
-    const canvasImages = [];
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-    const qualityMultiplier = parseFloat(pdfQuality.value) || 2;
-    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-    const IMAGE_TYPES = ['image'];
-    const ALL_OVERLAY_TYPES = [...TEXT_TYPES, ...IMAGE_TYPES];
-
-    for (let i = 0; i < pages.value.length; i++) {
-      const allObjects = canvas.value.getObjects();
-
-      // ── STEP 2: Hide ALL overlay objects (fixes ghosting)
-      // Background JPEG must contain ONLY non-text/non-asset elements.
-      // Vector text and assets will be drawn on top by the PDF generator.
-      const hiddenForCapture = [];
-      allObjects.forEach((obj) => {
-        const center = obj.getCenterPoint();
-        const objPageIndex = Math.floor(center.y / (P_H + GAP));
-        // Hide: wrong page OR is an overlay object on this page
-        // [FIX] Never hide the background image (page-bg-image) or white paper (page-bg)
-        const isWrongPage = objPageIndex !== i;
-        const isOverlay = ALL_OVERLAY_TYPES.includes(obj.type) &&
-          obj.id !== 'page-bg-image' &&
-          obj.id !== 'page-bg';
-
-        if ((isWrongPage || isOverlay) && obj.visible) {
-          obj.visible = false;
-          hiddenForCapture.push(obj);
-        }
-      });
-      canvas.value.renderAll();
-
-      const topOffset = i * (P_H + GAP) * zoomLevel.value;
-      
-      // Safe canvas capture with CORS fallback
-      let canvasImage = null;
-      try {
-        canvasImage = canvas.value.toDataURL({
-          format: 'jpeg',
-          quality: 0.92,
-          multiplier: qualityMultiplier / zoomLevel.value,
-          left: 0,
-          top: topOffset,
-          width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
-          height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
-        });
-      } catch (canvasError) {
-        console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
-        
-        // Fallback: create minimal canvas with just background
-        try {
-          const fallbackCanvas = document.createElement('canvas');
-          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
-          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
-          const fallbackCtx = fallbackCanvas.getContext('2d');
-          
-          // White background
-          fallbackCtx.fillStyle = '#ffffff';
-          fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
-          
-          canvasImage = fallbackCanvas.toDataURL('image/jpeg', 0.92);
-        } catch (fallbackError) {
-          console.error(`Even fallback failed for page ${i + 1}:`, fallbackError);
-        }
-      }
-      
-      if (canvasImage && canvasImage.length > 100) {
-        canvasImages.push(canvasImage);
-      }
-
-      // Restore visibility
-      hiddenForCapture.forEach((obj) => { obj.visible = true; });
-    }
-    canvas.value.requestRenderAll();
-
-    if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
-
-    // ── STEP 3: Generate Hybrid PDF ────────────────────────────────────────
-    const hybridFn = async () => {
-      return await generateHybridPdfBlob(
-        canvasImages,
-        projectData,
-        variableMap,
-        currentReportId.value,
-        'report'
-      );
-    };
-    await unifiedSave(hybridFn);
-
-  } catch (e) {
-    console.error('Editable PDF Error:', e);
-    alert('เกิดข้อผิดพลาดในการสร้าง PDF: ' + e.message);
-  } finally {
-    isGenerating.value = false;
-
-    // ── STEP 4: Restore canvas to editable state ───────────────────────────
-    if (canvas.value) {
-      canvas.value.selection = true;
-      canvas.value.getObjects().forEach((obj) => {
-        if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-          obj.set({ selectable: true, evented: true, visible: true });
-          if (['textbox', 'text', 'i-text'].includes(obj.type)) obj.set('editable', true);
-        }
-      });
-      canvas.value.renderAll();
-    }
-
-    if (!wasPreview) {
-      isPreviewMode.value = false;
-      await nextTick();
-      // Restore pages.value using the clean template data captured in STEP 0
-      pages.value = pagesData;
-      await nextTick();
-      loadPageToCanvas(originalPage);
-    } else {
-      loadPageToCanvas(originalPage);
-    }
-  }
-};
 
 const scrollToPage = (index) => {
   if (!viewportRef.value) return;

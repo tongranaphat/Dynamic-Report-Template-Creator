@@ -448,6 +448,11 @@ export function useCanvasLegacy() {
                 if (!active) return;
                 e.preventDefault();
                 active.clone((cloned) => {
+                    // Bug Fix: Deep clone to prevent shared memory references
+                    const clonedObj = JSON.parse(JSON.stringify(active));
+                    Object.assign(cloned, clonedObj);
+                    cloned.id = uuidv4(); // Assign new UUID
+                    cloned.clipPath = null; // Clear any inherited clipPath
                     _clipboard = cloned;
                     _pasteOffset = 0;
                     console.log('📋 Copied', active.type);
@@ -501,27 +506,19 @@ export function useCanvasLegacy() {
                 if (!active) return;
                 e.preventDefault();
                 active.clone((cloned) => {
+                    // Bug Fix: Deep clone to prevent shared memory references
+                    const clonedObj = JSON.parse(JSON.stringify(active));
+                    Object.assign(cloned, clonedObj);
+                    cloned.id = uuidv4(); // Assign new UUID
+                    cloned.clipPath = null; // Clear any inherited clipPath
                     cloned.set({
                         left: active.left + 20,
                         top: active.top + 20,
-                        evented: true,
+                        evented: true
                     });
-                    if (cloned.type === 'activeSelection') {
-                        cloned.canvas = canvas.value;
-                        cloned.forEachObject((obj) => {
-                            obj.id = uuidv4();
-                            canvas.value.add(obj);
-                        });
-                        cloned.setCoords();
-                    } else {
-                        cloned.id = uuidv4();
-                        canvas.value.add(cloned);
-                    }
-                    canvas.value.discardActiveObject();
-                    canvas.value.setActiveObject(cloned);
-                    canvas.value.requestRenderAll();
-                    saveHistory();
-                    console.log('🗂️ Duplicated', cloned.type);
+                    _clipboard = cloned;
+                    _pasteOffset = 0;
+                    console.log('� Copied', active.type);
                 });
             }
         }

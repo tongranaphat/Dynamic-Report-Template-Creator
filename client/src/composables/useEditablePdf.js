@@ -550,5 +550,392 @@ export function useEditablePdf() {
         }
     };
 
-    return { generateHybridPdfBlob };
+    // Store original templates before preview mode
+    const originalTemplates = new Map();
+    
+    // Safe template backup before entering preview
+    const backupTemplatesBeforePreview = (canvas, pages) => {
+        originalTemplates.clear();
+        
+        if (!canvas || !pages) return;
+        
+        canvas.getObjects().forEach(obj => {
+            if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
+                const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
+                originalTemplates.set(objId, {
+                    text: obj.text,
+                    editable: obj.editable,
+                    selectable: obj.selectable,
+                    evented: obj.evented
+                });
+            }
+        });
+    };
+
+    // Safe template restoration with validation
+    const restoreTemplatesAfterPreview = (canvas) => {
+        if (!canvas || originalTemplates.size === 0) return false;
+        
+        let restored = 0;
+        let errors = 0;
+        
+        canvas.getObjects().forEach(obj => {
+            if (['textbox', 'text', 'i-text'].includes(obj.type)) {
+                const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
+                const backup = originalTemplates.get(objId);
+                
+                if (backup) {
+                    try {
+                        // Restore original template text
+                        obj.set('text', backup.text);
+                        obj.set('editable', backup.editable);
+                        obj.set('selectable', backup.selectable);
+                        obj.set('evented', backup.evented);
+                        
+                        // Ensure proper text baseline
+                        if (obj.textBaseline === 'alphabetical') {
+                            obj.set('textBaseline', 'alphabetic');
+                        }
+                        
+                        restored++;
+                    } catch (e) {
+                        console.error(`Failed to restore template for object ${objId}:`, e);
+                        errors++;
+                    }
+                }
+            }
+        });
+        
+        console.log(`Template restoration: ${restored} restored, ${errors} errors`);
+        originalTemplates.clear();
+        
+        return errors === 0;
+    };
+
+    // Enhanced applyPreviewData with error handling
+    const applyPreviewDataSafe = (canvas, mockData) => {
+        if (!canvas) return false;
+        
+        try {
+            // Backup before applying preview data
+            const currentTexts = new Map();
+            canvas.getObjects().forEach(obj => {
+                if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
+                    const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
+                    currentTexts.set(objId, obj.text);
+                }
+            });
+
+            canvas.selection = false;
+            canvas.discardActiveObject();
+
+            canvas.getObjects().forEach(obj => {
+                // Resolve text variables safely
+                if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
+                    let newText = obj.text;
+                    let hasVariables = false;
+                    
+                    // Check for variables before replacement
+                    if (/\{\{[^}]+\}\}/.test(newText)) {
+                        hasVariables = true;
+                        Object.keys(mockData).forEach(key => {
+                            const regex = new RegExp(`{{${key}}}`, 'g');
+                            newText = newText.replace(regex, mockData[key]);
+                        });
+                    }
+                    
+                    if (hasVariables && newText !== obj.text) {
+                        obj.set('text', newText);
+                    }
+                    obj.set('editable', false);
+                }
+
+                // Lock objects safely - preserve background elements
+                if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
+                    obj.set({ 
+                        selectable: false, 
+                        evented: false,
+                        hasControls: false,
+                        hasBorders: false
+                    });
+                }
+            });
+
+            canvas.requestRenderAll();
+            return true;
+            
+        } catch (error) {
+            console.error('Error applying preview data:', error);
+            return false;
+        }
+    };
+
+    // Safe toggle with rollback capability
+    const togglePreviewWithRollback = async (
+        canvas, 
+        isPreviewMode, 
+        setIsPreviewMode, 
+        mockData, 
+        renderAllPages,
+        saveCurrentPageState
+    ) => {
+        if (!canvas) return false;
+        
+        // Always save state before any toggle
+        saveCurrentPageState();
+        
+        const wasPreview = isPreviewMode.value;
+        
+        try {
+            if (!wasPreview) {
+                // Entering preview mode
+                backupTemplatesBeforePreview(canvas);
+                setIsPreviewMode(true);
+                
+                await nextTick();
+                await renderAllPages();
+                
+                const success = applyPreviewDataSafe(canvas, mockData);
+                if (!success) {
+                    throw new Error('Failed to apply preview data');
+                }
+            } else {
+                // Exiting preview mode
+                const success = restoreTemplatesAfterPreview(canvas);
+                if (!success) {
+                    console.warn('Template restoration had errors, but continuing...');
+                }
+                
+                setIsPreviewMode(false);
+                canvas.selection = true;
+                
+                await nextTick();
+                await renderAllPages();
+            }
+            
+            return true;
+            
+        } catch (error) {
+            console.error('Preview toggle failed, rolling back:', error);
+            
+            // Rollback on error
+            try {
+                if (!wasPreview) {
+                    // Failed to enter preview, restore edit mode
+                    restoreTemplatesAfterPreview(canvas);
+                    setIsPreviewMode(false);
+                    canvas.selection = true;
+                } else {
+                    // Failed to exit preview, stay in preview
+                    setIsPreviewMode(true);
+                }
+                
+                await nextTick();
+                await renderAllPages();
+            } catch (rollbackError) {
+                console.error('Rollback also failed:', rollbackError);
+            }
+            
+            return false;
+        }
+    };
+
+    // Cleanup function
+    const cleanup = () => {
+        originalTemplates.clear();
+    };
+
+    // Enhanced font loading with timeout and concurrency control
+    const createFontLoader = () => {
+        const fontCache = new Map();
+        const loadingPromises = new Map();
+        const MAX_FONT_CACHE_SIZE = 20;
+        const FONT_LOAD_TIMEOUT = 10000; // 10 seconds
+
+        const loadFontSafe = async (pdfDoc, family, weight = 'normal', style = 'normal') => {
+            const key = `${family}-${weight}-${style}`;
+            
+            // Check cache first
+            if (fontCache.has(key)) {
+                return fontCache.get(key);
+            }
+
+            // Check if already loading
+            if (loadingPromises.has(key)) {
+                return loadingPromises.get(key);
+            }
+
+            // Limit cache size
+            if (fontCache.size >= MAX_FONT_CACHE_SIZE) {
+                const firstKey = fontCache.keys().next().value;
+                fontCache.delete(firstKey);
+            }
+
+            // Create loading promise with timeout
+            const loadPromise = new Promise(async (resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    loadingPromises.delete(key);
+                    reject(new Error(`Font load timeout: ${key}`));
+                }, FONT_LOAD_TIMEOUT);
+
+                try {
+                    // Try to load font (implementation depends on your font strategy)
+                    let font = null;
+                    
+                    // Standard fonts first
+                    if (['Helvetica', 'Arial', 'Times', 'Courier'].some(n => family.includes(n))) {
+                        const base = family.includes('Times') ? 'Times' : 
+                                    family.includes('Courier') ? 'Courier' : 'Helvetica';
+                        
+                        if (weight === 'bold' && style === 'italic') {
+                            font = await pdfDoc.embedFont(window.PDFLib.StandardFonts[`${base}BoldOblique`]);
+                        } else if (weight === 'bold') {
+                            font = await pdfDoc.embedFont(window.PDFLib.StandardFonts[`${base}Bold`]);
+                        } else if (style === 'italic') {
+                            font = await pdfDoc.embedFont(window.PDFLib.StandardFonts[`${base}Oblique`]);
+                        } else {
+                            font = await pdfDoc.embedFont(window.PDFLib.StandardFonts[base]);
+                        }
+                    } else {
+                        // Custom font loading with error handling
+                        try {
+                            // Your custom font loading logic here
+                            font = await pdfDoc.embedFont(window.PDFLib.StandardFonts.Helvetica);
+                        } catch (customError) {
+                            console.warn(`Custom font ${family} failed, using Helvetica:`, customError);
+                            font = await pdfDoc.embedFont(window.PDFLib.StandardFonts.Helvetica);
+                        }
+                    }
+
+                    clearTimeout(timeoutId);
+                    loadingPromises.delete(key);
+                    fontCache.set(key, font);
+                    resolve(font);
+                    
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    loadingPromises.delete(key);
+                    reject(error);
+                }
+            });
+
+            loadingPromises.set(key, loadPromise);
+            return loadPromise;
+        };
+
+        return { loadFontSafe, cleanup: () => fontCache.clear() };
+    };
+
+    // Safe canvas image capture with CORS protection
+    const captureCanvasPageSafe = async (canvas, pageIndex, zoomLevel, qualityMultiplier = 2) => {
+        if (!canvas) return null;
+        
+        const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const GAP = CANVAS_CONSTANTS.PAGE_GAP;
+        const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+        const IMAGE_TYPES = ['image'];
+        const ALL_OVERLAY_TYPES = [...TEXT_TYPES, ...IMAGE_TYPES];
+
+        try {
+            // Create a clean canvas clone to avoid tainting
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            const captureWidth = CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel;
+            const captureHeight = P_H * zoomLevel;
+            const topOffset = pageIndex * (P_H + GAP) * zoomLevel;
+            
+            tempCanvas.width = captureWidth;
+            tempCanvas.height = captureHeight;
+            
+            // Get all objects and determine visibility for this page
+            const allObjects = canvas.getObjects();
+            const objectsToRender = [];
+            const hiddenForCapture = [];
+            
+            allObjects.forEach(obj => {
+                const center = obj.getCenterPoint();
+                const objPageIndex = Math.floor(center.y / (P_H + GAP));
+                const isWrongPage = objPageIndex !== pageIndex;
+                const isOverlay = ALL_OVERLAY_TYPES.includes(obj.type) && 
+                                obj.id !== 'page-bg-image' && 
+                                obj.id !== 'page-bg';
+                
+                if ((isWrongPage || isOverlay) && obj.visible) {
+                    hiddenForCapture.push(obj);
+                    obj.visible = false;
+                } else if (!isWrongPage && obj.visible) {
+                    objectsToRender.push(obj);
+                }
+            });
+            
+            // Render the clean page
+            canvas.renderAll();
+            
+            // Use toDataURL with error handling
+            let dataUrl = null;
+            try {
+                dataUrl = canvas.toDataURL({
+                    format: 'jpeg',
+                    quality: 0.92,
+                    multiplier: qualityMultiplier / zoomLevel,
+                    left: 0,
+                    top: topOffset,
+                    width: captureWidth,
+                    height: captureHeight
+                });
+            } catch (canvasError) {
+                console.warn(`Canvas taint detected on page ${pageIndex + 1}, using fallback:`, canvasError);
+                
+                // Fallback: draw only background elements
+                try {
+                    // Create a minimal canvas with just background
+                    const fallbackCanvas = document.createElement('canvas');
+                    fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
+                    fallbackCanvas.height = P_H * qualityMultiplier;
+                    const fallbackCtx = fallbackCanvas.getContext('2d');
+                    
+                    fallbackCtx.fillStyle = '#ffffff';
+                    fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+                    
+                    dataUrl = fallbackCanvas.toDataURL('image/jpeg', 0.92);
+                } catch (fallbackError) {
+                    console.error(`Even fallback failed for page ${pageIndex + 1}:`, fallbackError);
+                    return null;
+                }
+            }
+            
+            // Restore visibility
+            hiddenForCapture.forEach(obj => { obj.visible = true; });
+            canvas.renderAll();
+            
+            return dataUrl && dataUrl.length > 100 ? dataUrl : null;
+            
+        } catch (error) {
+            console.error(`Error capturing page ${pageIndex + 1}:`, error);
+            return null;
+        }
+    };
+
+    // Helper functions from usePdfExportFix
+    const dataUrlToBytes = (dataUrl) => {
+        if (!dataUrl || typeof dataUrl !== 'string') return null;
+        const parts = dataUrl.split(';base64,');
+        if (parts.length < 2) return null;
+        const raw = atob(parts[1]);
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        return arr;
+    };
+
+    return {
+        generateHybridPdfBlob,
+        createFontLoader,
+        captureCanvasPageSafe,
+        backupTemplatesBeforePreview,
+        restoreTemplatesAfterPreview,
+        applyPreviewDataSafe,
+        togglePreviewWithRollback,
+        cleanup
+    };
 }

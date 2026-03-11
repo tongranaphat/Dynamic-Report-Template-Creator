@@ -24,7 +24,7 @@
         <button @click="handleTabClick('assets')" @mouseenter="handleMouseEnter('assets')"
           :class="['rail-btn', { active: activeTab === 'assets' && isOpen, pinned: isPinned && activeTab === 'assets' }]">
           <span class="rail-icon">🖼️</span>
-          <span class="rail-label">รูปภาพ</span>
+          <span class="rail-label">องค์ประกอบ</span>
         </button>
 
         <button @click="handleTabClick('project')" @mouseenter="handleMouseEnter('project')"

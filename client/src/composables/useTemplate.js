@@ -4,6 +4,9 @@ import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist';
 import { fabric } from 'fabric';
 import { useEditorStore } from '../stores/editorStore';
+import { apiService } from '../services/apiService';
+import { showNotification } from '../utils/notifications';
+import { CANVAS_CONSTANTS } from '../constants/canvas';
 
 export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const { resetHistory, saveHistory, setHistoryLock } = canvasHelpers;
@@ -227,16 +230,29 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
     try {
       if (currentTemplateId.value) {
-        await axios.put(`${SERVER_URL}/templates/${currentTemplateId.value}`, payload);
-        if (!isSilent) alert('Template Updated successfully');
+        await apiService.updateTemplate(currentTemplateId.value, payload);
+        if (!isSilent) {
+          // Success notification
+          showNotification('Template Updated successfully!', 'success');
+        }
       } else {
-        const response = await axios.post(`${SERVER_URL}/templates`, payload);
-        currentTemplateId.value = response.data.id;
-        if (!isSilent) alert('Template Saved successfully');
+        const response = await apiService.saveTemplate(payload);
+        // Bug Fix: Handle both direct ID response and nested response
+        const templateId = response?.data?.id || response?.data?.id || response?.id || response;
+        currentTemplateId.value = typeof templateId === 'string' ? templateId : String(templateId || '');
+        if (!isSilent) {
+          // Success notification
+          showNotification('Template Saved successfully!', 'success');
+        }
       }
-      await fetchTemplates();
+      // Removed automatic sidebar refresh during save operations
+      // await fetchTemplates();
     } catch (e) {
-      alert('Save Template failed: ' + (e.response?.data || e.message));
+      const errorMsg = 'Save Template failed: ' + (e.response?.data || e.message);
+      if (!isSilent) {
+        showNotification(errorMsg, 'error');
+      }
+      console.error(errorMsg, e);
       throw e;
     }
   };
@@ -244,7 +260,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const loadTemplate = async (t) => {
     if (!canvas.value) return;
 
-    currentTemplateId.value = t._id || t.id;
+    currentTemplateId.value = typeof (t._id || t.id) === 'string' ? (t._id || t.id) : String(t._id || t.id || '');
     currentReportId.value = null;
     templateName.value = t.name;
     isPreviewMode.value = false;
@@ -310,11 +326,12 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const deleteTemplate = async (id) => {
     if (!confirm('Delete this template?')) return;
     try {
-      await axios.delete(`${SERVER_URL}/templates/${id}`);
+      await apiService.deleteTemplate(id);
       await fetchTemplates();
       if (currentTemplateId.value === id) await resetCanvas();
+      showNotification('Template deleted successfully', 'success');
     } catch (e) {
-      alert('Delete failed');
+      showNotification('Delete failed: ' + (e.response?.data || e.message), 'error');
     }
   };
 
@@ -481,115 +498,58 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     };
   };
 
-  const unifiedSave = async (generatePdfFn, variableMap = null) => {
+  const unifiedSave = async (generatePdfFn, variableMap = null, isSilent = false) => {
     // 0. Ensure we have a handle immediately to preserve User Gesture (Critical for Save As)
     if (window.showSaveFilePicker && !currentFileHandle.value) {
       try {
         const options = {
-          suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`,
-          types: [
-            {
-              description: 'Hybrid PDF Project',
-              accept: { 'application/pdf': ['.pdf'] }
-            }
-          ]
+          suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`
         };
+        
         currentFileHandle.value = await window.showSaveFilePicker(options);
+        if (currentFileHandle.value) {
+          await generatePdfFn(canvasImages, projectData, variableMap);
+          saveHistory();
+        }
       } catch (err) {
-        if (err.name === 'AbortError') return; // User cancelled
+        if (err.name === 'AbortError') return false; // User cancelled
         console.error('File picker failed:', err);
-        return;
       }
+      return; // Exit early - file picker handled
     }
 
+    // 1. Try to save to database first (non-blocking)
     try {
-      await saveReport(true); // Silent save to DB
+      const payload = {
+        name: templateName.value || 'Untitled Template',
+        pages: preparePagesForSave(),
+        userId: getMachineId()
+      };
+      
+      if (currentTemplateId.value) {
+        await apiService.updateTemplate(currentTemplateId.value, payload);
+        if (!isSilent) {
+          // Success notification
+          showNotification('Template Updated successfully!', 'success');
+        }
+      } else {
+        const response = await apiService.saveTemplate(payload);
+        // Bug Fix: Handle both direct ID response and nested response
+        const templateId = response?.data?.id || response?.data?.id || response?.id || response;
+        currentTemplateId.value = typeof templateId === 'string' ? templateId : String(templateId || '');
+        if (!isSilent) {
+          // Success notification
+          showNotification('Template Saved successfully!', 'success');
+        }
+      }
     } catch (e) {
       console.warn('Silent DB save failed:', e);
       // Non-blocking: we still proceed with the local file save.
       // Show a non-blocking warning in the console so developers can diagnose.
     }
-
-    // 2. Save to Local File (Hybrid PDF)
-    if (!window.showSaveFilePicker) {
-      alert('Your browser does not support local file saving. Project saved to History only.');
-      return;
-    }
-
-    try {
-      const fileHandle = currentFileHandle.value;
-      if (!fileHandle) return; // Should not happen if step 0 succeeded
-
-      // 1. Create a writable stream FIRST (preserves User Gesture if Save As is needed immediately)
-      let writable;
-      try {
-        // Attempt to silently overwrite the existing file
-        writable = await fileHandle.createWritable();
-      } catch (writeErr) {
-        console.warn('The file was modified externally or locked. Requesting new save location...', writeErr);
-
-        // Clear the broken shortcut
-        currentFileHandle.value = null;
-
-        // Open the "Save As" dialog again
-        const options = {
-          suggestedName: `${sanitizeTemplateName(templateName.value)}.pdf`,
-          types: [{ description: 'Hybrid PDF Project', accept: { 'application/pdf': ['.pdf'] } }]
-        };
-        currentFileHandle.value = await window.showSaveFilePicker(options);
-
-        try {
-          // Create the writable stream with the fresh handle
-          writable = await currentFileHandle.value.createWritable();
-        } catch (secondErr) {
-          currentFileHandle.value = null;
-          if (secondErr.name === 'InvalidStateError' || secondErr.name === 'NotAllowedError') {
-            throw new Error('The selected file is locked by another program (e.g., Adobe Acrobat) or cannot be written to. Please close the file in other applications and try saving again.');
-          }
-          throw secondErr;
-        }
-      }
-
-      // 2. NOW generate the PDF with the stream safely open
-      const projectData = getFullProjectData();
-      let pdfBlob;
-      try {
-        pdfBlob = await generatePdfFn(pages.value, projectData, variableMap);
-      } catch (genErr) {
-        // Discard the temporary .crswap file without mutating the real file
-        await writable.abort();
-        throw genErr;
-      }
-
-      if (!pdfBlob) {
-        await writable.abort();
-        throw new Error('Failed to generate Hybrid PDF');
-      }
-
-      // 3. Write the file and commit changes
-      await writable.write(pdfBlob);
-      await writable.close();
-
-      alert('Project saved successfully as Hybrid PDF!');
-    } catch (err) {
-      console.error('Unified Save Failed:', err);
-
-      if (err.name === 'InvalidStateError') {
-        currentFileHandle.value = null;
-        alert('Failed to save: The file state is invalid. It might be locked by another program. Please "Save As" a different name.');
-      } else {
-        alert('Failed to save local file: ' + err.message);
-      }
-    }
   };
 
-  const handleUnifiedImport = async () => {
-    // Open File Picker
-    if (!window.showOpenFilePicker) {
-      alert('Browser not supported.');
-      return;
-    }
-
+  const handleUnifiedImport = async (e) => {
     try {
       const [fileHandle] = await window.showOpenFilePicker({
         types: [
@@ -768,6 +728,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     cleanFabricObject,
     preparePagesForSave,
     sanitizePagesData, // BUG-006 fix: exported so EditorView can use it in openReportFromHistory
+    currentFileHandle, // Export for EditorView to use in Save Project workflow
     // Unified Exports
     unifiedSave,
     handleUnifiedImport,

@@ -4,11 +4,16 @@ const prisma = require('../prismaClient');
 const { asyncHandler } = require('../utils/errorHandler');
 const { saveValidTextContent, deleteTextFile } = require('../utils/textSaver');
 
-// Save or Create Report Project
+// Save or Create Report Instance
 const saveReport = asyncHandler(async (req, res) => {
-    const { id, name, pages, templateId, status } = req.body;
+    const { id, name, pages, templateId, status, projectData, filePath } = req.body;
 
     let report;
+
+    // Extract data from projectData if available
+    const finalName = name || (projectData?.name) || 'Untitled Report';
+    const finalPages = pages || (projectData?.pages) || [];
+    const finalTemplateId = templateId || (projectData?.templateId) || null;
 
     if (id) {
         // === CASE 1: มี ID ส่งมา = UPDATE งานเดิม ===
@@ -18,8 +23,9 @@ const saveReport = asyncHandler(async (req, res) => {
             report = await prisma.reportInstance.update({
                 where: { id },
                 data: {
-                    name: name || existing.name,
-                    pages: pages,
+                    name: finalName,
+                    pages: finalPages,
+                    templateId: finalTemplateId,
                     status: status || 'DRAFT',
                     updatedAt: new Date()
                 }
@@ -28,9 +34,9 @@ const saveReport = asyncHandler(async (req, res) => {
             report = await prisma.reportInstance.create({
                 data: {
                     id: id,
-                    name: name || 'Untitled Project',
-                    pages: pages || [],
-                    templateId: templateId || null,
+                    name: finalName,
+                    pages: finalPages,
+                    templateId: finalTemplateId,
                     status: 'DRAFT'
                 }
             });
@@ -39,9 +45,9 @@ const saveReport = asyncHandler(async (req, res) => {
         // === CASE 2: ไม่มี ID ส่งมา = CREATE งานใหม่ ===
         report = await prisma.reportInstance.create({
             data: {
-                name: name || 'Untitled Project',
-                pages: pages || [],
-                templateId: templateId || null,
+                name: finalName,
+                pages: finalPages,
+                templateId: finalTemplateId,
                 status: 'DRAFT'
             }
         });
@@ -49,8 +55,8 @@ const saveReport = asyncHandler(async (req, res) => {
 
     if (report) {
         let bgUrl = null;
-        if (templateId) {
-            const tmpl = await prisma.template.findUnique({ where: { id: templateId } });
+        if (report.templateId) {
+            const tmpl = await prisma.template.findUnique({ where: { id: report.templateId } });
             if (tmpl) bgUrl = tmpl.background;
         }
         await saveValidTextContent(report.pages, 'report', report.id, report.name, bgUrl);
