@@ -65,7 +65,10 @@ const getVariables = asyncHandler(async (req, res) => {
     const variables = await prisma.variable.findMany({
         where: {
             OR: [{ scope: 'GLOBAL' }, { scope: 'USER' }]
-        }
+        },
+        orderBy: [
+            { label: 'asc' }
+        ]
     });
 
     // ถ้า DB ว่าง (รันครั้งแรก) ให้ส่ง Mock กลับไปก่อน
@@ -74,13 +77,57 @@ const getVariables = asyncHandler(async (req, res) => {
             { id: '1', key: 'school_name', label: 'ชื่อโรงเรียน', scope: 'GLOBAL' },
             { id: '2', key: 'school_year', label: 'ปีการศึกษา', scope: 'GLOBAL' },
             { id: '3', key: 'student_name', label: 'ชื่อนักเรียน', scope: 'GLOBAL' },
-            { id: '4', key: 'student_id', label: 'รหัสนักเรียน', scope: 'GLOBAL' }
+            { id: '4', key: 'student_id', label: 'รหัสนักเรียน', scope: 'GLOBAL' },
+            { id: '5', key: 'student_class', label: 'ชั้นเรียน', scope: 'GLOBAL' },
+            { id: '6', key: 'teacher_name', label: 'ชื่อครู', scope: 'GLOBAL' },
+            { id: '7', key: 'teacher_id', label: 'รหัสครู', scope: 'GLOBAL' },
+            { id: '8', key: 'school_address', label: 'ที่อยู่โรงเรียน', scope: 'GLOBAL' },
+            { id: '9', key: 'school_phone', label: 'เบอร์โทรศัพท์', scope: 'GLOBAL' },
+            { id: '10', key: 'report_date', label: 'วันที่รายงาน', scope: 'GLOBAL' },
+            { id: '11', key: 'report_title', label: 'ชื่อรายงาน', scope: 'GLOBAL' },
+            { id: '12', key: 'semester', label: 'ภาคการศึกษา', scope: 'GLOBAL' },
+            { id: '13', key: 'grade_level', label: 'ระดับชั้น', scope: 'GLOBAL' }
         ];
-        return res.json(mockVariables);
+        
+        // Add categories dynamically to mock variables
+        const categorizedMockVariables = mockVariables.map(v => {
+            let category = 'General';
+            if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
+                category = 'Student Info';
+            } else if (v.key.includes('teacher')) {
+                category = 'Teacher Info';
+            } else if (v.key.includes('school')) {
+                category = 'School Info';
+            } else if (v.key.includes('report')) {
+                category = 'Report Info';
+            } else if (v.key.includes('semester') || v.key.includes('grade')) {
+                category = 'Academic Info';
+            }
+            return { ...v, category };
+        });
+        
+        return res.json(categorizedMockVariables);
     }
 
-    logger.success(`Retrieved ${variables.length} variables`);
-    res.json(variables);
+    // Add categories dynamically to database variables
+    const categorizedVariables = variables.map(v => {
+        let category = 'General';
+        if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
+            category = 'Student Info';
+        } else if (v.key.includes('teacher')) {
+            category = 'Teacher Info';
+        } else if (v.key.includes('school')) {
+            category = 'School Info';
+        } else if (v.key.includes('report')) {
+            category = 'Report Info';
+        } else if (v.key.includes('semester') || v.key.includes('grade')) {
+            category = 'Academic Info';
+        }
+        return { ...v, category };
+    });
+
+    logger.success(`Retrieved ${categorizedVariables.length} variables`);
+    res.json(categorizedVariables);
 });
 
 // 2. GET Templates

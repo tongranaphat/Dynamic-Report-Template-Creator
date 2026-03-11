@@ -4,98 +4,127 @@ import { useCanvasCore } from './useCanvasCore.js';
 export function useCanvasHistory() {
   const { canvas } = useCanvasCore();
 
-  // History management state
+  // Enhanced history management state
   const historyStack = ref([]);
   const redoStack = ref([]);
   const isHistoryProcessing = ref(false);
-  const maxHistorySize = 50; // Limit history size to prevent memory issues
+  const isHistoryLocked = ref(false);
+  const isRemoteUpdating = ref(false);
+  const pendingRemoteUpdate = ref(null);
+  const maxHistorySize = 50;
 
   // Computed properties for UI state
   const canUndo = computed(() => historyStack.value.length > 1); // >1 because first element is initial state
   const canRedo = computed(() => redoStack.value.length > 0);
 
-  // History management functions
+  // Enhanced saveHistory with remote protection and debouncing
   const saveHistory = () => {
-    if (!canvas.value || isHistoryProcessing.value) return;
+    if (!canvas.value || isHistoryProcessing.value || isHistoryLocked.value || isRemoteUpdating.value) return;
 
     try {
-      const currentState = canvas.value.toJSON(['id', 'selectable', 'name']);
-      historyStack.value.push(currentState);
-
-      // Limit history size
-      if (historyStack.value.length > maxHistorySize) {
-        historyStack.value.shift();
+      // Debounce rapid saves
+      if (pendingRemoteUpdate.value) {
+        clearTimeout(pendingRemoteUpdate.value);
       }
 
-      // Clear redo stack when new action is performed
-      redoStack.value = [];
+      pendingRemoteUpdate.value = setTimeout(() => {
+        const currentState = canvas.value.toJSON([
+          'id', 'selectable', 'name', 'data', 'originX', 'originY', 
+          'lockMovementX', 'lockMovementY', 'textBaseline'
+        ]);
 
-      console.log('History saved. Stack size:', historyStack.value.length);
+        // Prevent duplicate states
+        if (historyStack.value.length > 0) {
+          const lastState = historyStack.value[historyStack.value.length - 1];
+          if (JSON.stringify(lastState) === JSON.stringify(currentState)) {
+            return;
+          }
+        }
+
+        historyStack.value.push(currentState);
+        
+        // Limit history size with memory awareness
+        if (historyStack.value.length > maxHistorySize) {
+          historyStack.value.shift();
+        }
+
+        // Clear redo stack when new action is performed
+        redoStack.value = [];
+
+        // Emit only local changes, not remote ones
+        if (!isRemoteUpdating.value) {
+          canvas.value.fire('canvas:changed-by-user', { json: currentState });
+        }
+
+        console.log('History saved. Stack size:', historyStack.value.length);
+      }, 150);
+
     } catch (error) {
       console.error('Error saving history:', error);
     }
   };
 
+  // Enhanced undo with remote awareness
   const undo = () => {
-    if (!canvas.value || historyStack.value.length <= 1) return;
+    if (!canvas.value || historyStack.value.length <= 1 || 
+        isHistoryProcessing.value || isHistoryLocked.value || isRemoteUpdating.value) return;
 
-    isHistoryProcessing.value = true;
+    isHistoryLocked.value = true;
 
     try {
-      // Save current state to redo stack
-      const currentState = canvas.value.toJSON(['id', 'selectable', 'name']);
+      const currentState = historyStack.value.pop();
       redoStack.value.push(currentState);
-
-      // Remove current state from history stack
-      historyStack.value.pop();
-
-      // Get previous state
+      
       const previousState = historyStack.value[historyStack.value.length - 1];
 
-      // Load previous state
       canvas.value.loadFromJSON(previousState, () => {
         canvas.value.renderAll();
-        isHistoryProcessing.value = false;
-        console.log(
-          'Undo performed. History stack:',
-          historyStack.value.length,
-          'Redo stack:',
-          redoStack.value.length
-        );
+        
+        // Font-ready re-render
+        document.fonts.ready.then(() => {
+          if (canvas.value) canvas.value.requestRenderAll();
+        });
+        
+        isHistoryLocked.value = false;
+        console.log('↩️ Undo performed (remote-safe)');
+
+        canvas.value.fire('canvas:changed-by-user', { json: previousState });
+        canvas.value.fire('history:restored');
       });
     } catch (error) {
-      console.error('Error during undo:', error);
-      isHistoryProcessing.value = false;
+      console.error('Undo error:', error);
+      isHistoryLocked.value = false;
     }
   };
 
+  // Enhanced redo with remote awareness
   const redo = () => {
-    if (!canvas.value || redoStack.value.length === 0) return;
+    if (!canvas.value || redoStack.value.length === 0 || 
+        isHistoryProcessing.value || isHistoryLocked.value || isRemoteUpdating.value) return;
 
-    isHistoryProcessing.value = true;
+    isHistoryLocked.value = true;
 
     try {
-      // Get state to redo
-      const stateToRedo = redoStack.value.pop();
+      const nextState = redoStack.value.pop();
+      historyStack.value.push(nextState);
 
-      // Save current state to history stack
-      const currentState = canvas.value.toJSON(['id', 'selectable', 'name']);
-      historyStack.value.push(currentState);
-
-      // Load redo state
-      canvas.value.loadFromJSON(stateToRedo, () => {
+      canvas.value.loadFromJSON(nextState, () => {
         canvas.value.renderAll();
-        isHistoryProcessing.value = false;
-        console.log(
-          'Redo performed. History stack:',
-          historyStack.value.length,
-          'Redo stack:',
-          redoStack.value.length
-        );
+        
+        // Font-ready re-render
+        document.fonts.ready.then(() => {
+          if (canvas.value) canvas.value.requestRenderAll();
+        });
+        
+        isHistoryLocked.value = false;
+        console.log('↪️ Redo performed (remote-safe)');
+
+        canvas.value.fire('canvas:changed-by-user', { json: nextState });
+        canvas.value.fire('history:restored');
       });
     } catch (error) {
-      console.error('Error during redo:', error);
-      isHistoryProcessing.value = false;
+      console.error('Redo error:', error);
+      isHistoryLocked.value = false;
     }
   };
 
@@ -135,11 +164,47 @@ export function useCanvasHistory() {
     }, 100);
   };
 
+  // Safe loadFromSocket with history protection
+  const loadFromSocket = (json) => {
+    if (!canvas.value) return;
+
+    console.log('🔄 Receiving update from socket...');
+    isRemoteUpdating.value = true;
+    isHistoryLocked.value = true;
+
+    canvas.value.loadFromJSON(json, () => {
+      canvas.value.renderAll();
+      
+      // Re-render after fonts load
+      document.fonts.ready.then(() => {
+        if (canvas.value) canvas.value.requestRenderAll();
+      });
+
+      // CRITICAL: Do NOT push remote changes to local history
+      // This prevents undoing other users' work
+      isRemoteUpdating.value = false;
+      isHistoryLocked.value = false;
+      console.log('✅ Remote update applied (history protected)');
+
+      canvas.value.fire('history:restored');
+    });
+  };
+
+  // Cleanup function
+  const cleanup = () => {
+    if (pendingRemoteUpdate.value) {
+      clearTimeout(pendingRemoteUpdate.value);
+      pendingRemoteUpdate.value = null;
+    }
+  };
+
   return {
     // History state
     historyStack,
     redoStack,
     isHistoryProcessing,
+    isHistoryLocked,
+    isRemoteUpdating,
     canUndo,
     canRedo,
 
@@ -147,6 +212,7 @@ export function useCanvasHistory() {
     saveHistory,
     undo,
     redo,
-    initializeHistory
+    loadFromSocket,
+    cleanup
   };
 }

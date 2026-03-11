@@ -11,8 +11,7 @@
           </button>
 
           <div v-if="showFontPicker" class="font-dropdown" @click.stop>
-            <input v-model="fontSearch" class="font-search" placeholder="ค้นหาฟอนต์..." @input="filterFonts"
-              autofocus />
+            <input v-model="fontSearch" class="font-search" placeholder="ค้นหาฟอนต์..." @input="filterFonts" />
 
             <div class="font-list" ref="fontListRef">
               <!-- Thai-capable fonts group -->
@@ -129,6 +128,38 @@
         </div>
       </div>
     </template>
+
+    <div class="divider"></div>
+    
+    <!-- Layer Management Controls -->
+    <div class="tool-group">
+        <button @click="showLayerControls = !showLayerControls" :class="['icon-btn', { active: showLayerControls }]"
+          title="การจัดลำดับชั้น">
+          ชั้นที่ ▾
+        </button>
+        <div v-if="showLayerControls" class="popup-menu layer-popup">
+          <div class="popup-item">
+            <button @click="bringToFront" class="layer-btn" title="นำไปอยู่ด้านหน้าสุด">
+              ⬆️ นำขึ้นหน้าสุด
+            </button>
+          </div>
+          <div class="popup-item">
+            <button @click="bringForward" class="layer-btn" title="นำขึ้นหน้า">
+              ↑ นำขึ้นหน้า
+            </button>
+          </div>
+          <div class="popup-item">
+            <button @click="sendBackwards" class="layer-btn" title="ส่งลับหลัง">
+              ↓ ส่งลับหลัง
+            </button>
+          </div>
+          <div class="popup-item">
+            <button @click="sendToBack" class="layer-btn" title="ส่งไปอยู่ด้านหลังสุด">
+              ⬇️ ส่งลับหลังสุด
+            </button>
+          </div>
+        </div>
+    </div>
 
     <div class="divider"></div>
     <button @click="deleteObject" class="icon-btn delete-icon" title="ลบวัตถุ">🗑 ลบ</button>
@@ -251,6 +282,7 @@ const activeObject = ref(null);
 const showSpacing = ref(false);
 const showOpacity = ref(false);
 const showFontPicker = ref(false);
+const showLayerControls = ref(false);
 const fontSearch = ref('');
 const pickerRef = ref(null);
 
@@ -440,6 +472,59 @@ const deleteObject = () => {
   }
 };
 
+// Layer Management Methods
+const bringToFront = () => {
+  if (!props.canvas || !activeObject.value) return;
+  const targets = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects() : [activeObject.value];
+  targets.forEach(obj => {
+    if (obj.nodeId) {
+      props.canvas.bringToFront(obj);
+    }
+  });
+  props.canvas.renderAll();
+  props.canvas.fire('object:modified');
+  showLayerControls.value = false;
+};
+
+const bringForward = () => {
+  if (!props.canvas || !activeObject.value) return;
+  const targets = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects() : [activeObject.value];
+  targets.forEach(obj => {
+    if (obj.nodeId) {
+      props.canvas.bringForward(obj);
+    }
+  });
+  props.canvas.renderAll();
+  props.canvas.fire('object:modified');
+  showLayerControls.value = false;
+};
+
+const sendBackwards = () => {
+  if (!props.canvas || !activeObject.value) return;
+  const targets = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects() : [activeObject.value];
+  targets.forEach(obj => {
+    if (obj.nodeId) {
+      props.canvas.sendBackwards(obj);
+    }
+  });
+  props.canvas.renderAll();
+  props.canvas.fire('object:modified');
+  showLayerControls.value = false;
+};
+
+const sendToBack = () => {
+  if (!props.canvas || !activeObject.value) return;
+  const targets = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects() : [activeObject.value];
+  targets.forEach(obj => {
+    if (obj.nodeId) {
+      props.canvas.sendToBack(obj);
+    }
+  });
+  props.canvas.renderAll();
+  props.canvas.fire('object:modified');
+  showLayerControls.value = false;
+};
+
 const updateSelection = () => {
   if (!props.canvas) return;
   const active = props.canvas.getActiveObject();
@@ -473,6 +558,12 @@ const handleClickOutside = (e) => {
   const opacityBtn = document.querySelector('button[title="ความโปร่งใส"]');
   if (showOpacity.value && opacityPopup && !opacityPopup.contains(e.target) && (!opacityBtn || !opacityBtn.contains(e.target))) {
     showOpacity.value = false;
+  }
+  // Close layer controls popup
+  const layerPopup = document.querySelector('.layer-popup');
+  const layerBtn = document.querySelector('button[title="การจัดลำดับชั้น"]');
+  if (showLayerControls.value && layerPopup && !layerPopup.contains(e.target) && (!layerBtn || !layerBtn.contains(e.target))) {
+    showLayerControls.value = false;
   }
 };
 
@@ -787,5 +878,29 @@ onUnmounted(() => {
   padding: 0;
   cursor: pointer;
   box-sizing: border-box;
+}
+
+/* ── Layer controls ── */
+.layer-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.layer-btn:hover {
+  background: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.layer-popup {
+  width: 160px;
+  padding: 8px;
 }
 </style>

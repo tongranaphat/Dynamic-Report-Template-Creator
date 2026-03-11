@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import axios from 'axios';
+import { apiService } from '../services/apiService';
 import { CANVAS_CONSTANTS } from '../constants/canvas';
 
 import { v4 as uuidv4, validate as validateUuid } from 'uuid';
@@ -17,8 +17,6 @@ const getMachineId = () => {
 };
 
 export const useEditorStore = defineStore('editor', () => {
-  const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
   // --- STATE ---
   const variables = ref([]);
   const templates = ref([]);
@@ -44,15 +42,16 @@ export const useEditorStore = defineStore('editor', () => {
 
   const fetchVariables = async () => {
     try {
-      const res = await axios.get(`${SERVER_URL}/variables`);
-      variables.value = res.data;
+      const data = await apiService.getVariables();
+      variables.value = data;
+      console.log('Variables loaded:', data.length);
     } catch (e) {
       console.error('Failed to load vars', e);
       // Fallback
       variables.value = [
-        { key: 'school_name', label: 'ชื่อโรงเรียน', scope: 'GLOBAL', category: 'General' },
-        { key: 'school_year', label: 'ปีการศึกษา', scope: 'GLOBAL', category: 'General' },
-        { key: 'student_name', label: 'ชื่อนักเรียน', scope: 'GLOBAL', category: 'General' }
+        { key: 'school_name', label: 'ชื่อโรงเรียน', scope: 'GLOBAL', category: 'Student Info' },
+        { key: 'school_year', label: 'ปีการศึกษา', scope: 'GLOBAL', category: 'Student Info' },
+        { key: 'student_name', label: 'ชื่อนักเรียน', scope: 'GLOBAL', category: 'Student Info' }
       ];
     }
   };
@@ -60,8 +59,9 @@ export const useEditorStore = defineStore('editor', () => {
   const fetchTemplates = async () => {
     try {
       const machineId = getMachineId();
-      const res = await axios.get(`${SERVER_URL}/templates?userId=${machineId}`);
-      templates.value = res.data;
+      const data = await apiService.getTemplates(machineId);
+      templates.value = data;
+      console.log('Templates loaded:', data.length);
     } catch (e) {
       console.error('Failed to fetch templates:', e);
     }

@@ -24,19 +24,16 @@ export function attachBlockInteraction(
 
         clearGuides();
 
+        // Handle both single objects and ActiveSelection
+        const targets = (target as any).type === 'activeSelection' ? (target as any).getObjects() : [target];
+
         // 1. Array loop performance optimization: Precompute bounds before the loop
-        const objects = canvas.getObjects().filter((obj) => obj !== target && (obj as any).nodeId !== undefined);
+        const objects = canvas.getObjects().filter((obj) => 
+            !targets.includes(obj) && (obj as any).nodeId !== undefined
+        );
         const cachedBounds = objects.map(obj => obj.getBoundingRect());
 
-        // 2. Grid Snapping
-        if (target.left !== undefined) {
-            target.set({ left: Math.round(target.left / GRID_SIZE) * GRID_SIZE });
-        }
-        if (target.top !== undefined) {
-            target.set({ top: Math.round(target.top / GRID_SIZE) * GRID_SIZE });
-        }
-
-        // 3. Fix jitter: Recompute bounds after grid snapping
+        // 2. Get target bounds BEFORE any snapping
         target.setCoords();
         const targetBounds = target.getBoundingRect();
 
@@ -50,21 +47,57 @@ export function attachBlockInteraction(
         let snappedX = false;
         let snappedY = false;
 
-        const drawGuide = (coords: number[]) => {
+        // Get the logical coordinates of the visible canvas area
+        const vpt = canvas.viewportTransform;
+        let vptTl = { x: -5000, y: -5000 };
+        let vptBr = { x: 5000, y: 5000 };
+        
+        if (vpt) {
+            const invertedVpt = fabric.util.invertTransform(vpt);
+            vptTl = fabric.util.transformPoint(new fabric.Point(0, 0), invertedVpt);
+            vptBr = fabric.util.transformPoint(new fabric.Point(canvas.width || 1000, canvas.height || 1000), invertedVpt);
+        }
+
+        // Get current zoom level for manual stroke scaling
+        const zoom = canvas.getZoom() || 1;
+
+        // 3. Draw guide functions with proper viewport handling
+        const drawGuide = (coords: number[], isCanvasCenter = false) => {
             const line = new fabric.Line(coords, {
-                stroke: '#4A90E2',
-                strokeWidth: 1,
-                strokeDashArray: [4, 4],
+                stroke: isCanvasCenter ? '#FF00FF' : '#4A90E2',
+                strokeWidth: (isCanvasCenter ? 2 : 1) / zoom,
+                strokeDashArray: isCanvasCenter ? undefined : [4 / zoom, 4 / zoom],
                 selectable: false,
                 evented: false,
                 excludeFromExport: true,
                 hoverCursor: 'default'
+                // NO strokeUniform here
             });
             activeGuides.push(line);
             canvas.add(line);
+            // Bring guides to top
+            line.bringToFront();
         };
 
-        // 4. Smart Alignment Snapping
+        // 4. Canvas Center Snapping (highest priority)
+        const canvasCenterX = (canvas.width || 1000) / 2;
+        const canvasCenterY = (canvas.height || 1000) / 2;
+
+        // X-Axis Canvas Center Snapping
+        if (!snappedX && Math.abs(targetCenterX - canvasCenterX) < SNAP_THRESHOLD) {
+            target.set({ left: target.left! - (targetCenterX - canvasCenterX) });
+            drawGuide([canvasCenterX, vptTl.y, canvasCenterX, vptBr.y], true);
+            snappedX = true;
+        }
+
+        // Y-Axis Canvas Center Snapping
+        if (!snappedY && Math.abs(targetCenterY - canvasCenterY) < SNAP_THRESHOLD) {
+            target.set({ top: target.top! - (targetCenterY - canvasCenterY) });
+            drawGuide([vptTl.x, canvasCenterY, vptBr.x, canvasCenterY], true);
+            snappedY = true;
+        }
+
+        // 5. Smart Alignment Snapping with other objects (second priority)
         for (const objBounds of cachedBounds) {
             if (snappedX && snappedY) break;
 
@@ -78,17 +111,16 @@ export function attachBlockInteraction(
             // X-Axis Snapping
             if (!snappedX) {
                 if (Math.abs(targetLeft - objLeft) < SNAP_THRESHOLD) {
-                    // Update from target.left overrides grid snapping mathematically.
                     target.set({ left: target.left! - (targetLeft - objLeft) });
-                    drawGuide([objLeft, 0, objLeft, canvas.height || 1000]);
+                    drawGuide([objLeft, vptTl.y, objLeft, vptBr.y]);
                     snappedX = true;
                 } else if (Math.abs(targetRight - objRight) < SNAP_THRESHOLD) {
                     target.set({ left: target.left! - (targetRight - objRight) });
-                    drawGuide([objRight, 0, objRight, canvas.height || 1000]);
+                    drawGuide([objRight, vptTl.y, objRight, vptBr.y]);
                     snappedX = true;
                 } else if (Math.abs(targetCenterX - objCenterX) < SNAP_THRESHOLD) {
                     target.set({ left: target.left! - (targetCenterX - objCenterX) });
-                    drawGuide([objCenterX, 0, objCenterX, canvas.height || 1000]);
+                    drawGuide([objCenterX, vptTl.y, objCenterX, vptBr.y]);
                     snappedX = true;
                 }
             }
@@ -97,30 +129,46 @@ export function attachBlockInteraction(
             if (!snappedY) {
                 if (Math.abs(targetTop - objTop) < SNAP_THRESHOLD) {
                     target.set({ top: target.top! - (targetTop - objTop) });
-                    drawGuide([0, objTop, canvas.width || 1000, objTop]);
+                    drawGuide([vptTl.x, objTop, vptBr.x, objTop]);
                     snappedY = true;
                 } else if (Math.abs(targetBottom - objBottom) < SNAP_THRESHOLD) {
                     target.set({ top: target.top! - (targetBottom - objBottom) });
-                    drawGuide([0, objBottom, canvas.width || 1000, objBottom]);
+                    drawGuide([vptTl.x, objBottom, vptBr.x, objBottom]);
                     snappedY = true;
                 } else if (Math.abs(targetCenterY - objCenterY) < SNAP_THRESHOLD) {
                     target.set({ top: target.top! - (targetCenterY - objCenterY) });
-                    drawGuide([0, objCenterY, canvas.width || 1000, objCenterY]);
+                    drawGuide([vptTl.x, objCenterY, vptBr.x, objCenterY]);
                     snappedY = true;
                 }
             }
         }
 
-        // 5. Instantly Sync Transform Back to Reactive Block
-        const nodeId = (target as any).nodeId;
-        if (nodeId) {
-            const blocks = getBlocks();
-            const block = blocks.find(b => b.id === nodeId);
-            if (block) {
-                if (target.left !== undefined) block.transform.x = target.left;
-                if (target.top !== undefined) block.transform.y = target.top;
+        // 6. Grid Snapping (lowest priority - only if no smart snapping occurred)
+        if (!snappedX && target.left !== undefined) {
+            const gridSnappedX = Math.round(target.left / GRID_SIZE) * GRID_SIZE;
+            if (Math.abs(target.left - gridSnappedX) < SNAP_THRESHOLD) {
+                target.set({ left: gridSnappedX });
             }
         }
+        if (!snappedY && target.top !== undefined) {
+            const gridSnappedY = Math.round(target.top / GRID_SIZE) * GRID_SIZE;
+            if (Math.abs(target.top - gridSnappedY) < SNAP_THRESHOLD) {
+                target.set({ top: gridSnappedY });
+            }
+        }
+
+        // 5. Instantly Sync Transform Back to Reactive Block(s)
+        targets.forEach((obj: any) => {
+            const nodeId = obj.nodeId;
+            if (nodeId) {
+                const blocks = getBlocks();
+                const block = blocks.find(b => b.id === nodeId);
+                if (block) {
+                    if (obj.left !== undefined) block.transform.x = obj.left;
+                    if (obj.top !== undefined) block.transform.y = obj.top;
+                }
+            }
+        });
     });
 
     canvas.on('object:modified', (e) => {
@@ -128,50 +176,67 @@ export function attachBlockInteraction(
         const target = e.target;
         if (!target) return;
 
-        const nodeId = (target as any).nodeId;
-        if (!nodeId) return;
+        // Handle both single objects and ActiveSelection
+        const targets = (target as any).type === 'activeSelection' ? (target as any).getObjects() : [target];
+        
+        if (targets.length === 0) return;
 
         const blocks = getBlocks();
-        const block = blocks.find(b => b.id === nodeId);
-        if (!block) return;
+        let hasChanges = false;
 
-        if (target.left !== undefined) block.transform.x = target.left;
-        if (target.top !== undefined) block.transform.y = target.top;
-        if (target.angle !== undefined) block.transform.rotation = target.angle;
+        targets.forEach((obj: any) => {
+            const nodeId = obj.nodeId;
+            if (!nodeId) return;
 
-        if (target.scaleX !== undefined && target.scaleY !== undefined) {
-            const newWidth = target.getScaledWidth();
-            const newHeight = target.getScaledHeight();
+            const block = blocks.find(b => b.id === nodeId);
+            if (!block) return;
 
-            block.transform.width = newWidth;
-            block.transform.height = newHeight;
+            // Update position
+            if (obj.left !== undefined) block.transform.x = obj.left;
+            if (obj.top !== undefined) block.transform.y = obj.top;
+            if (obj.angle !== undefined) block.transform.rotation = obj.angle;
 
-            if (block.type !== 'image') {
-                target.set({
-                    width: newWidth,
-                    height: newHeight,
-                    scaleX: 1,
-                    scaleY: 1
-                });
-            }
-            target.setCoords();
-        }
+            // Update scale
+            if (obj.scaleX !== undefined && obj.scaleY !== undefined) {
+                const newWidth = obj.getScaledWidth();
+                const newHeight = obj.getScaledHeight();
 
-        if (block.type === 'text' && target instanceof fabric.IText) {
-            const textBlock = block as TextBlock;
-            textBlock.content = [{ text: target.text || '', marks: [] }];
-            if (target.fontSize !== undefined) {
-                // Safely initialize layout if the block was created without one
-                if (!textBlock.layout) {
-                    textBlock.layout = {} as any; 
+                block.transform.width = newWidth;
+                block.transform.height = newHeight;
+
+                if (block.type !== 'image') {
+                    obj.set({
+                        width: newWidth,
+                        height: newHeight,
+                        scaleX: 1,
+                        scaleY: 1
+                    });
                 }
-                textBlock.layout.fontSize = target.fontSize;
+                obj.setCoords();
             }
-        }
 
-        // CanvasHistory internally performs a deep clone (structuredClone)
-        history.push(blocks);
-        rerender();
+            // Update text properties
+            if (block.type === 'text' && obj instanceof fabric.IText) {
+                const textBlock = block as TextBlock;
+                textBlock.content = [{ text: obj.text || '', marks: [] }];
+                if (obj.fontSize !== undefined) {
+                    // Safely initialize layout if the block was created without one
+                    if (!textBlock.layout) {
+                        textBlock.layout = {} as any; 
+                    }
+                    textBlock.layout.fontSize = obj.fontSize;
+                }
+            }
+
+            hasChanges = true;
+        });
+
+        // Save to history only once for the entire multi-object operation
+        if (hasChanges) {
+            // CanvasHistory internally performs a deep clone (structuredClone)
+            history.push(blocks);
+            rerender();
+        }
     });
 
     // Cleanup guides on mouse up just in case modified didn't fire (e.g., clicked but didn't drag)
@@ -319,6 +384,11 @@ function updateExistingObject(canvas: fabric.Canvas, obj: fabric.Object, block: 
     });
 
     if (block.type === 'text' && obj instanceof fabric.Textbox) {
+        // Bug Fix: Skip updating if user is actively editing
+        if ((obj as any).isEditing) {
+            return false; // Don't update while user is typing
+        }
+        
         const textBlock = block as TextBlock;
         const plainText = textBlock.content.map((run) => run.text).join('');
 
@@ -331,7 +401,6 @@ function updateExistingObject(canvas: fabric.Canvas, obj: fabric.Object, block: 
             height: block.transform.height,
             fontSize: textBlock.layout?.fontSize || 20
         });
-
     } else if (block.type === 'image' && obj instanceof fabric.Image) {
         const img = obj as fabric.Image;
         const scaleX = block.transform.width / (img.width || 1);
