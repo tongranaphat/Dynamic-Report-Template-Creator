@@ -312,7 +312,7 @@ const handleSaveProject = async () => {
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
-    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    const TEXT_TYPES = ['textbox', 'text', 'i-text', 'image'];
 
     // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
@@ -337,11 +337,15 @@ const handleSaveProject = async () => {
           const center = obj.getCenterPoint();
           const objPageIndex = Math.floor(center.y / (P_H + GAP));
           const isWrongPage = objPageIndex !== i;
-          const isOverlay = TEXT_TYPES.includes(obj.type) &&
-            obj.id !== 'page-bg-image' &&
-            obj.id !== 'page-bg';
+          const OVERLAY_TYPES = ['textbox', 'text', 'i-text'];
 
-          if ((isWrongPage || isOverlay) && obj.visible) {
+          // const isOverlay = OVERLAY_TYPES.includes(obj.type) &&
+          //   obj.id !== 'page-bg-image' &&
+          //   obj.id !== 'page-bg';
+
+          const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
+
+          if ((isWrongPage || !isBackground) && obj.visible) {
             obj.visible = false;
             hiddenForCapture.push(obj);
           }
@@ -461,7 +465,7 @@ const handleExport = async () => {
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
-    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    const TEXT_TYPES = ['textbox', 'text', 'i-text', 'image'];
 
     // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
@@ -486,11 +490,15 @@ const handleExport = async () => {
           const center = obj.getCenterPoint();
           const objPageIndex = Math.floor(center.y / (P_H + GAP));
           const isWrongPage = objPageIndex !== i;
-          const isOverlay = TEXT_TYPES.includes(obj.type) &&
-            obj.id !== 'page-bg-image' &&
-            obj.id !== 'page-bg';
 
-          if ((isWrongPage || isOverlay) && obj.visible) {
+          // const OVERLAY_TYPES = ['textbox', 'text', 'i-text'];
+          // const isOverlay = OVERLAY_TYPES.includes(obj.type) &&
+          //   obj.id !== 'page-bg-image' &&
+          //   obj.id !== 'page-bg';
+
+          const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
+
+          if ((isWrongPage || !isBackground) && obj.visible) {
             obj.visible = false;
             hiddenForCapture.push(obj);
           }
