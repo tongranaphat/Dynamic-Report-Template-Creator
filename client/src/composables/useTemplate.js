@@ -31,6 +31,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const customVarName = ref('');
   const currentBackground = ref(null);
   const originalObjectStates = ref({});
+  const isPagesSidebarOpen = ref(false);
 
   // --- HELPER FUNCTIONS ---
 
@@ -729,6 +730,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     preparePagesForSave,
     sanitizePagesData, // BUG-006 fix: exported so EditorView can use it in openReportFromHistory
     currentFileHandle, // Export for EditorView to use in Save Project workflow
+    isPagesSidebarOpen, // Export for EditorView to use in keyboard shortcuts
     // Unified Exports
     unifiedSave,
     handleUnifiedImport,

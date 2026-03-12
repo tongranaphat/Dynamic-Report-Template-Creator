@@ -40,9 +40,9 @@
       @update:pdfQuality="pdfQuality = $event" @save-template="handleSaveTemplate" @reset-canvas="resetCanvasWrapper"
       @toggle-preview="togglePreviewWrapper" @import-workspace="handleImportWorkspaceWrapper"
       @add-variable="addVariableToCanvas" @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject"
-      @generate-pdf="handleExport" @open-history="openHistoryModal"
-      @generate-editable-pdf="handleExport" @delete-page="deletePage" @add-page="addBlankPageWrapper"
-      @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" />
+      @generate-pdf="handleExport" @open-history="openHistoryModal" @generate-editable-pdf="handleExport"
+      @delete-page="deletePage" @add-page="addBlankPageWrapper" @import-page="handleAppendPageWrapper"
+      @page-click="scrollToPage" @page-drop="handlePageDrop" />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
       <div class="scroll-center-helper">
@@ -85,6 +85,7 @@ import { usePreviewData } from '../composables/usePreviewData';
 import { useEditorStore } from '../stores/editorStore';
 import { CANVAS_CONSTANTS } from '../constants/canvas';
 import { showNotification } from '../utils/notifications';
+import apiService from '../services/apiService';
 
 const PAGE_WIDTH_CONST = CANVAS_CONSTANTS.PAGE_WIDTH;
 const PAGE_HEIGHT_CONST = CANVAS_CONSTANTS.PAGE_HEIGHT;
@@ -204,6 +205,7 @@ const {
   pages,
   currentPageIndex,
   isSidebarOpen,
+  isPagesSidebarOpen, // Keyboard shortcut state
   groupedVariables,
   fetchVariables,
   fetchTemplates,
@@ -269,14 +271,15 @@ const handleSaveTemplate = async () => {
 // 2. Save Project: STRICT Overwrite ONLY (no file picker)
 const handleSaveProject = async () => {
   if (!canvas.value) return;
-  
+
   // STRICT: Only allow overwrite if file is already linked
-  if (!currentFileHandle.value) {
-    showNotification('No local file linked.', 'error');
+  if (!currentFileHandle || !currentFileHandle.value) {
+    showNotification('No local file linked. Please use Export first.', 'error');
     return;
   }
-  
+
   try {
+    saveCurrentPageState();
     // Collect data for PDF generation
     const pagesData = preparePagesForSave();
     const projectData = {
@@ -286,7 +289,7 @@ const handleSaveProject = async () => {
       timestamp: new Date().toISOString(),
       type: 'hybrid-project'
     };
-    
+
     const variableMap = {
       school_name: 'โรงเรียนเวทย์มนตร์',
       school_year: '2580',
@@ -303,18 +306,18 @@ const handleSaveProject = async () => {
         if (v.key && v.value) variableMap[v.key] = v.value;
       });
     }
-    
+
     // Capture canvas images first
     const canvasImages = [];
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
     const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-    
+
     // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
     const originalPage = currentPageIndex.value;
-    
+
     try {
       canvas.value.requestRenderAll();
       if (!wasPreview) saveCurrentPageState();
@@ -323,12 +326,12 @@ const handleSaveProject = async () => {
       await nextTick();
       applyPreviewDataToCanvas();
       await nextTick();
-      
+
       // Capture each page as image
       for (let i = 0; i < pages.value.length; i++) {
         const allObjects = canvas.value.getObjects();
         const hiddenForCapture = [];
-        
+
         // Hide overlay objects for clean background capture
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
@@ -337,16 +340,16 @@ const handleSaveProject = async () => {
           const isOverlay = TEXT_TYPES.includes(obj.type) &&
             obj.id !== 'page-bg-image' &&
             obj.id !== 'page-bg';
-          
+
           if ((isWrongPage || isOverlay) && obj.visible) {
             obj.visible = false;
             hiddenForCapture.push(obj);
           }
         });
         canvas.value.renderAll();
-        
+
         const topOffset = i * (P_H + GAP) * zoomLevel.value;
-        
+
         try {
           const canvasImage = canvas.value.toDataURL({
             format: 'jpeg',
@@ -357,7 +360,7 @@ const handleSaveProject = async () => {
             width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
             height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
           });
-          
+
           if (canvasImage && canvasImage.length > 100) {
             canvasImages.push(canvasImage);
           }
@@ -375,22 +378,22 @@ const handleSaveProject = async () => {
             canvasImages.push(fallbackImage);
           }
         }
-        
+
         // Restore visibility
         hiddenForCapture.forEach((obj) => { obj.visible = true; });
       }
       canvas.value.requestRenderAll();
-      
+
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
-      
+
       // Generate PDF blob with canvas images
       const pdfBlob = await generateHybridPdfBlob(canvasImages, projectData, variableMap);
-      
+
       // STRICT: Only overwrite existing file
       const writable = await currentFileHandle.value.createWritable();
       await writable.write(pdfBlob);
       await writable.close();
-      
+
       showNotification('Project saved successfully!', 'success');
       saveHistory();
     } finally {
@@ -405,7 +408,7 @@ const handleSaveProject = async () => {
         });
         canvas.value.renderAll();
       }
-      
+
       if (!wasPreview) {
         isPreviewMode.value = false;
         await nextTick();
@@ -423,8 +426,9 @@ const handleSaveProject = async () => {
 // 3. Export: Save As + DB Registration
 const handleExport = async () => {
   if (!canvas.value) return;
-  
+
   try {
+    saveCurrentPageState();
     // Collect data for PDF generation
     const pagesData = preparePagesForSave();
     const projectData = {
@@ -434,7 +438,7 @@ const handleExport = async () => {
       timestamp: new Date().toISOString(),
       type: 'hybrid-project'
     };
-    
+
     const variableMap = {
       school_name: 'โรงเรียนเวทย์มนตร์',
       school_year: '2580',
@@ -451,18 +455,18 @@ const handleExport = async () => {
         if (v.key && v.value) variableMap[v.key] = v.value;
       });
     }
-    
+
     // Capture canvas images first
     const canvasImages = [];
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
     const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-    
+
     // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
     const originalPage = currentPageIndex.value;
-    
+
     try {
       canvas.value.requestRenderAll();
       if (!wasPreview) saveCurrentPageState();
@@ -471,12 +475,12 @@ const handleExport = async () => {
       await nextTick();
       applyPreviewDataToCanvas();
       await nextTick();
-      
+
       // Capture each page as image
       for (let i = 0; i < pages.value.length; i++) {
         const allObjects = canvas.value.getObjects();
         const hiddenForCapture = [];
-        
+
         // Hide overlay objects for clean background capture
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
@@ -485,16 +489,16 @@ const handleExport = async () => {
           const isOverlay = TEXT_TYPES.includes(obj.type) &&
             obj.id !== 'page-bg-image' &&
             obj.id !== 'page-bg';
-          
+
           if ((isWrongPage || isOverlay) && obj.visible) {
             obj.visible = false;
             hiddenForCapture.push(obj);
           }
         });
         canvas.value.renderAll();
-        
+
         const topOffset = i * (P_H + GAP) * zoomLevel.value;
-        
+
         try {
           const canvasImage = canvas.value.toDataURL({
             format: 'jpeg',
@@ -505,7 +509,7 @@ const handleExport = async () => {
             width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
             height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
           });
-          
+
           if (canvasImage && canvasImage.length > 100) {
             canvasImages.push(canvasImage);
           }
@@ -523,36 +527,33 @@ const handleExport = async () => {
             canvasImages.push(fallbackImage);
           }
         }
-        
+
         // Restore visibility
         hiddenForCapture.forEach((obj) => { obj.visible = true; });
       }
       canvas.value.requestRenderAll();
-      
+
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
-      
+
       // Step 1: Generate PDF blob
       const pdfBlob = await generateHybridPdfBlob(canvasImages, projectData, variableMap);
-      
+
       // Step 2: Use file picker for Save As
       const options = {
         suggestedName: `${templateName.value || 'report'}.pdf`
       };
       const newHandle = await window.showSaveFilePicker(options);
-      
+
       // Step 3: Write PDF blob to new handle
       const writable = await newHandle.createWritable();
       await writable.write(pdfBlob);
       await writable.close();
-      
+
       // Step 4: CRITICAL - Reassign handle for future saves
       currentFileHandle.value = newHandle;
-      
+
       // Step 5: Register new instance in database
       try {
-        // Import apiService dynamically to avoid circular dependencies
-        const { default: apiService } = await import('../services/apiService');
-        
         const reportInstanceData = {
           name: templateName.value || 'Untitled Report',
           templateId: currentTemplateId.value || null,
@@ -561,21 +562,18 @@ const handleExport = async () => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        
+
         const response = await apiService.createReportInstance(reportInstanceData);
-        
-        if (response && response.data) {
-          currentReportId.value = response.data.id;
+        const responseData = response?.data || response;
+        if (responseData && responseData.id) {
+          currentReportId.value = responseData.id;
           showNotification('Report exported and registered successfully!', 'success');
         }
-        // else {
-        //   showNotification('Report exported but failed to register in database', 'warning');
-        // }
       } catch (dbError) {
         console.error('Failed to register report instance:', dbError);
         showNotification('Report exported but database registration failed', 'warning');
       }
-      
+
       saveHistory();
     } finally {
       // Restore canvas state
@@ -589,7 +587,7 @@ const handleExport = async () => {
         });
         canvas.value.renderAll();
       }
-      
+
       if (!wasPreview) {
         isPreviewMode.value = false;
         await nextTick();
@@ -648,10 +646,10 @@ const addBlankPageWrapper = async () => {
 // เพิ่ม cleanup function เพื่อป้องกัน memory leaks
 const cleanupCanvasObjects = () => {
   if (!canvas.value) return;
-  
+
   const objects = canvas.value.getObjects();
   let cleanedCount = 0;
-  
+
   objects.forEach(obj => {
     try {
       // Clear clipPath อย่างปลอดภัย
@@ -661,23 +659,23 @@ const cleanupCanvasObjects = () => {
         }
         obj.clipPath = null;
       }
-      
+
       // Clear event listeners
       if (obj.off && typeof obj.off === 'function') {
         obj.off();
       }
-      
+
       // Dispose custom objects
       if (obj.dispose && typeof obj.dispose === 'function') {
         obj.dispose();
       }
-      
+
       cleanedCount++;
     } catch (e) {
       console.warn('Error cleaning up object:', e);
     }
   });
-  
+
   if (cleanedCount > 0) {
     console.log(`Cleaned up ${cleanedCount} objects`);
   }
@@ -692,7 +690,7 @@ const renderAllPages = async () => {
   try {
     // Cleanup ก่อน clear เพื่อป้องกัน memory leaks
     cleanupCanvasObjects();
-    
+
     if (!pages.value || !Array.isArray(pages.value) || pages.value.length === 0) {
       pages.value = [{ id: 0, background: null, objects: [] }];
     }
@@ -809,7 +807,7 @@ const renderAllPages = async () => {
                       }
                       imgResolve();
                     },
-                    { 
+                    {
                       crossOrigin: 'anonymous',
                       // Add timeout and error callback
                       onError: (err) => {
@@ -857,8 +855,8 @@ const scrollToPage = (index) => {
 const forceUnlockObject = (obj) => {
   if (!obj) return;
   const isText = ['i-text', 'textbox', 'text'].includes(obj.type);
-  
-  // เก็บ original state ก่อนทำการแก้ไข (ถ้ายังไม่ได้เก็บไว้)
+  const isImage = obj.type === 'image'; // เช็คว่าเป็นรูปภาพหรือไม่
+
   if (!obj._originalState) {
     obj._originalState = {
       selectable: obj.selectable,
@@ -868,7 +866,7 @@ const forceUnlockObject = (obj) => {
       hasBorders: obj.hasBorders
     };
   }
-  
+
   obj.set({
     selectable: true,
     evented: true,
@@ -880,17 +878,16 @@ const forceUnlockObject = (obj) => {
     lockRotation: false,
     lockScalingX: false,
     lockScalingY: false,
-    // BUG-003 fix: only lock uniform scaling for images (not textboxes).
-    // Textboxes need independent width resize; lockUniScaling:true broke that.
-    lockUniScaling: !isText
+    // ปลดล็อคให้ยืดหดได้อย่างอิสระ (สำหรับรูปภาพจะได้ยืดได้)
+    lockUniScaling: false
   });
 
-  // Hide middle controls (Top, Bottom, Left, Right) to keep selection clean and force uniform scaling
+  // กำหนดว่าใครโชว์ปุ่มไหนดึงได้บ้าง
   obj.setControlsVisibility({
-    mt: false,
-    mb: false,
-    ml: false,
-    mr: false,
+    mt: isImage, // รูปภาพโชว์ดึงบน / ข้อความซ่อน
+    mb: isImage, // รูปภาพโชว์ดึงล่าง / ข้อความซ่อน
+    ml: true,    // โชว์ทั้งคู่ (รูปไว้บีบ, ข้อความไว้ยืดกรอบ)
+    mr: true,    // โชว์ทั้งคู่
     tl: true,
     tr: true,
     bl: true,
@@ -914,9 +911,14 @@ let isSavingState = false;
 
 const saveCurrentPageState = () => {
   if (isPreviewMode.value || !canvas.value || isSavingState) return;
-  
+
   isSavingState = true;
   try {
+    // FIX: Force ungroup to restore absolute coordinates before saving state
+    if (canvas.value && canvas.value.getActiveObject() && canvas.value.getActiveObject().type === 'activeSelection') {
+      canvas.value.discardActiveObject();
+    }
+
     const allObjects = canvas.value.getObjects();
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
@@ -930,28 +932,23 @@ const saveCurrentPageState = () => {
       if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
       if (typeof obj.top !== 'number' || isNaN(obj.top)) return;
 
-      // Use Center Point for Page Assignment ("Half in more") - zoom-aware
+      // Zoom-independent coordinates (DO NOT divide by zoomLevel)
       const center = obj.getCenterPoint();
-      const actualCenterY = center.y / (zoomLevel.value || 1);
+      const actualCenterY = center.y;
       let pageIndex = Math.floor(actualCenterY / (P_H + GAP));
 
-      // Boundary checks
       if (pageIndex < 0) pageIndex = 0;
       if (pageIndex >= pages.value.length) pageIndex = pages.value.length - 1;
 
       try {
-        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline']);
+        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
         const pageTopY = pageIndex * (P_H + GAP);
-        
-        // Zoom-independent coordinates
-        const actualTop = obj.top / (zoomLevel.value || 1);
-        const actualLeft = obj.left / (zoomLevel.value || 1);
-        
-        serialized.left = Math.round(actualLeft * 100) / 100;
-        serialized.top = Math.round((actualTop - pageTopY) * 100) / 100;
-        serialized.width = Math.round((obj.width || 0) / (zoomLevel.value || 1) * 100) / 100;
-        serialized.height = Math.round((obj.height || 0) / (zoomLevel.value || 1) * 100) / 100;
-        
+
+        serialized.left = Math.round(obj.left * 100) / 100;
+        serialized.top = Math.round((obj.top - pageTopY) * 100) / 100;
+        serialized.width = Math.round((obj.width || 0) * 100) / 100;
+        serialized.height = Math.round((obj.height || 0) * 100) / 100;
+
         if (serialized.textBaseline === 'alphabetical') serialized.textBaseline = 'alphabetic';
         pageObjectMap[pageIndex].push(serialized);
       } catch (e) {
@@ -978,7 +975,7 @@ const setCanvasBackground = async (dataUrl) => {
 
 const applyPreviewDataToCanvas = () => {
   if (!canvas.value) return;
-  
+
   // ใช้ mock data จาก composable แทน hardcoded
   const mockData = getMockData();
 
@@ -999,8 +996,8 @@ const applyPreviewDataToCanvas = () => {
     // 2. Lock ALL objects (images, text, shapes) so they can't be selected/hovered/dragged
     // Only exclude background elements if they have a specific ID, but usually they are already evented=false
     if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-      obj.set({ 
-        selectable: false, 
+      obj.set({
+        selectable: false,
         evented: false,
         hasControls: false,
         hasBorders: false
@@ -1015,16 +1012,16 @@ const applyPreviewDataToCanvas = () => {
 const togglePreviewWrapper = async () => {
   // บันทึก state ก่อนเปลี่ยน mode เสมอ - ทั้งเข้าและออก preview
   saveCurrentPageState();
-  
+
   const wasPreview = isPreviewMode.value;
-  
+
   try {
     if (!wasPreview) {
       // Entering preview - backup templates first
-      const textObjects = canvas.value.getObjects().filter(obj => 
+      const textObjects = canvas.value.getObjects().filter(obj =>
         ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text
       );
-      
+
       // Store original templates in window for recovery
       window.__originalTemplates = textObjects.map(obj => ({
         id: obj.id || `${obj.type}_${obj.left}_${obj.top}`,
@@ -1034,29 +1031,29 @@ const togglePreviewWrapper = async () => {
         evented: obj.evented
       }));
     }
-    
+
     togglePreview();
     await nextTick();
-    
+
     if (isPreviewMode.value) {
       applyPreviewDataToCanvas();
     } else {
       // Exiting preview - restore templates
       if (canvas.value && window.__originalTemplates) {
         canvas.value.selection = true;
-        
+
         canvas.value.getObjects().forEach(obj => {
           if (['textbox', 'text', 'i-text'].includes(obj.type)) {
             const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
             const backup = window.__originalTemplates.find(t => t.id === objId);
-            
+
             if (backup) {
               try {
                 obj.set('text', backup.text);
                 obj.set('editable', backup.editable);
                 obj.set('selectable', backup.selectable);
                 obj.set('evented', backup.evented);
-                
+
                 if (obj.textBaseline === 'alphabetical') {
                   obj.set('textBaseline', 'alphabetic');
                 }
@@ -1066,17 +1063,17 @@ const togglePreviewWrapper = async () => {
             }
           }
         });
-        
+
         // Clear backup
         window.__originalTemplates = null;
       }
-      
+
       if (canvas.value) canvas.value.selection = true;
       await renderAllPages();
     }
   } catch (error) {
     console.error('Preview toggle failed:', error);
-    
+
     // Rollback on error
     try {
       if (!wasPreview && window.__originalTemplates) {
@@ -1230,6 +1227,7 @@ onMounted(async () => {
     window.resetCanvas = resetCanvasWrapper;
     window.applyPreviewDataToCanvas = applyPreviewDataToCanvas;
     window.renderAllPages = renderAllPages;
+    window.forceUnlockObject = forceUnlockObject;
     // Expose page state so useCanvas.js keyboard handler can paste cross-page
     window.__editorState = {
       get currentPageIndex() { return currentPageIndex.value; },
@@ -1277,19 +1275,62 @@ onMounted(async () => {
     viewportRef.value.addEventListener('scroll', handleScroll);
   }
 
+  let clipboard = null;
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Copy (Ctrl+C)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      const activeObj = canvas.value?.getActiveObject();
+      if (activeObj && !activeObj.isEditing) {
+        e.preventDefault();
+        activeObj.clone((cloned) => { clipboard = cloned; });
+      }
+      return;
+    }
+
+    // Paste (Ctrl+V)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      if (clipboard && canvas.value) {
+        e.preventDefault();
+        clipboard.clone((clonedObj) => {
+          canvas.value.discardActiveObject();
+          clonedObj.set({ left: clonedObj.left + 20, top: clonedObj.top + 20, evented: true, selectable: true });
+
+          if (clonedObj.type === 'activeSelection') {
+            clonedObj.canvas = canvas.value;
+            clonedObj.forEachObject((obj) => {
+              obj.id = 'obj_' + Date.now() + Math.random();
+              canvas.value.add(obj);
+            });
+            clonedObj.setCoords();
+          } else {
+            clonedObj.id = 'obj_' + Date.now() + Math.random();
+            canvas.value.add(clonedObj);
+          }
+          clipboard.top += 20;
+          clipboard.left += 20;
+          canvas.value.setActiveObject(clonedObj);
+          canvas.value.requestRenderAll();
+          if (typeof saveHistory === 'function') saveHistory();
+        });
+      }
+      return;
+    }
+
+    // Delete / Backspace
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const activeObj = canvas.value?.getActiveObject();
       if (activeObj && !activeObj.isEditing) {
         e.preventDefault();
-        removeSelectedObject();
+        if (typeof removeSelectedObject === 'function') removeSelectedObject();
         return;
-      } else if (isPagesSidebarOpen.value) {
-        deletePage(currentPageIndex.value);
+      } else if (typeof isPagesSidebarOpen !== 'undefined' && isPagesSidebarOpen?.value) {
+        if (typeof deletePage === 'function') deletePage(currentPageIndex.value);
       }
     }
   });
+
 });
 </script>
 

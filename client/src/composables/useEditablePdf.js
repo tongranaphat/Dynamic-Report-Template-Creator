@@ -552,13 +552,13 @@ export function useEditablePdf() {
 
     // Store original templates before preview mode
     const originalTemplates = new Map();
-    
+
     // Safe template backup before entering preview
     const backupTemplatesBeforePreview = (canvas, pages) => {
         originalTemplates.clear();
-        
+
         if (!canvas || !pages) return;
-        
+
         canvas.getObjects().forEach(obj => {
             if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
                 const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
@@ -575,15 +575,15 @@ export function useEditablePdf() {
     // Safe template restoration with validation
     const restoreTemplatesAfterPreview = (canvas) => {
         if (!canvas || originalTemplates.size === 0) return false;
-        
+
         let restored = 0;
         let errors = 0;
-        
+
         canvas.getObjects().forEach(obj => {
             if (['textbox', 'text', 'i-text'].includes(obj.type)) {
                 const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
                 const backup = originalTemplates.get(objId);
-                
+
                 if (backup) {
                     try {
                         // Restore original template text
@@ -591,12 +591,12 @@ export function useEditablePdf() {
                         obj.set('editable', backup.editable);
                         obj.set('selectable', backup.selectable);
                         obj.set('evented', backup.evented);
-                        
+
                         // Ensure proper text baseline
                         if (obj.textBaseline === 'alphabetical') {
                             obj.set('textBaseline', 'alphabetic');
                         }
-                        
+
                         restored++;
                     } catch (e) {
                         console.error(`Failed to restore template for object ${objId}:`, e);
@@ -605,17 +605,17 @@ export function useEditablePdf() {
                 }
             }
         });
-        
+
         console.log(`Template restoration: ${restored} restored, ${errors} errors`);
         originalTemplates.clear();
-        
+
         return errors === 0;
     };
 
     // Enhanced applyPreviewData with error handling
     const applyPreviewDataSafe = (canvas, mockData) => {
         if (!canvas) return false;
-        
+
         try {
             // Backup before applying preview data
             const currentTexts = new Map();
@@ -634,7 +634,7 @@ export function useEditablePdf() {
                 if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
                     let newText = obj.text;
                     let hasVariables = false;
-                    
+
                     // Check for variables before replacement
                     if (/\{\{[^}]+\}\}/.test(newText)) {
                         hasVariables = true;
@@ -643,7 +643,7 @@ export function useEditablePdf() {
                             newText = newText.replace(regex, mockData[key]);
                         });
                     }
-                    
+
                     if (hasVariables && newText !== obj.text) {
                         obj.set('text', newText);
                     }
@@ -652,8 +652,8 @@ export function useEditablePdf() {
 
                 // Lock objects safely - preserve background elements
                 if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-                    obj.set({ 
-                        selectable: false, 
+                    obj.set({
+                        selectable: false,
                         evented: false,
                         hasControls: false,
                         hasBorders: false
@@ -663,7 +663,7 @@ export function useEditablePdf() {
 
             canvas.requestRenderAll();
             return true;
-            
+
         } catch (error) {
             console.error('Error applying preview data:', error);
             return false;
@@ -672,29 +672,29 @@ export function useEditablePdf() {
 
     // Safe toggle with rollback capability
     const togglePreviewWithRollback = async (
-        canvas, 
-        isPreviewMode, 
-        setIsPreviewMode, 
-        mockData, 
+        canvas,
+        isPreviewMode,
+        setIsPreviewMode,
+        mockData,
         renderAllPages,
         saveCurrentPageState
     ) => {
         if (!canvas) return false;
-        
+
         // Always save state before any toggle
         saveCurrentPageState();
-        
+
         const wasPreview = isPreviewMode.value;
-        
+
         try {
             if (!wasPreview) {
                 // Entering preview mode
                 backupTemplatesBeforePreview(canvas);
                 setIsPreviewMode(true);
-                
+
                 await nextTick();
                 await renderAllPages();
-                
+
                 const success = applyPreviewDataSafe(canvas, mockData);
                 if (!success) {
                     throw new Error('Failed to apply preview data');
@@ -705,19 +705,19 @@ export function useEditablePdf() {
                 if (!success) {
                     console.warn('Template restoration had errors, but continuing...');
                 }
-                
+
                 setIsPreviewMode(false);
                 canvas.selection = true;
-                
+
                 await nextTick();
                 await renderAllPages();
             }
-            
+
             return true;
-            
+
         } catch (error) {
             console.error('Preview toggle failed, rolling back:', error);
-            
+
             // Rollback on error
             try {
                 if (!wasPreview) {
@@ -729,13 +729,13 @@ export function useEditablePdf() {
                     // Failed to exit preview, stay in preview
                     setIsPreviewMode(true);
                 }
-                
+
                 await nextTick();
                 await renderAllPages();
             } catch (rollbackError) {
                 console.error('Rollback also failed:', rollbackError);
             }
-            
+
             return false;
         }
     };
@@ -754,7 +754,7 @@ export function useEditablePdf() {
 
         const loadFontSafe = async (pdfDoc, family, weight = 'normal', style = 'normal') => {
             const key = `${family}-${weight}-${style}`;
-            
+
             // Check cache first
             if (fontCache.has(key)) {
                 return fontCache.get(key);
@@ -781,12 +781,12 @@ export function useEditablePdf() {
                 try {
                     // Try to load font (implementation depends on your font strategy)
                     let font = null;
-                    
+
                     // Standard fonts first
                     if (['Helvetica', 'Arial', 'Times', 'Courier'].some(n => family.includes(n))) {
-                        const base = family.includes('Times') ? 'Times' : 
-                                    family.includes('Courier') ? 'Courier' : 'Helvetica';
-                        
+                        const base = family.includes('Times') ? 'Times' :
+                            family.includes('Courier') ? 'Courier' : 'Helvetica';
+
                         if (weight === 'bold' && style === 'italic') {
                             font = await pdfDoc.embedFont(window.PDFLib.StandardFonts[`${base}BoldOblique`]);
                         } else if (weight === 'bold') {
@@ -811,7 +811,7 @@ export function useEditablePdf() {
                     loadingPromises.delete(key);
                     fontCache.set(key, font);
                     resolve(font);
-                    
+
                 } catch (error) {
                     clearTimeout(timeoutId);
                     loadingPromises.delete(key);
@@ -829,7 +829,7 @@ export function useEditablePdf() {
     // Safe canvas image capture with CORS protection
     const captureCanvasPageSafe = async (canvas, pageIndex, zoomLevel, qualityMultiplier = 2) => {
         if (!canvas) return null;
-        
+
         const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
         const GAP = CANVAS_CONSTANTS.PAGE_GAP;
         const TEXT_TYPES = ['textbox', 'text', 'i-text'];
@@ -840,27 +840,27 @@ export function useEditablePdf() {
             // Create a clean canvas clone to avoid tainting
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-            
+
             const captureWidth = CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel;
             const captureHeight = P_H * zoomLevel;
             const topOffset = pageIndex * (P_H + GAP) * zoomLevel;
-            
+
             tempCanvas.width = captureWidth;
             tempCanvas.height = captureHeight;
-            
+
             // Get all objects and determine visibility for this page
             const allObjects = canvas.getObjects();
             const objectsToRender = [];
             const hiddenForCapture = [];
-            
+
             allObjects.forEach(obj => {
                 const center = obj.getCenterPoint();
                 const objPageIndex = Math.floor(center.y / (P_H + GAP));
                 const isWrongPage = objPageIndex !== pageIndex;
-                const isOverlay = ALL_OVERLAY_TYPES.includes(obj.type) && 
-                                obj.id !== 'page-bg-image' && 
-                                obj.id !== 'page-bg';
-                
+                const isOverlay = ALL_OVERLAY_TYPES.includes(obj.type) &&
+                    obj.id !== 'page-bg-image' &&
+                    obj.id !== 'page-bg';
+
                 if ((isWrongPage || isOverlay) && obj.visible) {
                     hiddenForCapture.push(obj);
                     obj.visible = false;
@@ -868,10 +868,10 @@ export function useEditablePdf() {
                     objectsToRender.push(obj);
                 }
             });
-            
+
             // Render the clean page
             canvas.renderAll();
-            
+
             // Use toDataURL with error handling
             let dataUrl = null;
             try {
@@ -886,7 +886,7 @@ export function useEditablePdf() {
                 });
             } catch (canvasError) {
                 console.warn(`Canvas taint detected on page ${pageIndex + 1}, using fallback:`, canvasError);
-                
+
                 // Fallback: draw only background elements
                 try {
                     // Create a minimal canvas with just background
@@ -894,23 +894,23 @@ export function useEditablePdf() {
                     fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
                     fallbackCanvas.height = P_H * qualityMultiplier;
                     const fallbackCtx = fallbackCanvas.getContext('2d');
-                    
+
                     fallbackCtx.fillStyle = '#ffffff';
                     fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
-                    
+
                     dataUrl = fallbackCanvas.toDataURL('image/jpeg', 0.92);
                 } catch (fallbackError) {
                     console.error(`Even fallback failed for page ${pageIndex + 1}:`, fallbackError);
                     return null;
                 }
             }
-            
+
             // Restore visibility
             hiddenForCapture.forEach(obj => { obj.visible = true; });
             canvas.renderAll();
-            
+
             return dataUrl && dataUrl.length > 100 ? dataUrl : null;
-            
+
         } catch (error) {
             console.error(`Error capturing page ${pageIndex + 1}:`, error);
             return null;

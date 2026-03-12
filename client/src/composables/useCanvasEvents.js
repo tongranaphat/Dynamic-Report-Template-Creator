@@ -111,18 +111,17 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
     if (!obj) return;
     if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
       if (obj.scaleX !== 1 || obj.scaleY !== 1) {
-        // BUG-007 fix: capture scale values BEFORE resetting them to 1
         const sx = obj.scaleX;
         const sy = obj.scaleY;
-        const newFontSize = obj.fontSize * sy;
+        const newFontSize = obj.fontSize * Math.max(sx, sy); // Use max to keep ratio
         obj.set({
           fontSize: Math.round(newFontSize),
           scaleX: 1,
           scaleY: 1
         });
-        // Now sx/sy retain the original values — width update is correct
         if (obj.type === 'textbox') obj.set('width', obj.width * sx);
         obj.setCoords();
+        obj.dirty = true;
       }
     }
   };
