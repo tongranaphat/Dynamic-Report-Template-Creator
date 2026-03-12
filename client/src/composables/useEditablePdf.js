@@ -1,4 +1,5 @@
 import { CANVAS_CONSTANTS } from '../constants/canvas';
+import { PDFDocument, rgb, degrees } from 'pdf-lib';
 
 /**
  * useEditablePdf.js
@@ -435,7 +436,8 @@ export function useEditablePdf() {
                                     size: fontSize, font,
                                     color: textColor,
                                     opacity: obj.opacity ?? 1,
-                                    ...(charSpacing !== 0 ? { characterSpacing: charSpacing } : {})
+                                    ...(charSpacing !== 0 ? { characterSpacing: charSpacing } : {}),
+                                    rotate: degrees(-obj.angle || 0)
                                 });
                             } catch (drawErr) {
                                 // Specific encoding fallback that PRESERVES STYLE
@@ -446,7 +448,8 @@ export function useEditablePdf() {
                                             x: lineX, y: currentY,
                                             size: fontSize, font: fb,
                                             color: textColor,
-                                            opacity: obj.opacity ?? 1
+                                            opacity: obj.opacity ?? 1,
+                                            rotate: degrees(-obj.angle || 0)
                                         });
                                     } catch { }
                                 }
@@ -517,20 +520,44 @@ export function useEditablePdf() {
                                 }
                             }
 
+                            // 1. ดึงสัดส่วนขนาดภาพ
                             const sx = obj.scaleX || 1;
                             const sy = obj.scaleY || 1;
                             const w = (obj.width || 0) * sx;
                             const h = (obj.height || 0) * sy;
-                            let localX = obj.left ?? 0;
-                            let localY = obj.top ?? 0;
-                            if (obj.originX === 'center') localX -= w / 2;
-                            if (obj.originY === 'center') localY -= h / 2;
+
+                            // 2. คำนวณจุดกึ่งกลางที่แท้จริงตามหลักของ Fabric.js (เพราะ Fabric หมุนจากมุมซ้ายบน)
+                            let cx = obj.left ?? 0;
+                            let cy = obj.top ?? 0;
+                            const angleRadFab = (obj.angle || 0) * Math.PI / 180; // หมุนตามเข็มนาฬิกา
+
+                            let dx = 0; let dy = 0;
+                            if (obj.originX !== 'center') dx = w / 2;
+                            if (obj.originY !== 'center') dy = h / 2;
+
+                            // ชดเชยจุดศูนย์กลางที่เลื่อนไปจากการหมุน
+                            cx += (dx * Math.cos(angleRadFab) - dy * Math.sin(angleRadFab));
+                            cy += (dx * Math.sin(angleRadFab) + dy * Math.cos(angleRadFab));
+
+                            // 3. แปลงพิกัดกึ่งกลางไปเป็นหน่วยของ PDF
+                            const pdfCx = cx * SCALE;
+                            const pdfCy = PDF_H - (cy * SCALE);
+                            const pdfW = w * SCALE;
+                            const pdfH = h * SCALE;
+
+                            // 4. คำนวณพิกัดมุมซ้ายล่างสำหรับให้ PDF-lib ใช้เป็นจุดหมุน (Anchor)
+                            const angleDeg = -(obj.angle || 0); // PDF-lib หมุนทวนเข็มนาฬิกา
+                            const angleRad = angleDeg * Math.PI / 180;
+
+                            const pdfX = pdfCx - (pdfW / 2) * Math.cos(angleRad) + (pdfH / 2) * Math.sin(angleRad);
+                            const pdfY = pdfCy - (pdfW / 2) * Math.sin(angleRad) - (pdfH / 2) * Math.cos(angleRad);
 
                             pdfPage.drawImage(pdfImg, {
-                                x: localX * SCALE,
-                                y: PDF_H - (localY + h) * SCALE,
-                                width: w * SCALE,
-                                height: h * SCALE,
+                                x: pdfX,
+                                y: pdfY,
+                                width: pdfW,
+                                height: pdfH,
+                                rotate: degrees(angleDeg),
                                 opacity: obj.opacity ?? 1
                             });
                         } catch (err) {
