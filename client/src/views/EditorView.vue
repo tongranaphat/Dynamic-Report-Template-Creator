@@ -34,15 +34,15 @@
     <Sidebar :isOpen="isSidebarOpen" :connectionStatus="connectionStatus" :templates="templates"
       :isCanvasReady="isCanvasReady" :templateName="templateName" :isPreviewMode="isPreviewMode"
       :currentTemplateId="currentTemplateId" :groupedVariables="groupedVariables" :isGenerating="isGenerating"
-      :pdfQuality="pdfQuality" :pages="pages" :currentPageIndex="currentPageIndex" @toggle="toggleSidebar"
-      @open="isSidebarOpen = true" @close="isSidebarOpen = false" @load-template="loadTemplateWrapper"
-      @delete-template="deleteTemplate" @update:templateName="templateName = $event"
-      @update:pdfQuality="pdfQuality = $event" @save-template="handleSaveTemplate" @reset-canvas="resetCanvasWrapper"
-      @toggle-preview="togglePreviewWrapper" @import-workspace="handleImportWorkspaceWrapper"
-      @add-variable="addVariableToCanvas" @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject"
-      @generate-pdf="handleExport" @open-history="openHistoryModal" @generate-editable-pdf="handleExport"
-      @delete-page="deletePage" @add-page="addBlankPageWrapper" @import-page="handleAppendPageWrapper"
-      @page-click="scrollToPage" @page-drop="handlePageDrop" />
+      :pdfQuality="pdfQuality" :pdfMode="pdfMode" @update:pdfMode="pdfMode = $event" :pages="pages"
+      :currentPageIndex="currentPageIndex" @toggle="toggleSidebar" @open="isSidebarOpen = true"
+      @close="isSidebarOpen = false" @load-template="loadTemplateWrapper" @delete-template="deleteTemplate"
+      @update:templateName="templateName = $event" @update:pdfQuality="pdfQuality = $event"
+      @save-template="handleSaveTemplate" @reset-canvas="resetCanvasWrapper" @toggle-preview="togglePreviewWrapper"
+      @import-workspace="handleImportWorkspaceWrapper" @add-variable="addVariableToCanvas"
+      @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject" @generate-pdf="handleExport"
+      @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
+      @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
       <div class="scroll-center-helper">
@@ -378,41 +378,8 @@ const handleSaveProject = async () => {
             // โหมดรูปภาพ (Flatten): ซ่อนแค่ของที่อยู่ผิดหน้า (ปล่อยให้ข้อความลงรูปไปเลย)
             shouldHide = isWrongPage;
           } else {
-            // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้ และล้าง \u200B ให้เกลี้ยง)
-            const liveObjects = canvas.value.getObjects();
-            exportProjectData.pages.forEach((page, pageIndex) => {
-              if (page.objects) {
-                page.objects.forEach(jsonObj => {
-                  if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
-
-                    const liveObj = liveObjects.find(o => {
-                      if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                      const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
-                      return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
-                    });
-
-                    if (liveObj) {
-                      if (liveObj.textLines && liveObj.textLines.length > 0) {
-                        const cleanLines = liveObj.textLines.map(line => {
-                          return (typeof line === 'string' ? line : '')
-                            .replace(/\u200B/g, '') // ลบช่องว่างล่องหน
-                            .trimEnd();
-                        });
-                        jsonObj.text = cleanLines.join('\n');
-                      } else if (liveObj.text) {
-                        // 📌 แก้ไขตรงนี้: ลบ \u200B ออกจากกรณีสำรองด้วย Acrobat จะได้ไม่ Error
-                        jsonObj.text = liveObj.text.replace(/\u200B/g, '');
-                      }
-                    }
-
-                    // 📌 กันเหนียวชั้นสุดท้าย: เคลียร์ทุกอักขระแปลกปลอมก่อนส่งให้ PDF
-                    if (jsonObj.text) {
-                      jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
-                    }
-                  }
-                });
-              }
-            });
+            // โหมดเวคเตอร์: ซ่อน Overlay ออกจากรูป JPEG (pdf-lib จะวาดเป็น AcroForm แทน)
+            shouldHide = isWrongPage || isOverlay;
           }
 
           if (shouldHide && obj.visible) {
@@ -463,52 +430,40 @@ const handleSaveProject = async () => {
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
 
       // ==========================================
-      // 📌 เตรียมข้อมูลสำหรับ pdf-lib ตามโหมดที่เลือก
+      // 📌 เตรียมข้อมูลให้ PDF (คำนวณ \n ใหม่ โดยห้ามลบข้อมูลทิ้งเด็ดขาด!)
       // ==========================================
       const exportProjectData = JSON.parse(JSON.stringify(projectData));
+      const liveObjects = canvas.value.getObjects();
 
-      if (pdfMode.value === 'flatten') {
-        // โหมดรูปภาพ: ลบข้อมูล Text/Image ออกจาก JSON เลย เพื่อไม่ให้ pdf-lib วาดซ้ำ
-        exportProjectData.pages.forEach(p => {
-          if (p.objects) {
-            p.objects = p.objects.filter(o => !OVERLAY_TYPES.includes(o.type));
-          }
-        });
-      } else {
-        // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้)
-        const liveObjects = canvas.value.getObjects();
-        exportProjectData.pages.forEach((page, pageIndex) => {
-          if (page.objects) {
-            page.objects.forEach(jsonObj => {
-              if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+      exportProjectData.pages.forEach((page, pageIndex) => {
+        if (page.objects) {
+          page.objects.forEach(jsonObj => {
+            if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+              const liveObj = liveObjects.find(o => {
+                if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+              });
 
-                const liveObj = liveObjects.find(o => {
-                  if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                  const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
-                  return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
-                });
-
-                if (liveObj) {
-                  if (liveObj.textLines && liveObj.textLines.length > 0) {
-                    const cleanLines = liveObj.textLines.map(line => {
-                      return (typeof line === 'string' ? line : '')
-                        .replace(/\u200B/g, '')
-                        .trimEnd();
-                    });
-                    jsonObj.text = cleanLines.join('\n');
-                  } else if (liveObj.text) {
-                    jsonObj.text = liveObj.text;
-                  }
+              if (liveObj) {
+                if (liveObj.textLines && liveObj.textLines.length > 0) {
+                  const cleanLines = liveObj.textLines.map(line => {
+                    return (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd();
+                  });
+                  jsonObj.text = cleanLines.join('\n');
+                } else if (liveObj.text) {
+                  jsonObj.text = liveObj.text.replace(/\u200B/g, '');
                 }
               }
-            });
-          }
-        });
-      }
+              if (jsonObj.text) jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
+            }
+          });
+        }
+      });
       // ==========================================
 
-      // Step 1: Generate PDF blob (ส่งตัวแปรที่คัดกรองแล้วไปสร้าง)
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap);
+      // Step 1: Generate PDF blob (ส่งตัวแปรที่ 4, 5, 6 ไปให้ครบเพื่อบอกโหมด)
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
 
       // STRICT: Only overwrite existing file
       const writable = await currentFileHandle.value.createWritable();
@@ -647,41 +602,8 @@ const handleExport = async () => {
             // โหมดรูปภาพ (Flatten): ซ่อนแค่ของที่อยู่ผิดหน้า (ปล่อยให้ข้อความลงรูปไปเลย)
             shouldHide = isWrongPage;
           } else {
-            // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้ และล้าง \u200B ให้เกลี้ยง)
-            const liveObjects = canvas.value.getObjects();
-            exportProjectData.pages.forEach((page, pageIndex) => {
-              if (page.objects) {
-                page.objects.forEach(jsonObj => {
-                  if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
-
-                    const liveObj = liveObjects.find(o => {
-                      if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                      const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
-                      return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
-                    });
-
-                    if (liveObj) {
-                      if (liveObj.textLines && liveObj.textLines.length > 0) {
-                        const cleanLines = liveObj.textLines.map(line => {
-                          return (typeof line === 'string' ? line : '')
-                            .replace(/\u200B/g, '') // ลบช่องว่างล่องหน
-                            .trimEnd();
-                        });
-                        jsonObj.text = cleanLines.join('\n');
-                      } else if (liveObj.text) {
-                        // 📌 แก้ไขตรงนี้: ลบ \u200B ออกจากกรณีสำรองด้วย Acrobat จะได้ไม่ Error
-                        jsonObj.text = liveObj.text.replace(/\u200B/g, '');
-                      }
-                    }
-
-                    // 📌 กันเหนียวชั้นสุดท้าย: เคลียร์ทุกอักขระแปลกปลอมก่อนส่งให้ PDF
-                    if (jsonObj.text) {
-                      jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
-                    }
-                  }
-                });
-              }
-            });
+            // โหมดเวคเตอร์: ซ่อน Overlay ออกจากรูป JPEG (pdf-lib จะวาดเป็น AcroForm แทน)
+            shouldHide = isWrongPage || isOverlay;
           }
 
           if (shouldHide && obj.visible) {
@@ -732,52 +654,40 @@ const handleExport = async () => {
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
 
       // ==========================================
-      // 📌 เตรียมข้อมูลสำหรับ pdf-lib ตามโหมดที่เลือก
+      // 📌 เตรียมข้อมูลให้ PDF (คำนวณ \n ใหม่ โดยห้ามลบข้อมูลทิ้งเด็ดขาด!)
       // ==========================================
       const exportProjectData = JSON.parse(JSON.stringify(projectData));
+      const liveObjects = canvas.value.getObjects();
 
-      if (pdfMode.value === 'flatten') {
-        // โหมดรูปภาพ: ลบข้อมูล Text/Image ออกจาก JSON เลย เพื่อไม่ให้ pdf-lib วาดซ้ำ
-        exportProjectData.pages.forEach(p => {
-          if (p.objects) {
-            p.objects = p.objects.filter(o => !OVERLAY_TYPES.includes(o.type));
-          }
-        });
-      } else {
-        // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้)
-        const liveObjects = canvas.value.getObjects();
-        exportProjectData.pages.forEach((page, pageIndex) => {
-          if (page.objects) {
-            page.objects.forEach(jsonObj => {
-              if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+      exportProjectData.pages.forEach((page, pageIndex) => {
+        if (page.objects) {
+          page.objects.forEach(jsonObj => {
+            if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+              const liveObj = liveObjects.find(o => {
+                if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+              });
 
-                const liveObj = liveObjects.find(o => {
-                  if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                  const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
-                  return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
-                });
-
-                if (liveObj) {
-                  if (liveObj.textLines && liveObj.textLines.length > 0) {
-                    const cleanLines = liveObj.textLines.map(line => {
-                      return (typeof line === 'string' ? line : '')
-                        .replace(/\u200B/g, '')
-                        .trimEnd();
-                    });
-                    jsonObj.text = cleanLines.join('\n');
-                  } else if (liveObj.text) {
-                    jsonObj.text = liveObj.text;
-                  }
+              if (liveObj) {
+                if (liveObj.textLines && liveObj.textLines.length > 0) {
+                  const cleanLines = liveObj.textLines.map(line => {
+                    return (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd();
+                  });
+                  jsonObj.text = cleanLines.join('\n');
+                } else if (liveObj.text) {
+                  jsonObj.text = liveObj.text.replace(/\u200B/g, '');
                 }
               }
-            });
-          }
-        });
-      }
+              if (jsonObj.text) jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
+            }
+          });
+        }
+      });
       // ==========================================
 
-      // Step 1: Generate PDF blob (ส่งตัวแปรที่คัดกรองแล้วไปสร้าง)
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap);
+      // Step 1: Generate PDF blob (ส่งตัวแปรที่ 4, 5, 6 ไปให้ครบเพื่อบอกโหมด)
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
 
       // Step 2: Use file picker for Save As
       const options = {
