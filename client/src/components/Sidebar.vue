@@ -121,6 +121,13 @@
         <!-- Tab 2: Data -->
         <div v-if="activeTab === 'data'" class="tab-pane">
 
+          <div class="section" style="padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 15px;">
+            <h4 class="label-small">ข้อความทั่วไป:</h4>
+            <button @click="handleAddCustomText" class="var-btn" :disabled="isPreviewMode" draggable="true"
+              @dragstart="onCustomTextDragStart($event)">
+              📝 ข้อความอิสระ (พิมพ์เอง)
+            </button>
+          </div>
           <div class="section">
             <h4 class="label-small">เลือกชุดข้อมูล:</h4>
             <div class="var-list">
@@ -164,6 +171,15 @@
                 <option value="2">มาตรฐาน (2x)</option>
                 <option value="3">ละเอียด (3x)</option>
                 <option value="4">สำหรับพิมพ์ (4x)</option>
+              </select>
+            </div>
+
+            <div style="margin-bottom: 15px">
+              <label class="label-small">รูปแบบการส่งออก (Engine):</label>
+              <select :value="pdfMode" @change="$emit('update:pdfMode', $event.target.value)"
+                style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc; background: #fff;">
+                <option value="flatten">🌟 รูปภาพ (ถูกต้อง100%)</option>
+                <option value="vector">📝 เวคเตอร์ (แก้ไขข้อความใน Acrobat ได้)</option>
               </select>
             </div>
 
@@ -230,7 +246,8 @@ const props = defineProps({
   pdfQuality: [String, Number],
   // Page Props
   pages: Array,
-  currentPageIndex: Number
+  currentPageIndex: Number,
+  pdfMode: String
 });
 
 const emit = defineEmits([
@@ -255,7 +272,8 @@ const emit = defineEmits([
   'add-page',
   'import-page',
   'page-click',
-  'page-drop'
+  'page-drop',
+  'update:pdfMode'
 ]);
 
 // Removed local file handlers as they are now unified in parent
@@ -317,6 +335,20 @@ const sanitizeTemplateName = (name) => {
     .trim()
     .substring(0, 50);
 };
+
+// 📌 เมื่อกดปุ่มเฉยๆ (คลิก) ให้ไปเกิดที่พิกัดซ้ายบน (50, 50)
+const handleAddCustomText = () => {
+  if (window.addCustomTextToCanvas) {
+    window.addCustomTextToCanvas(50, 50);
+  }
+};
+
+// 📌 เมื่อผู้ใช้ "ลาก" ปุ่ม (Drag & Drop)
+const onCustomTextDragStart = (e) => {
+  e.dataTransfer.setData('customText', 'true');
+  e.dataTransfer.effectAllowed = 'copy';
+};
+
 </script>
 
 <script>

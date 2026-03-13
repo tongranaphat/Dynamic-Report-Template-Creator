@@ -100,6 +100,7 @@ const canvasBaseDimensions = ref({
 const connectionStatus = ref('offline');
 const isGenerating = ref(false);
 const pdfQuality = ref(2); // Default to Standard (2x)
+const pdfMode = ref('flatten');
 let isRendering = false;
 
 // --- History State & Logic ---
@@ -290,21 +291,46 @@ const handleSaveProject = async () => {
       type: 'hybrid-project'
     };
 
-    const variableMap = {
-      school_name: 'โรงเรียนเวทย์มนตร์',
-      school_year: '2580',
-      student_name: 'ด.ช. แฮรี่ พอตเตอร์',
-      student_id: '80001',
-      gpa: '5.00',
-      class_level: 'ม.7/1',
-      teacher_name: 'ครูสเนป โหด',
-      comment: 'เก่งมาก',
-      date: new Date().toLocaleDateString('th-TH')
-    };
-    if (variables.value) {
-      variables.value.forEach((v) => {
-        if (v.key && v.value) variableMap[v.key] = v.value;
-      });
+    // const variableMap = {
+    //   school_name: 'โรงเรียนเวทย์มนตร์',
+    //   school_year: '2580',
+    //   student_name: 'ด.ช. แฮรี่ พอตเตอร์',
+    //   student_id: '80001',
+    //   gpa: '5.00',
+    //   class_level: 'ม.7/1',
+    //   teacher_name: 'ครูสเนป โหด',
+    //   comment: 'เก่งมาก',
+    //   date: new Date().toLocaleDateString('th-TH')
+    // };
+    // if (variables.value) {
+    //   variables.value.forEach((v) => {
+    //     if (v.key && v.value) variableMap[v.key] = v.value;
+    //   });
+    // }
+
+    // 📌 1. สร้าง Map ว่างๆ ไว้รอรับข้อมูล
+    const variableMap = {};
+
+    try {
+      // 📌 2. เรียกใช้ฟังก์ชันที่มีอยู่แล้วใน apiService เพื่อดึงข้อมูลจริง
+      const realData = await apiService.getVariables();
+
+      // 📌 3. นำข้อมูลที่ได้จาก DB มายัดลง variableMap
+      if (Array.isArray(realData)) {
+        realData.forEach(item => {
+          if (item.key) {
+            variableMap[item.key] = item.value || '';
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('ดึงข้อมูลจริงไม่สำเร็จ จะใช้ค่า Default จากเมนูหน้าเว็บแทน', error);
+      // ถ้าไม่มีเน็ต หรือ Server ปิด ให้ดึงค่ามาจากหน้าจอ Sidebar แทน
+      if (variables.value) {
+        variables.value.forEach((v) => {
+          if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`;
+        });
+      }
     }
 
     // Capture canvas images first
@@ -312,7 +338,9 @@ const handleSaveProject = async () => {
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
-    const TEXT_TYPES = ['textbox', 'text', 'i-text', 'image'];
+    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    // 📌 แก้ไข: เพิ่ม image เข้าไปใน OVERLAY_TYPES เพื่อให้มันถูกแยกจัดการตามโหมด
+    const OVERLAY_TYPES = ['textbox', 'text', 'i-text', 'image'];
 
     // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
@@ -324,7 +352,7 @@ const handleSaveProject = async () => {
       isPreviewMode.value = true;
       await renderAllPages();
       await nextTick();
-      applyPreviewDataToCanvas();
+      applyPreviewDataToCanvas(variableMap);
       await nextTick();
 
       // Capture each page as image
@@ -332,24 +360,68 @@ const handleSaveProject = async () => {
         const allObjects = canvas.value.getObjects();
         const hiddenForCapture = [];
 
-        // Hide overlay objects for clean background capture
+        // ==========================================
+        // 📌 ระบบแยกสมอง (Flatten vs Vector)
+        // ==========================================
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
           const objPageIndex = Math.floor(center.y / (P_H + GAP));
           const isWrongPage = objPageIndex !== i;
-          const OVERLAY_TYPES = ['textbox', 'text', 'i-text'];
 
-          // const isOverlay = OVERLAY_TYPES.includes(obj.type) &&
-          //   obj.id !== 'page-bg-image' &&
-          //   obj.id !== 'page-bg';
-
+          // เช็คว่าใช่ Background หรือไม่
           const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
+          // เช็คว่าใช่ Overlay (ข้อความ/รูปภาพ) หรือไม่
+          const isOverlay = OVERLAY_TYPES.includes(obj.type) && !isBackground;
 
-          if ((isWrongPage || !isBackground) && obj.visible) {
+          let shouldHide = false;
+          if (pdfMode.value === 'flatten') {
+            // โหมดรูปภาพ (Flatten): ซ่อนแค่ของที่อยู่ผิดหน้า (ปล่อยให้ข้อความลงรูปไปเลย)
+            shouldHide = isWrongPage;
+          } else {
+            // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้ และล้าง \u200B ให้เกลี้ยง)
+            const liveObjects = canvas.value.getObjects();
+            exportProjectData.pages.forEach((page, pageIndex) => {
+              if (page.objects) {
+                page.objects.forEach(jsonObj => {
+                  if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+
+                    const liveObj = liveObjects.find(o => {
+                      if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                      const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                      return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+                    });
+
+                    if (liveObj) {
+                      if (liveObj.textLines && liveObj.textLines.length > 0) {
+                        const cleanLines = liveObj.textLines.map(line => {
+                          return (typeof line === 'string' ? line : '')
+                            .replace(/\u200B/g, '') // ลบช่องว่างล่องหน
+                            .trimEnd();
+                        });
+                        jsonObj.text = cleanLines.join('\n');
+                      } else if (liveObj.text) {
+                        // 📌 แก้ไขตรงนี้: ลบ \u200B ออกจากกรณีสำรองด้วย Acrobat จะได้ไม่ Error
+                        jsonObj.text = liveObj.text.replace(/\u200B/g, '');
+                      }
+                    }
+
+                    // 📌 กันเหนียวชั้นสุดท้าย: เคลียร์ทุกอักขระแปลกปลอมก่อนส่งให้ PDF
+                    if (jsonObj.text) {
+                      jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
+                    }
+                  }
+                });
+              }
+            });
+          }
+
+          if (shouldHide && obj.visible) {
             obj.visible = false;
             hiddenForCapture.push(obj);
           }
         });
+        // ==========================================
+
         canvas.value.renderAll();
 
         const topOffset = i * (P_H + GAP) * zoomLevel.value;
@@ -390,8 +462,53 @@ const handleSaveProject = async () => {
 
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
 
-      // Generate PDF blob with canvas images
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, projectData, variableMap);
+      // ==========================================
+      // 📌 เตรียมข้อมูลสำหรับ pdf-lib ตามโหมดที่เลือก
+      // ==========================================
+      const exportProjectData = JSON.parse(JSON.stringify(projectData));
+
+      if (pdfMode.value === 'flatten') {
+        // โหมดรูปภาพ: ลบข้อมูล Text/Image ออกจาก JSON เลย เพื่อไม่ให้ pdf-lib วาดซ้ำ
+        exportProjectData.pages.forEach(p => {
+          if (p.objects) {
+            p.objects = p.objects.filter(o => !OVERLAY_TYPES.includes(o.type));
+          }
+        });
+      } else {
+        // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้)
+        const liveObjects = canvas.value.getObjects();
+        exportProjectData.pages.forEach((page, pageIndex) => {
+          if (page.objects) {
+            page.objects.forEach(jsonObj => {
+              if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+
+                const liveObj = liveObjects.find(o => {
+                  if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                  const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                  return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+                });
+
+                if (liveObj) {
+                  if (liveObj.textLines && liveObj.textLines.length > 0) {
+                    const cleanLines = liveObj.textLines.map(line => {
+                      return (typeof line === 'string' ? line : '')
+                        .replace(/\u200B/g, '')
+                        .trimEnd();
+                    });
+                    jsonObj.text = cleanLines.join('\n');
+                  } else if (liveObj.text) {
+                    jsonObj.text = liveObj.text;
+                  }
+                }
+              }
+            });
+          }
+        });
+      }
+      // ==========================================
+
+      // Step 1: Generate PDF blob (ส่งตัวแปรที่คัดกรองแล้วไปสร้าง)
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap);
 
       // STRICT: Only overwrite existing file
       const writable = await currentFileHandle.value.createWritable();
@@ -443,21 +560,46 @@ const handleExport = async () => {
       type: 'hybrid-project'
     };
 
-    const variableMap = {
-      school_name: 'โรงเรียนเวทย์มนตร์',
-      school_year: '2580',
-      student_name: 'ด.ช. แฮรี่ พอตเตอร์',
-      student_id: '80001',
-      gpa: '5.00',
-      class_level: 'ม.7/1',
-      teacher_name: 'ครูสเนป โหด',
-      comment: 'เก่งมาก',
-      date: new Date().toLocaleDateString('th-TH')
-    };
-    if (variables.value) {
-      variables.value.forEach((v) => {
-        if (v.key && v.value) variableMap[v.key] = v.value;
-      });
+    // const variableMap = {
+    //   school_name: 'โรงเรียนเวทย์มนตร์',
+    //   school_year: '2580',
+    //   student_name: 'ด.ช. แฮรี่ พอตเตอร์',
+    //   student_id: '80001',
+    //   gpa: '5.00',
+    //   class_level: 'ม.7/1',
+    //   teacher_name: 'ครูสเนป โหด',
+    //   comment: 'เก่งมาก',
+    //   date: new Date().toLocaleDateString('th-TH')
+    // };
+    // if (variables.value) {
+    //   variables.value.forEach((v) => {
+    //     if (v.key && v.value) variableMap[v.key] = v.value;
+    //   });
+    // }
+
+    // 📌 1. สร้าง Map ว่างๆ ไว้รอรับข้อมูล
+    const variableMap = {};
+
+    try {
+      // 📌 2. เรียกใช้ฟังก์ชันที่มีอยู่แล้วใน apiService เพื่อดึงข้อมูลจริง
+      const realData = await apiService.getVariables();
+
+      // 📌 3. นำข้อมูลที่ได้จาก DB มายัดลง variableMap
+      if (Array.isArray(realData)) {
+        realData.forEach(item => {
+          if (item.key) {
+            variableMap[item.key] = item.value || '';
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('ดึงข้อมูลจริงไม่สำเร็จ จะใช้ค่า Default จากเมนูหน้าเว็บแทน', error);
+      // ถ้าไม่มีเน็ต หรือ Server ปิด ให้ดึงค่ามาจากหน้าจอ Sidebar แทน
+      if (variables.value) {
+        variables.value.forEach((v) => {
+          if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`;
+        });
+      }
     }
 
     // Capture canvas images first
@@ -465,7 +607,9 @@ const handleExport = async () => {
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
-    const TEXT_TYPES = ['textbox', 'text', 'i-text', 'image'];
+    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    // 📌 แก้ไข: เพิ่ม image เข้าไปใน OVERLAY_TYPES เพื่อให้มันถูกแยกจัดการตามโหมด
+    const OVERLAY_TYPES = ['textbox', 'text', 'i-text', 'image'];
 
     // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
@@ -477,7 +621,7 @@ const handleExport = async () => {
       isPreviewMode.value = true;
       await renderAllPages();
       await nextTick();
-      applyPreviewDataToCanvas();
+      applyPreviewDataToCanvas(variableMap);
       await nextTick();
 
       // Capture each page as image
@@ -485,24 +629,68 @@ const handleExport = async () => {
         const allObjects = canvas.value.getObjects();
         const hiddenForCapture = [];
 
-        // Hide overlay objects for clean background capture
+        // ==========================================
+        // 📌 ระบบแยกสมอง (Flatten vs Vector)
+        // ==========================================
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
           const objPageIndex = Math.floor(center.y / (P_H + GAP));
           const isWrongPage = objPageIndex !== i;
 
-          // const OVERLAY_TYPES = ['textbox', 'text', 'i-text'];
-          // const isOverlay = OVERLAY_TYPES.includes(obj.type) &&
-          //   obj.id !== 'page-bg-image' &&
-          //   obj.id !== 'page-bg';
-
+          // เช็คว่าใช่ Background หรือไม่
           const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
+          // เช็คว่าใช่ Overlay (ข้อความ/รูปภาพ) หรือไม่
+          const isOverlay = OVERLAY_TYPES.includes(obj.type) && !isBackground;
 
-          if ((isWrongPage || !isBackground) && obj.visible) {
+          let shouldHide = false;
+          if (pdfMode.value === 'flatten') {
+            // โหมดรูปภาพ (Flatten): ซ่อนแค่ของที่อยู่ผิดหน้า (ปล่อยให้ข้อความลงรูปไปเลย)
+            shouldHide = isWrongPage;
+          } else {
+            // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้ และล้าง \u200B ให้เกลี้ยง)
+            const liveObjects = canvas.value.getObjects();
+            exportProjectData.pages.forEach((page, pageIndex) => {
+              if (page.objects) {
+                page.objects.forEach(jsonObj => {
+                  if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+
+                    const liveObj = liveObjects.find(o => {
+                      if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                      const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                      return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+                    });
+
+                    if (liveObj) {
+                      if (liveObj.textLines && liveObj.textLines.length > 0) {
+                        const cleanLines = liveObj.textLines.map(line => {
+                          return (typeof line === 'string' ? line : '')
+                            .replace(/\u200B/g, '') // ลบช่องว่างล่องหน
+                            .trimEnd();
+                        });
+                        jsonObj.text = cleanLines.join('\n');
+                      } else if (liveObj.text) {
+                        // 📌 แก้ไขตรงนี้: ลบ \u200B ออกจากกรณีสำรองด้วย Acrobat จะได้ไม่ Error
+                        jsonObj.text = liveObj.text.replace(/\u200B/g, '');
+                      }
+                    }
+
+                    // 📌 กันเหนียวชั้นสุดท้าย: เคลียร์ทุกอักขระแปลกปลอมก่อนส่งให้ PDF
+                    if (jsonObj.text) {
+                      jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
+                    }
+                  }
+                });
+              }
+            });
+          }
+
+          if (shouldHide && obj.visible) {
             obj.visible = false;
             hiddenForCapture.push(obj);
           }
         });
+        // ==========================================
+
         canvas.value.renderAll();
 
         const topOffset = i * (P_H + GAP) * zoomLevel.value;
@@ -543,8 +731,53 @@ const handleExport = async () => {
 
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
 
-      // Step 1: Generate PDF blob
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, projectData, variableMap);
+      // ==========================================
+      // 📌 เตรียมข้อมูลสำหรับ pdf-lib ตามโหมดที่เลือก
+      // ==========================================
+      const exportProjectData = JSON.parse(JSON.stringify(projectData));
+
+      if (pdfMode.value === 'flatten') {
+        // โหมดรูปภาพ: ลบข้อมูล Text/Image ออกจาก JSON เลย เพื่อไม่ให้ pdf-lib วาดซ้ำ
+        exportProjectData.pages.forEach(p => {
+          if (p.objects) {
+            p.objects = p.objects.filter(o => !OVERLAY_TYPES.includes(o.type));
+          }
+        });
+      } else {
+        // โหมดเวคเตอร์: เตรียมข้อมูลให้ pdf-lib วาด (ดึง \n มาใช้)
+        const liveObjects = canvas.value.getObjects();
+        exportProjectData.pages.forEach((page, pageIndex) => {
+          if (page.objects) {
+            page.objects.forEach(jsonObj => {
+              if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+
+                const liveObj = liveObjects.find(o => {
+                  if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                  const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                  return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+                });
+
+                if (liveObj) {
+                  if (liveObj.textLines && liveObj.textLines.length > 0) {
+                    const cleanLines = liveObj.textLines.map(line => {
+                      return (typeof line === 'string' ? line : '')
+                        .replace(/\u200B/g, '')
+                        .trimEnd();
+                    });
+                    jsonObj.text = cleanLines.join('\n');
+                  } else if (liveObj.text) {
+                    jsonObj.text = liveObj.text;
+                  }
+                }
+              }
+            });
+          }
+        });
+      }
+      // ==========================================
+
+      // Step 1: Generate PDF blob (ส่งตัวแปรที่คัดกรองแล้วไปสร้าง)
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap);
 
       // Step 2: Use file picker for Save As
       const options = {
@@ -914,6 +1147,41 @@ const addImageToCanvasWrapper = (url) => {
   addImageToCanvas(url);
 };
 
+// ==========================================
+// 📌 1. ฟังก์ชันสร้างกล่องข้อความเปล่า (รองรับการลากวาง)
+// ==========================================
+const addCustomTextToCanvas = (x = 50, y = 50) => {
+  if (!canvas.value) return;
+
+  const text = new fabric.Textbox('พิมพ์ข้อความที่นี่...', {
+    id: 'custom_text_' + Date.now(),
+    left: x, // ใช้พิกัดที่ส่งมา (ค่าเริ่มต้นคือ 50)
+    top: y,  // ใช้พิกัดที่ส่งมา (ค่าเริ่มต้นคือ 50)
+    width: 200,
+    fontFamily: 'Sarabun',
+    fontSize: 16,
+    fill: '#000000',
+    editable: true,
+    padding: 5,
+    textAlign: 'left',
+    splitByGrapheme: true,
+    objectCaching: false
+  });
+
+  if (typeof forceUnlockObject === 'function') {
+    forceUnlockObject(text);
+  }
+
+  canvas.value.add(text);
+  canvas.value.setActiveObject(text);
+  canvas.value.requestRenderAll();
+
+  if (typeof saveCurrentPageState === 'function') {
+    saveCurrentPageState();
+  }
+};
+// ==========================================
+
 // เพิ่ม state saving lock เพื่อป้องกัน race condition
 let isSavingState = false;
 
@@ -981,35 +1249,32 @@ const setCanvasBackground = async (dataUrl) => {
   await renderAllPages();
 };
 
-const applyPreviewDataToCanvas = () => {
+const applyPreviewDataToCanvas = (customData = null) => {
   if (!canvas.value) return;
-
-  // ใช้ mock data จาก composable แทน hardcoded
-  const mockData = getMockData();
+  const dataToUse = customData || getMockData();
 
   canvas.value.selection = false;
   canvas.value.discardActiveObject();
 
   canvas.value.getObjects().forEach((obj) => {
-    // 1. Resolve Text Variables
     if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
       let newText = obj.text;
-      Object.keys(mockData).forEach((key) => {
-        newText = newText.replace(new RegExp(`{{${key}}}`, 'g'), mockData[key]);
+
+      // 1. นำข้อมูลจาก DB มาแทนที่ {{...}}
+      Object.keys(dataToUse).forEach((key) => {
+        newText = newText.replace(new RegExp(`{{${key}}}`, 'g'), dataToUse[key] || '');
       });
+
+      // 📌 ไม่ต้องใช้ formatThaiText แล้ว ยัดข้อความใส่ตรงๆ เลย
       if (newText !== obj.text) obj.set('text', newText);
+
+      // 📌 2. เปิดการหั่นคำให้กล่องยืดหดได้ปกติ
+      obj.set('splitByGrapheme', true);
       obj.set('editable', false);
     }
 
-    // 2. Lock ALL objects (images, text, shapes) so they can't be selected/hovered/dragged
-    // Only exclude background elements if they have a specific ID, but usually they are already evented=false
     if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-      obj.set({
-        selectable: false,
-        evented: false,
-        hasControls: false,
-        hasBorders: false
-      });
+      obj.set({ selectable: false, evented: false, hasControls: false, hasBorders: false });
     }
   });
 
@@ -1018,9 +1283,7 @@ const applyPreviewDataToCanvas = () => {
 
 // Safe toggle with template backup
 const togglePreviewWrapper = async () => {
-  // บันทึก state ก่อนเปลี่ยน mode เสมอ - ทั้งเข้าและออก preview
   saveCurrentPageState();
-
   const wasPreview = isPreviewMode.value;
 
   try {
@@ -1030,7 +1293,6 @@ const togglePreviewWrapper = async () => {
         ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text
       );
 
-      // Store original templates in window for recovery
       window.__originalTemplates = textObjects.map(obj => ({
         id: obj.id || `${obj.type}_${obj.left}_${obj.top}`,
         text: obj.text,
@@ -1038,18 +1300,32 @@ const togglePreviewWrapper = async () => {
         selectable: obj.selectable,
         evented: obj.evented
       }));
-    }
 
-    togglePreview();
-    await nextTick();
+      // 📌 1. ดึงข้อมูลจริงจาก DB มาเตรียมไว้ตอนกดปุ่ม Preview
+      const previewVariableMap = {};
+      try {
+        const realData = await apiService.getVariables();
+        if (Array.isArray(realData)) {
+          realData.forEach(item => {
+            if (item.key) previewVariableMap[item.key] = item.value || '';
+          });
+        }
+      } catch (error) {
+        console.warn('ดึงข้อมูล Preview จาก DB ไม่สำเร็จ', error);
+      }
 
-    if (isPreviewMode.value) {
-      applyPreviewDataToCanvas();
+      togglePreview();
+      await nextTick();
+      // 📌 2. ส่งข้อมูลจริงเข้าไปวาดบนหน้าจอ
+      applyPreviewDataToCanvas(previewVariableMap);
+
     } else {
       // Exiting preview - restore templates
+      togglePreview();
+      await nextTick();
+
       if (canvas.value && window.__originalTemplates) {
         canvas.value.selection = true;
-
         canvas.value.getObjects().forEach(obj => {
           if (['textbox', 'text', 'i-text'].includes(obj.type)) {
             const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
@@ -1071,8 +1347,6 @@ const togglePreviewWrapper = async () => {
             }
           }
         });
-
-        // Clear backup
         window.__originalTemplates = null;
       }
 
@@ -1081,16 +1355,12 @@ const togglePreviewWrapper = async () => {
     }
   } catch (error) {
     console.error('Preview toggle failed:', error);
-
-    // Rollback on error
     try {
       if (!wasPreview && window.__originalTemplates) {
-        // Failed to enter preview, restore edit mode
         togglePreview();
         isPreviewMode.value = false;
         window.__originalTemplates = null;
       } else {
-        // Failed to exit preview, stay in preview
         isPreviewMode.value = true;
       }
     } catch (rollbackError) {
@@ -1215,6 +1485,12 @@ const onDrop = (e) => {
       addImageToCanvas(asset, x, y);
     }
   }
+
+  // 📌 เพิ่มโค้ดชุดนี้ต่อท้ายลงไป เพื่อรับการลากวางกล่องอิสระ
+  const customText = e.dataTransfer.getData('customText');
+  if (customText) {
+    addCustomTextToCanvas(x, y);
+  }
 };
 
 onMounted(async () => {
@@ -1241,6 +1517,7 @@ onMounted(async () => {
       get currentPageIndex() { return currentPageIndex.value; },
       get pageCount() { return pages.value?.length ?? 1; },
     };
+    window.addCustomTextToCanvas = addCustomTextToCanvas;
   }
 
   await fetchVariables();
