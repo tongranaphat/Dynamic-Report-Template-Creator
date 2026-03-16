@@ -1,53 +1,52 @@
-<template>
+﻿<template>
   <aside class="sidebar-container" @mouseleave="handleMouseLeave">
-    <!-- 1. Vertical Rail (Always Visible) -->
     <div class="sidebar-rail">
       <div class="rail-items">
         <button @click="handleTabClick('templates')" @mouseenter="handleMouseEnter('templates')"
           :class="['rail-btn', { active: activeTab === 'templates' && isOpen, pinned: isPinned && activeTab === 'templates' }]">
-          <span class="rail-icon">📑</span>
+          <span class="rail-icon icon-dashboard"></span>
           <span class="rail-label">เทมเพลต</span>
         </button>
 
         <button @click="handleTabClick('pages')" @mouseenter="handleMouseEnter('pages')"
           :class="['rail-btn', { active: activeTab === 'pages' && isOpen, pinned: isPinned && activeTab === 'pages' }]">
-          <span class="rail-icon">📄</span>
+          <span class="rail-icon icon-placeholder">📄</span>
           <span class="rail-label">จัดการหน้า</span>
         </button>
 
         <button @click="handleTabClick('data')" @mouseenter="handleMouseEnter('data')"
           :class="['rail-btn', { active: activeTab === 'data' && isOpen, pinned: isPinned && activeTab === 'data' }]">
-          <span class="rail-icon">📊</span>
+          <span class="rail-icon icon-placeholder">📊</span>
           <span class="rail-label">ข้อมูล</span>
         </button>
 
         <button @click="handleTabClick('assets')" @mouseenter="handleMouseEnter('assets')"
           :class="['rail-btn', { active: activeTab === 'assets' && isOpen, pinned: isPinned && activeTab === 'assets' }]">
-          <span class="rail-icon">🖼️</span>
+          <span class="rail-icon icon-placeholder">🖼️</span>
           <span class="rail-label">องค์ประกอบ</span>
         </button>
 
         <button @click="handleTabClick('project')" @mouseenter="handleMouseEnter('project')"
           :class="['rail-btn', { active: activeTab === 'project' && isOpen, pinned: isPinned && activeTab === 'project' }]">
-          <span class="rail-icon">💾</span>
+          <span class="rail-icon icon-placeholder">💾</span>
           <span class="rail-label">โปรเจกต์</span>
         </button>
       </div>
     </div>
 
-    <!-- 2. Sliding Content Panel -->
     <div class="sidebar-panel" :class="{ collapsed: !isOpen }">
       <div class="panel-header">
-        <h3 v-if="activeTab === 'templates'">📂 จัดการเทมเพลต</h3>
-        <h3 v-if="activeTab === 'pages'">📄 จัดการหน้ากระดาษ</h3>
-        <h3 v-if="activeTab === 'data'">📊 จัดการข้อมูล</h3>
-        <h3 v-if="activeTab === 'assets'">🖼️ คลังรูปภาพ</h3>
-        <h3 v-if="activeTab === 'project'">💾 จัดการโปรเจกต์</h3>
-        <button class="panel-close-btn" @click="handleClose">◀</button>
+        <div class="panel-header-title" v-if="activeTab === 'templates'">
+          <span class="panel-header-icon icon-dashboard-active"></span>
+          <h3 class="panel-header-text">จัดการเทมเพลต</h3>
+        </div>
+        <h3 class="panel-header-text" v-if="activeTab === 'pages'">📄 จัดการหน้ากระดาษ</h3>
+        <h3 class="panel-header-text" v-if="activeTab === 'data'">📊 จัดการข้อมูล</h3>
+        <h3 class="panel-header-text" v-if="activeTab === 'assets'">🖼️ คลังรูปภาพ</h3>
+        <h3 class="panel-header-text" v-if="activeTab === 'project'">💾 จัดการโปรเจกต์</h3>
       </div>
 
       <div class="panel-content">
-        <!-- Tab 0: Pages -->
         <div v-if="activeTab === 'pages'" class="tab-pane">
           <div class="pages-list" @mouseleave="clearDragState">
             <div v-for="(page, index) in pages" :key="page.id" :class="[
@@ -89,38 +88,51 @@
           </div>
         </div>
 
-        <!-- Tab 1: Templates -->
-        <div v-if="activeTab === 'templates'" class="tab-pane">
-          <button @click="$emit('open-history')" class="btn-history" style="width: 100%; margin-bottom: 20px">
-            📜 ประวัติรายงาน
-          </button>
+        <div v-if="activeTab === 'templates'" class="tab-pane-templates">
 
-          <div class="section master-templates">
-            <div v-if="templates.length === 0" class="hint">ยังไม่มีเทมเพลตที่บันทึกไว้</div>
-            <div v-if="!isCanvasReady" class="hint" style="color: #ff9800">กำลังเริ่มต้นระบบ...</div>
-            <div class="template-list">
-              <div v-for="t in templates" :key="t._id" class="template-item">
-                <span @click="$emit('load-template', t)" :class="['t-name', { disabled: !isCanvasReady }]">{{
-                  sanitizeTemplateName(t.name) }}</span>
-                <button @click="isCanvasReady ? $emit('delete-template', t._id) : null" class="btn-del"
-                  :disabled="!isCanvasReady">x</button>
-              </div>
-            </div>
-            <hr style="margin: 10px 0; border-color: #ddd" />
-            <label class="label-small">ชื่อเทมเพลต / ชื่องาน:</label>
-            <input :value="templateName" @input="$emit('update:templateName', $event.target.value)"
-              placeholder="ตั้งชื่อเทมเพลต..." :disabled="isPreviewMode" style="margin-bottom: 8px" />
-            <button @click="$emit('save-template')" class="btn-save template-save" :disabled="isPreviewMode"
-              style="width: 100%; margin-bottom: 8px">🛠 บันทึกเป็นแม่แบบ</button>
-            <button v-if="currentTemplateId" @click="$emit('reset-canvas')" class="btn-new" style="margin-bottom: 0">
-              + สร้างหน้ากระดาษใหม่
+          <div class="history-section">
+            <div class="btn-history-header">ประวัติรายงาน</div>
+            <button @click="$emit('open-history')" :class="['btn-history', { 'active': isHistoryOpen }]">
+              <span class="btn-history-icon"></span>
+              <span class="btn-history-text">ประวัติการสร้างรายงาน</span>
             </button>
           </div>
+
+          <div class="template-save-pane">
+            <div class="save-pane-inner">
+
+              <div class="existing-templates-list">
+                <div v-if="templates.length === 0" class="hint" style="margin-top: 0; margin-bottom: 8px;">
+                  ยังไม่มีเทมเพลตที่บันทึกไว้</div>
+                <div class="template-list">
+                  <div v-for="t in templates" :key="t._id" class="template-item-row">
+                    <span @click="$emit('load-template', t)" :class="['t-name', { disabled: !isCanvasReady }]">
+                      {{ sanitizeTemplateName(t.name) }}
+                    </span>
+                    <button @click="isCanvasReady ? $emit('delete-template', t._id) : null" class="btn-del"
+                      :disabled="!isCanvasReady"><span class="icon-delete"></span></button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="template-label-small">ชื่อเทมเพลต / ชื่องาน:</div>
+
+              <input :value="templateName" @input="$emit('update:templateName', $event.target.value)"
+                placeholder="ตั้งชื่อเทมเพลต..." :disabled="isPreviewMode" class="template-name-input" />
+
+              <button @click="$emit('save-template')" class="template-save-btn" :disabled="isPreviewMode">
+                <span class="template-save-text">บันทึกเป็นแม่แบบ</span>
+              </button>
+            </div>
+          </div>
+
+          <button v-if="currentTemplateId" @click="$emit('reset-canvas')" class="btn-new">
+            + สร้างหน้ากระดาษใหม่
+          </button>
+
         </div>
 
-        <!-- Tab 2: Data -->
         <div v-if="activeTab === 'data'" class="tab-pane">
-
           <div class="section" style="padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 15px;">
             <h4 class="label-small">ข้อความทั่วไป:</h4>
             <button @click="handleAddCustomText" class="var-btn" :disabled="isPreviewMode" draggable="true"
@@ -142,12 +154,10 @@
           </div>
         </div>
 
-        <!-- Tab 3: Assets -->
         <div v-if="activeTab === 'assets'" class="tab-pane">
           <AssetManager :is-preview-mode="isPreviewMode" @select-asset="$emit('add-image', $event)" />
         </div>
 
-        <!-- Tab 4: Project -->
         <div v-if="activeTab === 'project'" class="tab-pane">
           <div class="section">
             <div class="upload-container">
@@ -235,6 +245,7 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  isHistoryOpen: Boolean,
   connectionStatus: String,
   templates: Array,
   isCanvasReady: Boolean,
@@ -275,8 +286,6 @@ const emit = defineEmits([
   'page-drop',
   'update:pdfMode'
 ]);
-
-// Removed local file handlers as they are now unified in parent
 
 const draggedPageIndex = ref(null);
 const dragOverIndex = ref(null);
@@ -359,154 +368,389 @@ export default {
 </script>
 
 <style scoped>
+/* ── Layout หลัก ── */
 .sidebar-container {
-  position: fixed;
+  position: absolute;
   left: 0;
-  top: 60px;
+  top: 69px;
   bottom: 0;
   display: flex;
   z-index: 50;
+
+  /* 📌 เพิ่ม 2 บรรทัดนี้เพื่อบังคับให้ตัวอักษรใน Sidebar ทั้งหมดคมกริบ */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Vertical Rail ── */
+/* ── 1. Vertical Rail (ดีไซน์ใหม่ 74px) ── */
 .sidebar-rail {
-  width: 72px;
-  background: #ffffff;
-  border-right: 1px solid #e0e0e0;
+  width: 85px;
+  height: 100%;
+  background: #FFFFFF;
+  border-right: 1px solid #F3F3F3;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 15px;
+  padding-top: 18px;
   z-index: 52;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
 }
 
 .rail-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
   width: 100%;
 }
 
 .rail-btn {
-  width: 100%;
-  border: none;
+  width: 67px;
+  height: 66px;
   background: transparent;
-  padding: 12px 2px;
+  border: none;
+  border-radius: 5px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #555;
+  padding: 0;
   transition: all 0.2s ease;
-  border-left: 3px solid transparent;
 }
 
-.rail-btn:hover {
-  background: #f5f5f5;
-  color: #2196f3;
-}
-
-.rail-btn.active {
-  background: #f0f0f0;
-  color: #2196f3;
-  border-left-color: #2196f3;
-}
-
+.rail-btn.active,
 .rail-btn.pinned {
-  color: #2196f3;
-  background: #e3f2fd;
+  background: #FFF5F8;
 }
 
-.rail-btn.pinned .rail-label {
-  font-weight: 700;
-  color: #1976d2;
-}
-
+/* ไอคอน Rail และการเรียกใช้รูป */
 .rail-icon {
-  font-size: 20px;
-  margin-bottom: 4px;
+  width: 22px;
+  height: 22px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-bottom: 2px;
+}
+
+.icon-dashboard {
+  background-image: url('../assets/icons/dashboard.png');
+}
+
+.rail-btn.active .icon-dashboard {
+  background-image: url('../assets/icons/dashboard-active.png');
+}
+
+.icon-placeholder {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .rail-label {
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  margin-top: 2px;
 }
 
-/* ── Sliding Panel ── */
+.rail-btn.active .rail-label {
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #F65189;
+}
+
+/* ── 2. Sliding Panel (ปรับความกว้างเป็น 286px ตาม Design) ── */
 .sidebar-panel {
-  width: 320px;
-  background: white;
-  border-right: 1px solid #e0e0e0;
+  width: 329px;
+  /* 📌 ปรับความกว้างให้เป๊ะตาม Design */
+  height: 100%;
+  /* ใช้ 100% แทน 797px เพื่อให้ยืดหยุ่นตามหน้าจอ */
+  background: #FFFFFF;
+  border: 1px solid #F3F3F3;
+  /* 📌 เพิ่มเส้นขอบตาม Design */
   display: flex;
   flex-direction: column;
   z-index: 51;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: translateX(0);
+  box-sizing: border-box;
 }
 
+/* 📌 ปรับระยะตอนพับเก็บให้พอดีกับความกว้างใหม่ (ซ่อนไป 330px รวมขอบ) */
 .sidebar-panel.collapsed {
-  transform: translateX(-321px);
-  /* Slide behind the rail */
+  transform: translateX(-330px);
 }
 
 .panel-header {
+  height: 69px;
+  min-height: 69px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 15px 20px;
-  border-bottom: 1px solid #eee;
-  background: #fafafa;
+  padding: 0 17px;
+  /* 📌 ลด Padding ซ้ายขวาลงนิดหน่อยเพื่อให้พอดีกับกล่องที่แคบลง */
+  border-bottom: 1px solid #F3F3F3;
 }
 
-.panel-header h3 {
+.panel-header-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.panel-header-icon {
+  width: 18px;
+  height: 18px;
+  background: transparent url('../assets/icons/dashboard-active.png') center/contain no-repeat;
+}
+
+.panel-header-text {
+  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #333;
 }
 
 .panel-close-btn {
+  background: none;
   border: none;
-  background: transparent;
-  color: #999;
   cursor: pointer;
-  padding: 5px;
+  color: #999;
   font-weight: bold;
-  font-size: 14px;
 }
 
-.panel-close-btn:hover {
-  color: #333;
-}
-
+/* 📌 ส่วนเนื้อหาด้านใน */
 .panel-content {
   flex: 1;
+  width: 100%;
   overflow-y: auto;
-  padding: 20px;
+  padding: 28px 0;
 }
 
+/* ── 3. Templates Tab Content (ดีไซน์ใหม่) ── */
+.tab-pane-templates {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.history-section {
+  width: 298px;
+}
+
+.btn-history-header {
+  width: 81px;
+  height: 26px;
+  text-align: left;
+  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #000000;
+  opacity: 1;
+  margin-bottom: 9px;
+  /* ระยะห่างจากปุ่ม */
+  white-space: nowrap;
+  /* 📌 ป้องกันตกบรรทัด */
+}
+
+.btn-history {
+  width: 259px;
+  height: 40px;
+  background: #FFFFFF;
+  border: 1px solid #F65189;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.btn-history-icon {
+  width: 16px;
+  height: 16px;
+  background: transparent url('../assets/icons/history.png') center/contain no-repeat;
+}
+
+.btn-history-text {
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #F65189;
+}
+
+/* กล่องเทา (Save Pane) */
+.template-save-pane {
+  width: 298px;
+  min-height: 192px;
+  /* ใช้ min-height เผื่อรายชื่อเทมเพลตยาวขึ้น */
+  background: #F9F9F9 0% 0% no-repeat padding-box;
+  border: 1px solid #E8E8E8;
+  border-radius: 5px;
+  opacity: 1;
+  margin-top: 18px;
+  /* ระยะห่างจากปุ่มประวัติ */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* จัดให้ inner อยู่ตรงกลาง */
+  padding: 12px 0 20px 0;
+  /* กะขอบบนล่างให้พอดี */
+  box-sizing: border-box;
+}
+
+.save-pane-inner {
+  width: 268px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* บังคับให้ทุกอย่างในนี้ชิดซ้ายเป๊ะๆ */
+}
+
+.existing-templates-list {
+  width: 100%;
+}
+
+.template-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.template-item-title {
+  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  margin-bottom: 5px;
+}
+
+/* ── Label & Input ── */
+.template-label-small {
+  width: 105px;
+  height: 24px;
+  text-align: left;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #000000;
+  opacity: 1;
+  margin-top: 0px;
+  /* ระยะห่างระหว่าง t-name กับ label */
+}
+
+.template-name-input {
+  width: 268px;
+  height: 46px;
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #E3E3E3;
+  border-radius: 5px;
+  opacity: 1;
+  margin-top: 6px;
+  padding: 0 13px;
+  text-align: left;
+  font: normal normal normal 14px/18px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  box-sizing: border-box;
+}
+
+.template-name-input::placeholder {
+  color: #BEBEBE;
+}
+
+/* ── ปุ่ม Save ── */
+.template-save-btn {
+  width: 268px;
+  height: 46px;
+  background: #F65189 0% 0% no-repeat padding-box;
+  border-radius: 5px;
+  opacity: 1;
+  border: none;
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.template-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.template-save-text {
+  height: 24px;
+  text-align: left;
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #FFFFFF;
+  opacity: 1;
+}
+
+.t-name {
+  text-align: left;
+  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #000000;
+  opacity: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 219px;
+  /* เว้นที่ให้ปุ่ม x */
+}
+
+.t-name.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.template-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding-bottom: 6px;
+}
+
+.btn-del {
+  background: #E74C3C;
+  border: none;
+  border-radius: 50%;
+  width: 23px;
+  height: 23px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-delete {
+  width: 16px;
+  height: 16px;
+  background: transparent url('../assets/icons/delete.svg') 0% 0% no-repeat padding-box;
+  background-size: contain;
+}
+
+/* ========================================================================= */
+/* ── CSS ของเดิมสำหรับ Tab Pages, Data, Assets, Project (เก็บไว้ครบ 100%) ── */
+/* ========================================================================= */
 .tab-pane {
   display: flex;
   flex-direction: column;
   height: 100%;
+  padding: 0 23px;
 }
 
 /* ── Pages Rail/Panel Styles ── */
 .pages-list {
   flex: 1;
   overflow-y: auto;
-  padding-right: 5px;
+  padding-right: 6px;
 }
 
 .page-item-sidebar {
-  padding: 8px;
+  padding: 9px;
   border: 2px solid transparent;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  border-radius: 9px;
+  margin-bottom: 14px;
   cursor: pointer;
   transition: all 0.2s;
   background: #f9f9f9;
@@ -537,13 +781,13 @@ export default {
 .page-entry {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 17px;
 }
 
 .page-thumb {
   position: relative;
-  width: 60px;
-  height: 85px;
+  width: 69px;
+  height: 98px;
   background: #fff;
   border: 1px solid #ddd;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -558,16 +802,16 @@ export default {
 
 .del-page-btn {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -7px;
+  right: -7px;
   background: #f44336;
   color: white;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
+  width: 21px;
+  height: 21px;
+  line-height: 21px;
   text-align: center;
-  font-size: 12px;
+  font-size: 14px;
   display: none;
 }
 
@@ -578,33 +822,33 @@ export default {
 .page-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .page-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: #333;
 }
 
 .add-page-actions-sidebar {
-  margin-top: 15px;
-  padding-top: 15px;
+  margin-top: 17px;
+  padding-top: 17px;
   border-top: 1px solid #eee;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 
 .add-pg-btn {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   background: #2196f3;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   transition: background 0.2s;
 }
@@ -628,26 +872,24 @@ export default {
 
 .sidebar-toggle {
   position: absolute;
-  right: -40px;
-  top: 20px;
-  width: 40px;
-  height: 40px;
+  right: -46px;
+  top: 23px;
+  width: 46px;
+  height: 46px;
   background: white;
   border: 1px solid #e0e0e0;
   border-left: none;
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 9px 9px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
   z-index: 51;
   color: #333;
 }
-
-/* Old sidebar headers removed */
 
 .connection-status.online {
   background: #e8f5e9;
@@ -662,13 +904,13 @@ export default {
 }
 
 .section {
-  margin-bottom: 20px;
+  margin-bottom: 23px;
 }
 
 .section h3 {
   margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 14px;
+  margin-bottom: 12px;
+  font-size: 16px;
   color: #666;
   font-weight: 600;
   text-transform: uppercase;
@@ -677,57 +919,24 @@ export default {
 
 .section.master-templates {
   background: #f8f9fa;
-  padding: 12px;
-  border-radius: 6px;
+  padding: 14px;
+  border-radius: 7px;
   border: 1px solid #eee;
 }
 
 .section.mode-selector {
   background: #fff;
-  padding: 12px;
-  border-radius: 6px;
+  padding: 14px;
+  border-radius: 7px;
   border: 1px solid #2196f3;
-}
-
-.t-name {
-  cursor: pointer;
-  color: #2196f3;
-  flex-grow: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-right: 10px;
-}
-
-.t-name:hover {
-  text-decoration: underline;
-}
-
-.t-name.disabled {
-  color: #aaa;
-  pointer-events: none;
 }
 
 .template-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
+  padding: 7px 0;
   border-bottom: 1px solid #eee;
-}
-
-.btn-del {
-  background: #ffcdd2;
-  color: #c62828;
-  border: none;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 24px;
-  padding: 0;
-  flex-shrink: 0;
 }
 
 .btn-save,
@@ -736,17 +945,17 @@ export default {
 .btn-upload,
 .btn-print,
 .var-btn {
-  padding: 8px 12px;
+  padding: 9px 14px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   transition: all 0.2s;
   font-family: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 36px;
+  min-height: 41px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -769,14 +978,33 @@ export default {
 }
 
 .btn-new {
-  background: #fff;
-  border: 1px solid #ddd;
-  color: #333;
-  width: 100%;
+  width: 298px;
+  /* กว้างเท่ากล่อง template-save-pane เป๊ะ */
+  height: 46px;
+  margin-top: 17px;
+  /* ระยะห่างปรับอิงตามขอบล่างของกล่องเทา (dynamic) */
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px dashed #F65189;
+  /* ใช้เส้นประสีชมพูให้ดูเป็นปุ่ม 'สร้างใหม่' */
+  border-radius: 5px;
+  opacity: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  /* จัดฟอนต์ให้อยู่กึ่งกลาง */
+  text-align: center;
+  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #F65189;
+  /* ใช้สีชมพูให้เข้ากับธีม */
+  transition: all 0.2s ease;
 }
 
 .btn-new:hover {
-  background: #f5f5f5;
+  background: #FFF5F8;
+  /* เอฟเฟกต์ตอนเอาเมาส์ชี้ */
 }
 
 .btn-mode-toggle {
@@ -812,7 +1040,7 @@ export default {
 .var-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .var-btn {
@@ -832,24 +1060,24 @@ export default {
 }
 
 .hint {
-  font-size: 12px;
+  font-size: 14px;
   color: #666;
-  margin-top: 5px;
+  margin-top: 6px;
   font-style: italic;
 }
 
 .label-small {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: #444;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
   display: block;
 }
 
 .category-header {
-  font-size: 13px;
+  font-size: 15px;
   color: #444;
-  margin: 10px 0 5px;
+  margin: 12px 0 6px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -858,11 +1086,53 @@ export default {
 input[type='text'],
 input:not([type]) {
   width: 100%;
-  padding: 8px;
+  padding: 9px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 5px;
   font-family: inherit;
   color: #333;
   background: #fff;
+}
+
+/* ========================================== */
+/* 5. เก็บตก Hover Effects & Scrollbar */
+/* ========================================== */
+
+/* เอฟเฟกต์ตอนเอาเมาส์ชี้ปุ่มบันทึก */
+.template-save-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(246, 81, 137, 0.2);
+}
+
+/* เอฟเฟกต์ตอนชี้ปุ่มประวัติรายงาน */
+.btn-history:hover {
+  background: #FFF5F8;
+}
+
+.btn-history.active {
+  background: #F65189;
+}
+
+.btn-history.active .btn-history-icon {
+  /* 📌 สลับเป็นไอคอนสีขาว */
+  background: transparent url('../assets/icons/history.png') center/contain no-repeat;
+}
+
+.btn-history.active .btn-history-text {
+  /* 📌 สลับเป็นตัวอักษรสีขาว */
+  color: #FFFFFF;
+}
+
+/* ทำให้รายชื่อเทมเพลตดูเป็นปุ่มกดได้ชัดเจนขึ้น */
+.template-item-row:hover .t-name {
+  color: #F65189;
+  /* เปลี่ยนสีเป็นสีชมพูตอนเมาส์ชี้ */
+  text-decoration: underline;
+}
+
+.btn-del:hover {
+  background: #f44336;
+  color: white;
 }
 </style>

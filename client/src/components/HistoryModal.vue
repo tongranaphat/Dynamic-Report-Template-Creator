@@ -1,8 +1,9 @@
 <template>
   <div class="modal-overlay" @click="$emit('close')">
     <div class="modal-content" @click.stop>
+
       <div class="modal-header">
-        <h2>📜 ประวัติการสร้างรายงาน</h2>
+        <h2 class="modal-header-text">ประวัติการสร้างรายงาน</h2>
         <button class="close-btn" @click="$emit('close')">×</button>
       </div>
 
@@ -14,56 +15,63 @@
         <div v-else class="table-container">
           <table class="history-table">
             <thead>
-              <tr>
-                <th>วันที่/เวลา</th>
-                <th>ชื่อเทมเพลต</th>
-                <th>สถานะ</th>
-                <th>จัดการ</th>
+              <tr class="table-row header-row">
+                <th class="cell-center-bold" style="width: 60px;">#</th>
+                <th class="cell-center-bold" style="width: 160px;">วันที่สร้าง</th>
+                <th class="cell-center-bold">ชื่อเทมเพลต</th>
+                <th class="cell-center-bold" style="width: 120px;">สถานะ</th>
+                <th class="cell-center-bold" style="width: 180px;">จัดการ</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="instance in reportInstances" :key="instance.id">
-                <td class="date-cell">{{ formatDate(instance.createdAt) }}</td>
-                <td class="template-cell">
-                  {{ instance.template?.name || `รายงาน #${instance.id.slice(-8)}` }}
+              <tr v-for="(instance, index) in reportInstances" :key="instance.id" class="table-row">
+
+                <td class="cell-center">{{ index + 1 }}</td>
+                <td class="cell-center">{{ formatDate(instance.createdAt) }}</td>
+
+                <td class="cell-left template-cell">
+                  {{ instance.template?.name || `รายงาน ${index + 1}` }}
                 </td>
-                <td class="status-cell">
-                  <span :class="['status-badge', instance.status.toLowerCase()]">
-                    <span v-if="instance.status === 'completed'" class="status-icon">✅</span>
-                    <span v-else-if="instance.status === 'draft'" class="status-icon">📝</span>
-                    <span v-else-if="instance.status === 'failed'" class="status-icon">❌</span>
-                    {{ getStatusText(instance.status) }}
+
+                <td class="cell-center status-cell">
+                  <span :class="['status-text', getStatusDisplay(instance).cssClass]">
+                    {{ getStatusDisplay(instance).text }}
                   </span>
                 </td>
-                <td class="actions-cell">
-                  <button v-if="instance.pdfUrl" @click="downloadReport(instance)" class="btn-download"
-                    title="ดาวน์โหลดไฟล์ PDF">
-                    📥 ดาวน์โหลด
-                  </button>
-                  <button @click="editReport(instance)" class="btn-edit" title="แก้ไขรายงานนี้">
-                    ✏️ แก้ไข
-                  </button>
-                  <button @click="$emit('delete', instance)" class="btn-delete" title="ลบข้อมูล">
-                    🗑️ ลบ
-                  </button>
+
+                <td class="cell-center">
+                  <div class="action-buttons">
+                    <button @click="editReport(instance)" class="btn-edit" title="แก้ไขรายงานนี้">
+                      <span class="btn-edit-icon"></span>
+                      <span class="btn-action-text">แก้ไข</span>
+                    </button>
+                    <button @click="$emit('delete', instance)" class="btn-delete" title="ลบข้อมูล">
+                      <span class="btn-delete-icon"></span>
+                      <span class="btn-action-text">ลบ</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
-
 import axios from 'axios';
 
 const props = defineProps({
   reportInstances: {
     type: Array,
     default: () => []
+  },
+  currentInstanceId: {
+    type: [String, Number],
+    default: null
   }
 });
 
@@ -81,36 +89,37 @@ const formatDate = (dateString) => {
   });
 };
 
-const getStatusText = (status) => {
-  const statusMap = {
-    draft: 'ฉบับร่าง',
-    completed: 'เสร็จสมบูรณ์',
-    failed: 'ล้มเหลว'
-  };
-  return statusMap[status] || status;
+const getStatusDisplay = (instance) => {
+  // ถ้า ID ของแถวนี้ ตรงกับ ID ที่กำลังเปิดแก้ไขอยู่ ให้บังคับเป็น "ใช้งาน" ทันที
+  if (props.currentInstanceId && instance.id === props.currentInstanceId) {
+    return { text: 'ใช้งาน', cssClass: 'inuse' };
+  }
+
+  // ถ้าไม่ใช่ตัวที่กำลังเปิดอยู่ ก็เช็คตาม status ในฐานข้อมูล
+  const status = instance.status?.toLowerCase();
+  if (status === 'completed') {
+    return { text: 'ใช้งาน', cssClass: 'inuse' };
+  }
+
+  // นอกนั้น (รวมถึง draft) ให้เป็นฉบับร่าง
+  return { text: 'ฉบับร่าง', cssClass: 'draft' };
 };
 
 const downloadReport = async (instance) => {
   if (instance.pdfUrl) {
     try {
-      // Construct the file URL correctly (remove /api from API URL)
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       const baseUrl = apiUrl.replace('/api', '');
       const fileUrl = `${baseUrl}${instance.pdfUrl}`;
 
-      // Generate filename based on template name
       const fileName =
         instance.template?.name && instance.template.name.trim() !== ''
           ? `${instance.template.name.trim().replace(/[^a-zA-Z0-9ก-๙\s\-_]/g, '_')}.pdf`
           : `report_${instance.id.slice(-8)}.pdf`;
 
-      // Fetch the file content as a Blob
       const fileResponse = await axios.get(fileUrl, { responseType: 'blob' });
-
-      // Create a local Blob URL (same-origin, so download attribute works)
       const blobUrl = window.URL.createObjectURL(new Blob([fileResponse.data]));
 
-      // Trigger Download
       const link = document.createElement('a');
       link.href = blobUrl;
       link.setAttribute('download', fileName);
@@ -118,7 +127,6 @@ const downloadReport = async (instance) => {
       document.body.appendChild(link);
       link.click();
 
-      // Cleanup
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(blobUrl);
@@ -138,245 +146,285 @@ const editReport = (instance) => {
 </script>
 
 <style scoped>
+/* ── บังคับฟอนต์ให้คมชัด ── */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 1. พื้นหลัง (ดันกล่องชิดขอบบนสุด 0px) ── */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  /* 📌 ดันกล่องขึ้นบนสุด */
   justify-content: center;
-  z-index: 1000;
-  padding: 20px;
+  z-index: 9999;
+  padding-top: 3.5px;
 }
 
+/* ── 2. กล่องขาว (กรอบสี่เหลี่ยม, ชิดบน, ขนาดกางตามตารางเป๊ะ) ── */
 .modal-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  max-width: 900px;
-  width: 100%;
-  max-height: 80vh;
+  position: relative;
+  /* 📌 แกนอ้างอิงของกากบาท */
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border-radius: 0;
+  /* 📌 บังคับกรอบสี่เหลี่ยมมุมฉาก 100% */
+  margin-top: 0;
+  /* 📌 ชิดขอบบนสุด */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+  /* 📌 size scales with table's elements */
+  width: max-content;
+  max-width: 100vw;
+  height: auto;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  opacity: 1;
 }
 
+/* ── 3. Header ── */
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 24px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  padding: 20px 30px;
+  border-bottom: 1px solid #E3E3E3;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.modal-header h2 {
+.modal-header h2,
+.modal-header-text {
+  text-align: left;
+  font: normal normal bold 25px/35px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 22/30 * 1.15 */
+  letter-spacing: 0px;
+  color: #000000;
   margin: 0;
-  color: #333;
-  font-size: 24px;
-  font-weight: 600;
+  opacity: 1;
 }
 
+/* ── 4. ปุ่มกากบาท (ลอยมุมขวาบนสุดของกล่องขาว) ── */
 .close-btn {
-  background: none;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 10px;
+  /* 📌 9px * 1.15 */
+  height: 10px;
+  /* 📌 9px * 1.15 */
+  background: transparent;
   border: none;
-  font-size: 28px;
-  color: #666;
+  font-size: 24px;
+  color: #686868;
   cursor: pointer;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s ease;
+  line-height: 1;
+  z-index: 10;
+  opacity: 1;
 }
 
 .close-btn:hover {
-  background: #e0e0e0;
-  color: #333;
+  color: #E74C3C;
 }
 
+/* ── 5. Body & Table Container ── */
 .modal-body {
-  padding: 24px;
+  display: flex;
+  /* 📌 flex - size scales with table's elements */
+  flex-direction: column;
+  padding: 20px 30px 40px 30px;
   overflow-y: auto;
-  flex: 1;
 }
 
 .empty-state {
   text-align: center;
   padding: 40px;
   color: #666;
-  font-style: italic;
+  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
 }
 
 .table-container {
+  display: flex;
+  /* 📌 flex - size scales with table's size */
   overflow-x: auto;
 }
 
 .history-table {
-  width: 100%;
+  width: 1036px;
+  /* 📌 901px * 1.15 = 1036px (กางตามสเปคตาราง) */
   border-collapse: collapse;
-  font-size: 14px;
 }
 
-.history-table th {
-  background: #f8f9fa;
-  padding: 12px;
-  text-align: left;
-  font-weight: 600;
-  color: #333;
-  border-bottom: 2px solid #e0e0e0;
-}
-
+.history-table th,
 .history-table td {
-  padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
+  border: 1px solid #E3E3E3;
+  padding: 0 10px;
   vertical-align: middle;
 }
 
-.history-table tr:hover {
-  background: #f8f9fa;
+.table-row {
+  height: 53px;
+  /* 📌 46px * 1.15 = 53px */
+  border: 1px solid #E3E3E3;
+  opacity: 1;
+  transition: background-color 0.2s;
 }
 
-.date-cell {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
+.table-row:hover:not(.header-row) {
+  background-color: #F9F9F9;
 }
 
-.template-cell {
-  font-weight: 500;
-  color: #333;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.status-cell {
+/* ── 6. Typography ── */
+.cell-center-bold {
   text-align: center;
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 18/24 * 1.15 */
+  letter-spacing: 0px;
+  color: #000000;
+  opacity: 1;
 }
 
-.status-badge {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid;
+.cell-center {
+  text-align: center;
+  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 18/24 * 1.15 */
+  letter-spacing: 0px;
+  color: #000000;
+  opacity: 1;
 }
 
-.status-icon {
-  font-size: 10px;
+.cell-left {
+  text-align: left;
+  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #000000;
+  padding-left: 15px !important;
+  opacity: 1;
 }
 
-.status-badge.draft {
-  background: #fff3cd;
-  color: #856404;
-  border-color: #ffeaa7;
+.status-text {
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  opacity: 1;
 }
 
-.status-badge.completed {
-  background: #d4edda;
-  color: #155724;
-  border-color: #c3e6cb;
+.status-text.inuse {
+  color: #349A53;
 }
 
-.status-badge.failed {
-  background: #f8d7da;
-  color: #721c24;
-  border-color: #f5c6cb;
+.status-text.draft {
+  color: #F39C12;
 }
 
-.actions-cell {
+.status-text.failed {
+  color: #E74C3C;
+}
+
+/* ── 7. ปุ่มจัดการ ── */
+.action-buttons {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
 }
 
-.btn-download,
-.btn-edit {
-  padding: 6px 12px;
+.btn-edit,
+.btn-delete,
+.btn-download {
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  transition: opacity 0.2s;
+  opacity: 1;
+}
+
+.btn-edit:hover,
+.btn-delete:hover,
+.btn-download:hover {
+  opacity: 0.85;
+}
+
+/* ปุ่มแก้ไข */
+.btn-edit {
+  width: 71px;
+  /* 📌 62px * 1.15 */
+  height: 30px;
+  /* 📌 26px * 1.15 */
+  background: #427EB1 0% 0% no-repeat padding-box;
+  border-radius: 6px;
+  /* 📌 5px * 1.15 */
+}
+
+.btn-edit-icon {
+  width: 14px;
+  /* 📌 12px * 1.15 */
+  height: 14px;
+  /* 📌 12px * 1.15 */
+  background: transparent url('../assets/icons/edit.png') center/contain no-repeat;
+}
+
+/* ปุ่มลบ */
+.btn-delete {
+  width: 55px;
+  /* 📌 48px * 1.15 */
+  height: 30px;
+  /* 📌 26px * 1.15 */
+  background: #E74C3C 0% 0% no-repeat padding-box;
+  border-radius: 6px;
+  /* 📌 5px * 1.15 */
+}
+
+.btn-delete-icon {
+  width: 12px;
+  /* 📌 10px * 1.15 = 11.5 ปัดเป็น 12px */
+  height: 14px;
+  /* 📌 12px * 1.15 = 13.8 ปัดเป็น 14px */
+  background: transparent url('../assets/icons/delete.svg') center/contain no-repeat;
 }
 
 .btn-download {
-  background: #e8f5e8;
-  color: #2e7d32;
+  padding: 0 10px;
+  height: 30px;
+  border-radius: 6px;
+  background: #2E7D32;
 }
 
-.btn-download:hover {
-  background: #c8e6c9;
+.btn-action-text {
+  text-align: left;
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 16/21 * 1.15 */
+  letter-spacing: 0px;
+  color: #FFFFFF;
+  opacity: 1;
 }
 
-.btn-edit {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.btn-edit:hover {
-  background: #bbdefb;
-}
-
-.btn-delete {
-  background: #ffebee;
-  color: #c62828;
-}
-
-.btn-delete:hover {
-  background: #ffcdd2;
-}
-
-/* Responsive */
+/* ── 8. Responsive ── */
 @media (max-width: 768px) {
   .modal-content {
-    margin: 0;
     max-height: 100vh;
-    border-radius: 0;
+    width: 100%;
   }
 
-  .modal-header {
-    padding: 16px;
-  }
-
-  .modal-header h2 {
-    font-size: 20px;
-  }
-
+  .modal-header,
   .modal-body {
     padding: 16px;
   }
 
-  .history-table {
-    font-size: 12px;
-  }
-
-  .history-table th,
-  .history-table td {
-    padding: 8px;
-  }
-
-  .actions-cell {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .btn-download,
-  .btn-edit {
-    font-size: 11px;
-    padding: 4px 8px;
+  .action-buttons {
+    flex-wrap: wrap;
   }
 }
 </style>

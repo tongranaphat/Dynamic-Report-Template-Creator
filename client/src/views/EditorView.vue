@@ -1,38 +1,53 @@
-<template>
+﻿<template>
   <div class="app-layout">
     <header class="top-navbar">
       <div class="navbar-left">
-        <h1 class="app-title">ระบบสร้างเทมเพลตรายงาน</h1>
-        <div class="divider-v"></div>
-        <div class="hud-controls">
-          <button @click="undo" class="zoom-btn" title="ย้อนกลับ">↩ ย้อนกลับ</button>
-          <button @click="redo" class="zoom-btn" title="ทำซ้ำ">↪ ทำซ้ำ</button>
-          <div class="divider-v"></div>
-          <button @click="zoomOut" class="zoom-btn">−</button>
-          <span class="zoom-value">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomIn" class="zoom-btn">+</button>
-          <button @click="fitToScreen" class="zoom-fit">รีเซ็ต</button>
-        </div>
+        <h1 class="app-title">สร้างเทมเพลตรายงาน</h1>
       </div>
-      <div class="navbar-center">
-        <!-- Center space now flexible -->
-      </div>
-      <div class="navbar-right">
-        <button @click="togglePreviewWrapper"
-          :class="['mode-toggle-btn', isPreviewMode ? 'preview-active' : 'edit-active']" :disabled="isGenerating">
-          {{ isGenerating ? '⏳ กำลังสร้าง...' : (isPreviewMode ? '📝 แก้ไข' : '👁️ ดูตัวอย่าง') }}
 
-        </button>
-        <div v-if="connectionStatus"
-          :class="['connection-status-pill', connectionStatus === 'connected' ? 'online' : 'offline']"
-          :title="connectionStatus === 'connected' ? 'ออนไลน์' : 'ออฟไลน์'">
-          {{ connectionStatus === 'connected' ? '🟢' : '🔴' }}
+      <div class="navbar-right">
+
+        <div class="zoom-group">
+          <button @click="zoomOut" class="btn-zoom-out" title="ซูมออก">
+            <span class="zoom-out-icon"></span>
+          </button>
+
+          <div class="zoom-value-box">
+            <span class="zoom-value-text">{{ Math.round(zoomLevel * 100) }}%</span>
+          </div>
+
+          <button @click="zoomIn" class="btn-zoom-in" title="ซูมเข้า">
+            <span class="zoom-in-icon"></span>
+          </button>
         </div>
+
+        <div class="undo-redo-group">
+          <button @click="undo" class="action-btn-text" title="ย้อนกลับ">
+            <span class="icon-undo"></span>
+            <span class="action-text">ย้อนกลับ</span>
+          </button>
+          <button @click="redo" class="action-btn-text" title="ทำซ้ำ">
+            <span class="icon-redo"></span>
+            <span class="action-text">ทำซ้ำ</span>
+          </button>
+        </div>
+
+        <div class="divider-v"></div>
+
+        <div class="mode-group">
+          <button @click="togglePreviewWrapper" class="preview-btn" :disabled="isGenerating">
+            <span :class="isPreviewMode ? 'icon-edit' : 'icon-eye'"></span>
+            <span class="preview-text">
+              {{ isGenerating ? 'สร้าง...' : (isPreviewMode ? 'แก้ไข' : 'ดูตัวอย่าง') }}
+            </span>
+          </button>
+        </div>
+
       </div>
     </header>
 
-    <Sidebar :isOpen="isSidebarOpen" :connectionStatus="connectionStatus" :templates="templates"
-      :isCanvasReady="isCanvasReady" :templateName="templateName" :isPreviewMode="isPreviewMode"
+    <Sidebar :isOpen="isSidebarOpen" :is-history-open="showHistoryModal" :connectionStatus="connectionStatus"
+      :templates="templates" :isCanvasReady="isCanvasReady" :templateName="templateName" :isPreviewMode="isPreviewMode"
       :currentTemplateId="currentTemplateId" :groupedVariables="groupedVariables" :isGenerating="isGenerating"
       :pdfQuality="pdfQuality" :pdfMode="pdfMode" @update:pdfMode="pdfMode = $event" :pages="pages"
       :currentPageIndex="currentPageIndex" @toggle="toggleSidebar" @open="isSidebarOpen = true"
@@ -56,12 +71,10 @@
       </div>
     </main>
 
-
     <PropertiesPanel v-if="canvas" :canvas="canvas" :is-preview-mode="isPreviewMode" />
 
-
-    <HistoryModal v-if="showHistoryModal" :reportInstances="reportHistory" @close="showHistoryModal = false"
-      @edit="openReportFromHistory" @delete="handleDeleteReport" />
+    <HistoryModal v-if="showHistoryModal" :reportInstances="reportHistory" :currentInstanceId="currentReportId"
+      @close="showHistoryModal = false" @edit="openReportFromHistory" @delete="handleDeleteReport" />
   </div>
 </template>
 
@@ -1592,159 +1605,240 @@ onMounted(async () => {
   top: 0;
   left: 0;
   right: 0;
-  height: 60px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  height: 69px;
+  background: #FFFFFF;
+  border-top: 3.5px solid #2196F3;
+  border-bottom: 1px solid #E3E3E3;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 46px;
   z-index: 1000;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+
+  /* 📌 เพิ่ม 2 บรรทัดนี้เพื่อบังคับให้ตัวอักษรและไอคอนทั้งหมดในแถบนี้คมกริบ */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .navbar-left {
   display: flex;
   align-items: center;
-  gap: 15px;
+  height: 100%;
 }
 
+/* app-title */
 .app-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #333;
+  text-align: left;
+  font: normal normal bold 26px/34px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #000000;
+  opacity: 1;
   margin: 0;
   white-space: nowrap;
-}
-
-.navbar-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
 }
 
 .navbar-right {
   display: flex;
   align-items: center;
-  gap: 15px;
+  height: 100%;
 }
 
-.hud-controls {
+/* ── 1. กลุ่ม Zoom ── */
+.zoom-group {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: #f8f9fa;
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid #eee;
 }
 
-.connection-status-pill {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-
-.mode-toggle-btn {
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 13px;
+.btn-zoom-out,
+.btn-zoom-in {
+  background: transparent;
+  border: none;
   cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-}
-
-.mode-toggle-btn.edit-active {
-  background: #e3f2fd;
-  color: #1565c0;
-  border-color: #bbdefb;
-}
-
-.mode-toggle-btn.edit-active:hover {
-  background: #bbdefb;
-}
-
-.mode-toggle-btn.preview-active {
-  background: #fff3e0;
-  color: #e65100;
-  border-color: #ffe0b2;
-}
-
-.mode-toggle-btn.preview-active:hover {
-  background: #ffe0b2;
-}
-
-.mode-toggle-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  filter: grayscale(0.5);
-}
-
-
-.connection-status-pill.online {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #c8e6c9;
-}
-
-.connection-status-pill.offline {
-  background: #ffebee;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
-}
-
-.zoom-btn {
-  background: #f5f5f5;
-  border: 1px solid #ddd;
-  padding: 6px 12px;
-  min-width: 36px;
-  height: 32px;
-  border-radius: 16px;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 13px;
-  color: #333;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+}
+
+.btn-zoom-out {
+  width: 23px;
+  height: 23px;
+  margin-right: 10px;
+  /* ระยะห่างเป๊ะจาก Design */
+}
+
+/* zoom-out-icon */
+.zoom-out-icon {
+  width: 13px;
+  height: 1px;
+  background: #4D4D4D;
+}
+
+/* zoom-value-box */
+.zoom-value-box {
+  width: 72px;
+  height: 39px;
+  background: #FFFFFF;
+  border: 1px solid #E3E3E3;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* zoom-value-text */
+.zoom-value-text {
+  width: 35px;
+  height: 26px;
+  text-align: center;
+  /* ปรับให้ตัวเลขอยู่กลางกล่อง */
+  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  margin-top: 1px;
+}
+
+.btn-zoom-in {
+  width: 23px;
+  height: 23px;
+  margin-left: 12px;
+  /* ระยะห่างเป๊ะจาก Design */
+}
+
+/* zoom-in-icon (9x9) สร้างกากบาทให้คมเป๊ะ */
+.zoom-in-icon {
+  position: relative;
+  width: 9px;
+  height: 9px;
+}
+
+.zoom-in-icon::before,
+.zoom-in-icon::after {
+  content: "";
+  position: absolute;
+  background: #4D4D4D;
+}
+
+/* เส้นแนวนอน */
+.zoom-in-icon::before {
+  top: 4px;
+  left: 0;
+  width: 9px;
+  height: 1px;
+}
+
+/* เส้นแนวตั้ง */
+.zoom-in-icon::after {
+  top: 0;
+  left: 4px;
+  width: 1px;
+  height: 9px;
+}
+
+/* ── 2. กลุ่ม Undo / Redo ── */
+.undo-redo-group {
+  display: flex;
+  align-items: center;
+  margin-left: 24px;
+  /* ห่างจากปุ่ม + */
+  gap: 24px;
+  /* ระยะห่างระหว่าง undo กับ redo */
+}
+
+.action-btn-text {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* icon-undo, icon-redo */
+.icon-undo,
+.icon-redo {
+  width: 23px;
+  height: 23px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 0% 0%;
+}
+
+.icon-undo {
+  background-image: url('../assets/icons/undo.png');
+}
+
+.icon-redo {
+  background-image: url('../assets/icons/redo.png');
+}
+
+/* action-text (undo/redo) */
+.action-text {
+  height: 26px;
+  text-align: left;
+  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
   white-space: nowrap;
 }
 
-.zoom-btn:hover {
-  background: #e0e0e0;
-  border-color: #ccc;
-}
-
-.zoom-value {
-  font-size: 14px;
-  font-weight: 700;
-  min-width: 45px;
-  text-align: center;
-  color: #222;
-}
-
-.zoom-fit {
-  background: #fff;
-  border: 1px solid #ccc;
-  padding: 6px 10px;
-  border-radius: 16px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #333;
-  font-weight: 600;
-}
-
-.zoom-fit:hover {
-  background: #f0f0f0;
-}
-
+/* ── เส้นคั่น ── */
 .divider-v {
   width: 1px;
-  height: 24px;
-  background: #ddd;
-  margin: 0 5px;
+  height: 49px;
+  background: #E3E3E3;
+  /* เปลี่ยนมาใช้ bg แทน border ให้เส้นคม 1px */
+  margin: 0 32px 0 46px;
+  /* คำนวณระยะห่างให้สมดุลตามดีไซน์ */
+}
+
+/* ── 3. ปุ่ม Preview ── */
+.mode-group {
+  display: flex;
+  align-items: center;
+}
+
+/* preview-btn */
+.preview-btn {
+  width: 105px;
+  height: 39px;
+  background: #F65189;
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.preview-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* icon-eye */
+.icon-eye {
+  width: 16px;
+  height: 16px;
+  background: transparent url('../assets/icons/eye.png') 0% 0% no-repeat padding-box;
+  background-size: contain;
+}
+
+.icon-edit {
+  width: 16px;
+  height: 16px;
+  background: transparent url('../assets/icons/edit.png') 0% 0% no-repeat padding-box;
+  background-size: contain;
+}
+
+/* preview-text */
+.preview-text {
+  height: 26px;
+  text-align: left;
+  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #FFFFFF;
+  white-space: nowrap;
 }
 </style>
