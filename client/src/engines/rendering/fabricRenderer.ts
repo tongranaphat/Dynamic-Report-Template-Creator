@@ -28,7 +28,7 @@ export function attachBlockInteraction(
         const targets = (target as any).type === 'activeSelection' ? (target as any).getObjects() : [target];
 
         // 1. Array loop performance optimization: Precompute bounds before the loop
-        const objects = canvas.getObjects().filter((obj) => 
+        const objects = canvas.getObjects().filter((obj) =>
             !targets.includes(obj) && (obj as any).nodeId !== undefined
         );
         const cachedBounds = objects.map(obj => obj.getBoundingRect());
@@ -51,7 +51,7 @@ export function attachBlockInteraction(
         const vpt = canvas.viewportTransform;
         let vptTl = { x: -5000, y: -5000 };
         let vptBr = { x: 5000, y: 5000 };
-        
+
         if (vpt) {
             const invertedVpt = fabric.util.invertTransform(vpt);
             vptTl = fabric.util.transformPoint(new fabric.Point(0, 0), invertedVpt);
@@ -178,7 +178,7 @@ export function attachBlockInteraction(
 
         // Handle both single objects and ActiveSelection
         const targets = (target as any).type === 'activeSelection' ? (target as any).getObjects() : [target];
-        
+
         if (targets.length === 0) return;
 
         const blocks = getBlocks();
@@ -222,7 +222,7 @@ export function attachBlockInteraction(
                 if (obj.fontSize !== undefined) {
                     // Safely initialize layout if the block was created without one
                     if (!textBlock.layout) {
-                        textBlock.layout = {} as any; 
+                        textBlock.layout = {} as any;
                     }
                     textBlock.layout.fontSize = obj.fontSize;
                 }
@@ -388,7 +388,7 @@ function updateExistingObject(canvas: fabric.Canvas, obj: fabric.Object, block: 
         if ((obj as any).isEditing) {
             return false; // Don't update while user is typing
         }
-        
+
         const textBlock = block as TextBlock;
         const plainText = textBlock.content.map((run) => run.text).join('');
 

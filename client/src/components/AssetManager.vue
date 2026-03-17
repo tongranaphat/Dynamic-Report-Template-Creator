@@ -1,8 +1,15 @@
 <template>
   <div class="asset-manager">
-    <div class="header">
-      <input type="file" ref="fileInput" @change="uploadAsset" accept="image/*" style="display: none" />
-      <button class="btn-upload" @click="$refs.fileInput.click()" :disabled="isPreviewMode">+ อัปโหลดรูปภาพ</button>
+    <div class="upload-section">
+      <input type="file" ref="fileInput" @change="uploadAsset" accept="image/jpeg, image/png" style="display: none" />
+      <button class="btn-upload" @click="$refs.fileInput.click()" :disabled="isPreviewMode">
+        <span class="btn-upload-text">อัปโหลดรูปภาพ</span>
+      </button>
+      <div class="btn-upload-hint">รองรับ JPG, PNG</div>
+    </div>
+
+    <div class="asset-list-header">
+      <h4 class="label-small">รูปภาพที่อัปโหลด:</h4>
     </div>
 
     <div v-if="loading" class="loading">กำลังโหลด...</div>
@@ -11,8 +18,12 @@
       <div v-for="(asset, index) in assets" :key="index" :class="['asset-item', { disabled: isPreviewMode }]"
         :draggable="!isPreviewMode" @dragstart="onDragStart($event, asset)" @click="selectAsset(asset)">
         <img :src="asset.url" :alt="asset.name" />
-        <button class="btn-del" @click.stop="deleteAsset(asset)" v-if="!isPreviewMode">×</button>
+
+        <button class="btn-del" @click.stop="deleteAsset(asset)" v-if="!isPreviewMode">
+          <span class="icon-delete"></span>
+        </button>
       </div>
+
       <div v-if="assets.length === 0" class="empty-state">ยังไม่มีรูปภาพในคลัง</div>
     </div>
   </div>
@@ -112,48 +123,100 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ── จัด Layout หลักให้อยู่กึ่งกลาง ── */
 .asset-manager {
-  padding: 0;
-}
-
-.header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: 10px;
+  padding-top: 15px;
+  /* ดันลงมาจาก Header ให้เท่ากับแท็บอื่นๆ */
 }
 
-.header h3 {
-  margin: 0;
-  font-size: 14px;
-  color: #444;
+/* ── ส่วนปุ่มอัปโหลด ── */
+.upload-section {
+  width: 298px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 15px;
 }
 
 .btn-upload {
-  background: #2196f3;
-  color: white;
+  width: 298px;
+  height: 46px;
+  background: #F65189 0% 0% no-repeat padding-box;
+  border-radius: 6px;
   border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 12px;
+  transition: opacity 0.2s, transform 0.2s;
 }
 
+.btn-upload:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.btn-upload:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-upload-text {
+  text-align: center;
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #FFFFFF;
+}
+
+.btn-upload-hint {
+  text-align: left;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #A4A4A4;
+  margin-top: 6px;
+}
+
+/* ── ส่วนหัวข้อแสดงรูป ── */
+.asset-list-header {
+  width: 298px;
+  text-align: left;
+  margin-bottom: 10px;
+}
+
+.label-small {
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  margin: 0;
+}
+
+/* ── Grid แสดงรูปภาพ ── */
 .asset-grid {
+  width: 298px;
+  /* ล็อคความกว้างให้เท่าปุ่ม */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  max-height: 200px;
+  gap: 12px;
+  /* ขยายช่องว่างให้รูปดูไม่เบียดกันเกินไป */
+  max-height: 450px;
   overflow-y: auto;
+  padding: 5px;
+  /* เผื่อพื้นที่ให้เงาปุ่มลบไม่โดนตัด */
 }
 
+/* ── กล่องรูปภาพแต่ละรูป ── */
 .asset-item {
   position: relative;
   aspect-ratio: 1;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  overflow: hidden;
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #F6F6F6;
+  border-radius: 6px;
   cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.asset-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
 }
 
 .asset-item.disabled {
@@ -165,39 +228,57 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 5px;
 }
 
 .btn-del {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
+  top: -8px;
+  right: -8px;
+  background: #E74C3C;
   border: none;
   border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  font-size: 10px;
-  line-height: 16px;
+  width: 24px;
+  height: 24px;
   cursor: pointer;
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  z-index: 10;
 }
 
 .asset-item:hover .btn-del {
-  display: block;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-del:hover {
+  background: #C0392B;
+}
+
+.icon-delete {
+  width: 14px;
+  height: 14px;
+  background: transparent url('../assets/icons/delete.svg') center/contain no-repeat;
 }
 
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
   color: #999;
-  font-size: 12px;
-  padding: 10px;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  padding: 20px;
 }
 
 .loading {
   text-align: center;
   color: #666;
-  font-size: 12px;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  margin-top: 20px;
 }
 </style>

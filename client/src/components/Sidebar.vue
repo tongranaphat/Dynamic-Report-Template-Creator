@@ -10,25 +10,25 @@
 
         <button @click="handleTabClick('pages')" @mouseenter="handleMouseEnter('pages')"
           :class="['rail-btn', { active: activeTab === 'pages' && isOpen, pinned: isPinned && activeTab === 'pages' }]">
-          <span class="rail-icon icon-placeholder">📄</span>
-          <span class="rail-label">จัดการหน้า</span>
+          <span class="rail-icon icon-page"></span>
+          <span class="rail-label">หน้า</span>
         </button>
 
         <button @click="handleTabClick('data')" @mouseenter="handleMouseEnter('data')"
           :class="['rail-btn', { active: activeTab === 'data' && isOpen, pinned: isPinned && activeTab === 'data' }]">
-          <span class="rail-icon icon-placeholder">📊</span>
+          <span class="rail-icon icon-data"></span>
           <span class="rail-label">ข้อมูล</span>
         </button>
 
         <button @click="handleTabClick('assets')" @mouseenter="handleMouseEnter('assets')"
           :class="['rail-btn', { active: activeTab === 'assets' && isOpen, pinned: isPinned && activeTab === 'assets' }]">
-          <span class="rail-icon icon-placeholder">🖼️</span>
-          <span class="rail-label">องค์ประกอบ</span>
+          <span class="rail-icon icon-image"></span>
+          <span class="rail-label">รูปภาพ</span>
         </button>
 
         <button @click="handleTabClick('project')" @mouseenter="handleMouseEnter('project')"
           :class="['rail-btn', { active: activeTab === 'project' && isOpen, pinned: isPinned && activeTab === 'project' }]">
-          <span class="rail-icon icon-placeholder">💾</span>
+          <span class="rail-icon icon-project"></span>
           <span class="rail-label">โปรเจกต์</span>
         </button>
       </div>
@@ -36,18 +36,34 @@
 
     <div class="sidebar-panel" :class="{ collapsed: !isOpen }">
       <div class="panel-header">
+
         <div class="panel-header-title" v-if="activeTab === 'templates'">
           <span class="panel-header-icon icon-dashboard-active"></span>
           <h3 class="panel-header-text">จัดการเทมเพลต</h3>
         </div>
-        <h3 class="panel-header-text" v-if="activeTab === 'pages'">📄 จัดการหน้ากระดาษ</h3>
-        <h3 class="panel-header-text" v-if="activeTab === 'data'">📊 จัดการข้อมูล</h3>
-        <h3 class="panel-header-text" v-if="activeTab === 'assets'">🖼️ คลังรูปภาพ</h3>
-        <h3 class="panel-header-text" v-if="activeTab === 'project'">💾 จัดการโปรเจกต์</h3>
-      </div>
 
+        <div class="panel-header-title" v-if="activeTab === 'pages'">
+          <span class="panel-header-icon icon-pages"></span>
+          <h3 class="panel-header-text">จัดการหน้ากระดาษ</h3>
+        </div>
+
+        <div class="panel-header-title" v-if="activeTab === 'data'">
+          <span class="panel-header-icon icon-data-header"></span>
+          <h3 class="panel-header-text">จัดการข้อมูล</h3>
+        </div>
+
+        <div class="panel-header-title" v-if="activeTab === 'assets'">
+          <span class="panel-header-icon icon-image-header"></span>
+          <h3 class="panel-header-text">คลังรูปภาพ</h3>
+        </div>
+
+        <div class="panel-header-title" v-if="activeTab === 'project'">
+          <span class="panel-header-icon icon-project-header"></span>
+          <h3 class="panel-header-text">จัดการโปรเจกต์</h3>
+        </div>
+      </div>
       <div class="panel-content">
-        <div v-if="activeTab === 'pages'" class="tab-pane">
+        <div v-if="activeTab === 'pages'" class="tab-pane-pages">
           <div class="pages-list" @mouseleave="clearDragState">
             <div v-for="(page, index) in pages" :key="page.id" :class="[
               'page-item-sidebar',
@@ -64,27 +80,16 @@
               <div class="page-entry">
                 <div class="page-thumb">
                   <img :src="page.background || getDefaultPageImage(index)" :alt="`Page ${index + 1}`" />
-                  <div class="del-page-btn" @click.stop="isCanvasReady ? $emit('delete-page', index) : null"
+                  <button class="del-page-btn" @click.stop="isCanvasReady ? $emit('delete-page', index) : null"
                     v-if="pages.length > 1">
-                    ×
-                  </div>
+                    <span class="icon-delete"></span>
+                  </button>
                 </div>
                 <div class="page-info">
                   <span class="page-title">หน้า {{ index + 1 }}</span>
                 </div>
               </div>
             </div>
-          </div>
-
-          <div class="add-page-actions-sidebar">
-            <button class="add-pg-btn" @click="isCanvasReady ? $emit('add-page') : null" :disabled="!isCanvasReady">
-              + เพิ่มหน้าว่างใหม่
-            </button>
-            <input type="file" ref="appendInput" @change="onAppendFileChange"
-              accept="application/pdf, image/jpeg, image/png, image/gif, image/webp" style="display: none" />
-            <button class="add-pg-btn secondary" @click="triggerAppendUpload" :disabled="!isCanvasReady">
-              + นำเข้าหน้าใหม่
-            </button>
           </div>
         </div>
 
@@ -132,81 +137,164 @@
 
         </div>
 
-        <div v-if="activeTab === 'data'" class="tab-pane">
-          <div class="section" style="padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 15px;">
+        <div v-if="activeTab === 'data'" class="tab-pane-data">
+
+          <div class="data-section">
             <h4 class="label-small">ข้อความทั่วไป:</h4>
             <button @click="handleAddCustomText" class="var-btn" :disabled="isPreviewMode" draggable="true"
               @dragstart="onCustomTextDragStart($event)">
-              📝 ข้อความอิสระ (พิมพ์เอง)
+              <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
+              <span class="var-btn-text">ข้อความอิสระ (พิมพ์เอง)</span>
             </button>
           </div>
-          <div class="section">
+
+          <div class="data-section">
             <h4 class="label-small">เลือกชุดข้อมูล:</h4>
             <div class="var-list">
-              <div v-for="(group, category) in groupedVariables" :key="category">
+              <div v-for="(group, category) in groupedVariables" :key="category" class="var-group">
                 <h5 class="category-header">{{ category }}</h5>
                 <button v-for="v in group" :key="v.key" @click="$emit('add-variable', v.key)" draggable="true"
                   @dragstart="onDragStart($event, v.key)" class="var-btn" :disabled="isPreviewMode">
-                  {{ v.label }}
+                  <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
+                  <span class="var-btn-text">{{ v.label }}</span>
                 </button>
               </div>
             </div>
           </div>
+
         </div>
 
         <div v-if="activeTab === 'assets'" class="tab-pane">
           <AssetManager :is-preview-mode="isPreviewMode" @select-asset="$emit('add-image', $event)" />
         </div>
 
-        <div v-if="activeTab === 'project'" class="tab-pane">
-          <div class="section">
+        <div v-if="activeTab === 'project'" class="tab-pane-project">
+
+          <div class="project-section">
+            <h4 class="label">นำเข้าโปรเจกต์ / PDF / รูปภาพ</h4>
             <div class="upload-container">
-              <button class="btn-upload" @click="$emit('import-workspace')" :disabled="!isCanvasReady">
-                📂 นำเข้าโปรเจกต์ / PDF / รูปภาพ
+              <input type="file" ref="workspaceInput" @change="onWorkspaceFileChange"
+                accept=".json, application/pdf, image/jpeg, image/png, image/gif, image/webp" style="display: none" />
+              <button class="btn-upload-dashed" @click="$refs.workspaceInput.click()" :disabled="!isCanvasReady">
+                <span class="btn-upload-dashed-icon"></span>
+                <span class="btn-upload-dashed-text">นำเข้าโปรเจกต์</span>
               </button>
             </div>
-            <p class="hint">รองรับไฟล์: .json, Hybrid .pdf, รูปภาพ</p>
+            <p class="hint-text">รองรับไฟล์ : Json, Hybrid, PDF, รูปภาพ</p>
           </div>
 
-          <div class="actions" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee">
-            <button @click="$emit('save-report')" class="btn-save project-save" :disabled="isPreviewMode"
-              style="width: 100%; margin-bottom: 5px">💾 บันทึกโปรเจกต์</button>
-            <p class="hint" style="margin-bottom: 15px">บันทึกลงประวัติและไฟล์ Hybrid PDF</p>
-
-            <div style="margin-bottom: 8px">
-              <label class="label-small">คุณภาพ PDF:</label>
-              <select :value="pdfQuality" @change="$emit('update:pdfQuality', $event.target.value)"
-                style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc">
-                <option value="1">ฉบับร่าง (1x)</option>
-                <option value="2">มาตรฐาน (2x)</option>
-                <option value="3">ละเอียด (3x)</option>
-                <option value="4">สำหรับพิมพ์ (4x)</option>
-              </select>
-            </div>
-
-            <div style="margin-bottom: 15px">
-              <label class="label-small">รูปแบบการส่งออก (Engine):</label>
-              <select :value="pdfMode" @change="$emit('update:pdfMode', $event.target.value)"
-                style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc; background: #fff;">
-                <option value="flatten">🌟 รูปภาพ (ถูกต้อง100%)</option>
-                <option value="vector">📝 เวคเตอร์ (แก้ไขข้อความใน Acrobat ได้)</option>
-              </select>
-            </div>
-
-            <button @click="$emit('generate-pdf')" class="btn-print" :disabled="isGenerating || isPreviewMode"
-              style="width: 100%; font-weight: bold">
-              {{ isGenerating ? '⏳ กำลังสร้าง PDF...' : '📄 ส่งออกเป็นไฟล์ PDF' }}
+          <div class="project-section">
+            <button @click="$emit('save-report')" class="btn-project-save" :disabled="isPreviewMode">
+              <span class="btn-project-save-text">บันทึกโปรเจกต์</span>
             </button>
-            <p class="hint">แก้ไขต่อได้ทั้งในโปรแกรมนี้และ Acrobat</p>
+            <p class="hint-text">บันทึกลงประวัติและไฟล์ Hybrid PDF</p>
           </div>
+          <div class="project-section">
+            <h4 class="label">คุณภาพ PDF:</h4>
+            <div class="radio-group-list">
+              <div :class="['radio-card', { active: pdfQuality == '1' }]" @click="$emit('update:pdfQuality', '1')">
+                <div class="radio-circle">
+                  <div class="radio-inner" v-if="pdfQuality == '1'"></div>
+                </div>
+                <div class="radio-text-content">
+                  <div class="radio-title">ฉบับร่าง</div>
+                  <div class="radio-subtitle">ไฟล์เล็ก เหมาะสำหรับตรวจงาน</div>
+                </div>
+                <div class="radio-badge">1x</div>
+              </div>
+              <div :class="['radio-card', { active: pdfQuality == '2' }]" @click="$emit('update:pdfQuality', '2')">
+                <div class="radio-circle">
+                  <div class="radio-inner" v-if="pdfQuality == '2'"></div>
+                </div>
+                <div class="radio-text-content">
+                  <div class="radio-title">มาตรฐาน</div>
+                  <div class="radio-subtitle">สมดุลระหว่างคุณภาพและขนาด</div>
+                </div>
+                <div class="radio-badge">2x</div>
+              </div>
+              <div :class="['radio-card', { active: pdfQuality == '3' }]" @click="$emit('update:pdfQuality', '3')">
+                <div class="radio-circle">
+                  <div class="radio-inner" v-if="pdfQuality == '3'"></div>
+                </div>
+                <div class="radio-text-content">
+                  <div class="radio-title">ละเอียด(HD)</div>
+                  <div class="radio-subtitle">คมชัดสูง สำหรับจอ Retina</div>
+                </div>
+                <div class="radio-badge">3x</div>
+              </div>
+              <div :class="['radio-card', { active: pdfQuality == '4' }]" @click="$emit('update:pdfQuality', '4')">
+                <div class="radio-circle">
+                  <div class="radio-inner" v-if="pdfQuality == '4'"></div>
+                </div>
+                <div class="radio-text-content">
+                  <div class="radio-title">สำหรับพิมพ์</div>
+                  <div class="radio-subtitle">ความละเอียดสูงสุด</div>
+                </div>
+                <div class="radio-badge">4x</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="project-section">
+            <h4 class="label">รูปแบบการส่งออก (Engine):</h4>
+            <div class="radio-group-list">
+              <div :class="['radio-card', { active: pdfMode == 'flatten' }]"
+                @click="$emit('update:pdfMode', 'flatten')">
+                <div class="radio-circle">
+                  <div class="radio-inner" v-if="pdfMode == 'flatten'"></div>
+                </div>
+                <div class="radio-text-content">
+                  <div class="radio-title">รูปภาพ</div>
+                  <div class="radio-subtitle">ถูกต้อง100%</div>
+                </div>
+              </div>
+              <div :class="['radio-card', { active: pdfMode == 'vector' }]" @click="$emit('update:pdfMode', 'vector')">
+                <div class="radio-circle">
+                  <div class="radio-inner" v-if="pdfMode == 'vector'"></div>
+                </div>
+                <div class="radio-text-content">
+                  <div class="radio-title">เวคเตอร์</div>
+                  <div class="radio-subtitle">แก้ไขข้อความใน Acrobat ได้</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="project-section" style="margin-top: 10px; margin-bottom: 30px;">
+            <button @click="$emit('generate-pdf')" class="btn-print-outline" :disabled="isGenerating || isPreviewMode">
+              <span class="btn-print-text">
+                {{ isGenerating ? 'กำลังสร้าง PDF...' : 'ส่งออกเป็นไฟล์ PDF' }}
+              </span>
+            </button>
+          </div>
+
         </div>
       </div>
+
+      <div class="panel-footer" v-if="activeTab === 'pages'">
+        <div class="add-page-actions-sidebar">
+          <button class="add-pg-btn" @click="isCanvasReady ? $emit('add-page') : null" :disabled="!isCanvasReady">
+            + เพิ่มหน้าว่างใหม่
+          </button>
+          <input type="file" ref="appendInput" @change="onAppendFileChange"
+            accept="application/pdf, image/jpeg, image/png, image/gif, image/webp" style="display: none" />
+          <button class="add-pg-btn secondary" @click="triggerAppendUpload" :disabled="!isCanvasReady">
+            + นำเข้าหน้าใหม่
+          </button>
+        </div>
+      </div>
+
     </div>
   </aside>
 </template>
 
 <script setup>
 import { ref } from 'vue';
+
+const workspaceInput = ref(null);
+const onWorkspaceFileChange = (e) => {
+  emit('import-workspace', e); // หรือฟังก์ชันที่คุณใช้รับไฟล์ import ของเดิมครับ
+};
 
 const activeTab = ref('templates');
 const isPinned = ref(false);
@@ -376,13 +464,11 @@ export default {
   bottom: 0;
   display: flex;
   z-index: 50;
-
-  /* 📌 เพิ่ม 2 บรรทัดนี้เพื่อบังคับให้ตัวอักษรใน Sidebar ทั้งหมดคมกริบ */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── 1. Vertical Rail (ดีไซน์ใหม่ 74px) ── */
+/* ── 1. Vertical Rail ── */
 .sidebar-rail {
   width: 85px;
   height: 100%;
@@ -424,7 +510,6 @@ export default {
   background: #FFF5F8;
 }
 
-/* ไอคอน Rail และการเรียกใช้รูป */
 .rail-icon {
   width: 22px;
   height: 22px;
@@ -440,6 +525,22 @@ export default {
 
 .rail-btn.active .icon-dashboard {
   background-image: url('../assets/icons/dashboard-active.png');
+}
+
+.icon-page {
+  background-image: url('../assets/icons/page.png');
+}
+
+.rail-btn.active .icon-page {
+  background-image: url('../assets/icons/page-active.png');
+}
+
+.icon-data {
+  background-image: url('../assets/icons/folder.png');
+}
+
+.rail-btn.active .icon-data {
+  background-image: url('../assets/icons/folder-active.png');
 }
 
 .icon-placeholder {
@@ -460,15 +561,12 @@ export default {
   color: #F65189;
 }
 
-/* ── 2. Sliding Panel (ปรับความกว้างเป็น 286px ตาม Design) ── */
+/* ── 2. Sliding Panel ── */
 .sidebar-panel {
   width: 329px;
-  /* 📌 ปรับความกว้างให้เป๊ะตาม Design */
   height: 100%;
-  /* ใช้ 100% แทน 797px เพื่อให้ยืดหยุ่นตามหน้าจอ */
   background: #FFFFFF;
   border: 1px solid #F3F3F3;
-  /* 📌 เพิ่มเส้นขอบตาม Design */
   display: flex;
   flex-direction: column;
   z-index: 51;
@@ -476,7 +574,6 @@ export default {
   box-sizing: border-box;
 }
 
-/* 📌 ปรับระยะตอนพับเก็บให้พอดีกับความกว้างใหม่ (ซ่อนไป 330px รวมขอบ) */
 .sidebar-panel.collapsed {
   transform: translateX(-330px);
 }
@@ -488,7 +585,6 @@ export default {
   align-items: center;
   justify-content: space-between;
   padding: 0 17px;
-  /* 📌 ลด Padding ซ้ายขวาลงนิดหน่อยเพื่อให้พอดีกับกล่องที่แคบลง */
   border-bottom: 1px solid #F3F3F3;
 }
 
@@ -499,13 +595,27 @@ export default {
 }
 
 .panel-header-icon {
-  width: 18px;
-  height: 18px;
-  background: transparent url('../assets/icons/dashboard-active.png') center/contain no-repeat;
+  width: 20px;
+  height: 20px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.icon-dashboard-active {
+  background-image: url('../assets/icons/dashboard-active.png');
+}
+
+.icon-pages {
+  background-image: url('../assets/icons/page-active.png');
+}
+
+.icon-data-header {
+  background-image: url('../assets/icons/folder-active.png');
 }
 
 .panel-header-text {
-  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
   color: #000000;
   margin: 0;
 }
@@ -518,15 +628,181 @@ export default {
   font-weight: bold;
 }
 
-/* 📌 ส่วนเนื้อหาด้านใน */
 .panel-content {
   flex: 1;
   width: 100%;
   overflow-y: auto;
-  padding: 28px 0;
+  padding: 0px 0;
 }
 
-/* ── 3. Templates Tab Content (ดีไซน์ใหม่) ── */
+/* ── ส่วนกล่อง Footer ด้านล่างสุด ── */
+.panel-footer {
+  width: 100%;
+  background: #FFFFFF;
+  padding: 15px 0 25px 0;
+  display: flex;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* ========================================================================= */
+/* ── ส่วนของแท็บ "จัดการหน้ากระดาษ" ── */
+/* ========================================================================= */
+.tab-pane-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pages-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  padding-right: 5px;
+  padding-top: 15px;
+}
+
+.page-item-sidebar {
+  width: 298px;
+  height: 108px;
+  background: #F9F9F9 0% 0% no-repeat padding-box;
+  border: 1px solid #F3F3F3;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.page-item-sidebar.active {
+  background: #F651891A 0% 0% no-repeat padding-box;
+  border: 1px solid #FFD5E3;
+}
+
+.page-entry {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+}
+
+.page-thumb {
+  position: relative;
+  width: 70px;
+  height: 92px;
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #F6F6F6;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.page-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.del-page-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #E74C3C;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.page-item-sidebar:hover .del-page-btn {
+  display: flex;
+}
+
+.del-page-btn:hover {
+  background: #C0392B;
+}
+
+.page-title {
+  text-align: left;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  letter-spacing: 0px;
+  color: #000000;
+}
+
+.add-page-actions-sidebar {
+  width: 298px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.add-pg-btn {
+  width: 298px;
+  height: 46px;
+  background: #F65189 0% 0% no-repeat padding-box;
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.add-pg-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.add-pg-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.add-pg-btn.secondary {
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #F65189;
+  color: #F65189;
+}
+
+.add-pg-btn.secondary:hover:not(:disabled) {
+  background: #FFF5F8;
+  opacity: 1;
+}
+
+.page-item-sidebar.dragging {
+  opacity: 0.5;
+  border: 2px dashed #999;
+}
+
+.page-item-sidebar.drag-target-top {
+  border-top: 3px solid #F65189;
+}
+
+.page-item-sidebar.drag-target-bottom {
+  border-bottom: 3px solid #F65189;
+}
+
+/* ========================================================================= */
+/* ── ส่วนของแท็บ "เทมเพลต" ── */
+/* ========================================================================= */
 .tab-pane-templates {
   display: flex;
   flex-direction: column;
@@ -535,6 +811,7 @@ export default {
 
 .history-section {
   width: 298px;
+  padding-top: 15px;
 }
 
 .btn-history-header {
@@ -542,13 +819,9 @@ export default {
   height: 26px;
   text-align: left;
   font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  letter-spacing: 0px;
   color: #000000;
-  opacity: 1;
   margin-bottom: 9px;
-  /* ระยะห่างจากปุ่ม */
   white-space: nowrap;
-  /* 📌 ป้องกันตกบรรทัด */
 }
 
 .btn-history {
@@ -577,23 +850,17 @@ export default {
   color: #F65189;
 }
 
-/* กล่องเทา (Save Pane) */
 .template-save-pane {
   width: 298px;
   min-height: 192px;
-  /* ใช้ min-height เผื่อรายชื่อเทมเพลตยาวขึ้น */
   background: #F9F9F9 0% 0% no-repeat padding-box;
   border: 1px solid #E8E8E8;
   border-radius: 5px;
-  opacity: 1;
   margin-top: 18px;
-  /* ระยะห่างจากปุ่มประวัติ */
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* จัดให้ inner อยู่ตรงกลาง */
   padding: 12px 0 20px 0;
-  /* กะขอบบนล่างให้พอดี */
   box-sizing: border-box;
 }
 
@@ -602,7 +869,6 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  /* บังคับให้ทุกอย่างในนี้ชิดซ้ายเป๊ะๆ */
 }
 
 .existing-templates-list {
@@ -621,17 +887,23 @@ export default {
   margin-bottom: 5px;
 }
 
-/* ── Label & Input ── */
 .template-label-small {
-  width: 105px;
+  width: 120px;
   height: 24px;
   text-align: left;
   font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  letter-spacing: 0px;
   color: #000000;
-  opacity: 1;
   margin-top: 0px;
-  /* ระยะห่างระหว่าง t-name กับ label */
+}
+
+.label-small {
+  width: 70px;
+  height: 20px;
+  text-align: left;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  margin-top: 0px;
+  margin-bottom: 15px;
 }
 
 .template-name-input {
@@ -640,7 +912,6 @@ export default {
   background: #FFFFFF 0% 0% no-repeat padding-box;
   border: 1px solid #E3E3E3;
   border-radius: 5px;
-  opacity: 1;
   margin-top: 6px;
   padding: 0 13px;
   text-align: left;
@@ -653,13 +924,11 @@ export default {
   color: #BEBEBE;
 }
 
-/* ── ปุ่ม Save ── */
 .template-save-btn {
   width: 268px;
   height: 46px;
   background: #F65189 0% 0% no-repeat padding-box;
   border-radius: 5px;
-  opacity: 1;
   border: none;
   margin-top: 14px;
   display: flex;
@@ -677,23 +946,18 @@ export default {
   height: 24px;
   text-align: left;
   font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  letter-spacing: 0px;
   color: #FFFFFF;
-  opacity: 1;
 }
 
 .t-name {
   text-align: left;
   font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  letter-spacing: 0px;
   color: #000000;
-  opacity: 1;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 219px;
-  /* เว้นที่ให้ปุ่ม x */
 }
 
 .t-name.disabled {
@@ -720,6 +984,14 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+
+.template-item-row:hover .btn-del {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .icon-delete {
@@ -730,144 +1002,118 @@ export default {
 }
 
 /* ========================================================================= */
-/* ── CSS ของเดิมสำหรับ Tab Pages, Data, Assets, Project (เก็บไว้ครบ 100%) ── */
+/* ── ส่วนของแท็บ "ข้อมูล" (ดีไซน์ใหม่) ── */
+/* ========================================================================= */
+
+.tab-pane-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 15px;
+  /* 📌 ตั้งระยะห่างจากขอบบนสุดให้เท่ากัน */
+}
+
+.data-section {
+  width: 298px;
+}
+
+/* 📌 1. และ 2. จัดการระยะห่างและเส้นคั่นของหมวดหมู่แรก */
+.data-section:first-child {
+  padding-bottom: 18px;
+  /* เพิ่มระยะระหว่างปุ่มข้อความอิสระ กับเส้นคั่นล่าง */
+  margin-bottom: 15px;
+  /* ให้คำว่า "เลือกชุดข้อมูล" ห่างจากเส้นเท่ากับ padding-top ด้านบนสุด */
+  border-bottom: 1px solid #F3F3F3;
+}
+
+.label {
+  text-align: left;
+  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  margin: 0 0 10px 0;
+  display: block;
+}
+
+.category-header {
+  text-align: left;
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  opacity: 1;
+  margin: 10px 0 10px 0;
+  text-transform: none;
+  letter-spacing: 0px;
+}
+
+.var-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.var-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.var-btn {
+  width: 298px;
+  height: 46px;
+  background: #FFF9FB 0% 0% no-repeat padding-box;
+  border: 1px solid #FFD5E3;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 📌 4. Hover ปุ่ม ให้สีเป็นเหมือนเดิม แต่ลอยขึ้นนิดหน่อย + มีเงาให้ดูมีมิติ */
+.var-btn:hover:not(:disabled) {
+  background: #FFF9FB 0% 0% no-repeat padding-box;
+  /* ล็อคสีเดิม */
+  border: 1px solid #FFD5E3;
+  /* ล็อคสีขอบเดิม */
+  transform: translateY(-2px);
+  /* ลอยขึ้น 2px */
+  box-shadow: 0 4px 6px rgba(246, 81, 137, 0.06);
+  /* เพิ่มเงาสีชมพูอ่อนๆ ให้ดูเหมือนลอยอยู่จริงๆ */
+}
+
+.var-btn-icon-holder {
+  width: 35px;
+  height: 35px;
+  background: #FFDFE9 0% 0% no-repeat padding-box;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.var-btn-icon {
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #F65189;
+}
+
+.var-btn-text {
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #000000;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ========================================================================= */
+/* ── CSS ของเดิมสำหรับ Tab Assets และ Project ── */
 /* ========================================================================= */
 .tab-pane {
   display: flex;
   flex-direction: column;
   height: 100%;
   padding: 0 23px;
-}
-
-/* ── Pages Rail/Panel Styles ── */
-.pages-list {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 6px;
-}
-
-.page-item-sidebar {
-  padding: 9px;
-  border: 2px solid transparent;
-  border-radius: 9px;
-  margin-bottom: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #f9f9f9;
-}
-
-.page-item-sidebar:hover {
-  background: #f0f0f0;
-}
-
-.page-item-sidebar.active {
-  border-color: #2196f3;
-  background: #e3f2fd;
-}
-
-.page-item-sidebar.dragging {
-  opacity: 0.5;
-  border: 2px dashed #999;
-}
-
-.page-item-sidebar.drag-target-top {
-  border-top: 3px solid #2196f3;
-}
-
-.page-item-sidebar.drag-target-bottom {
-  border-bottom: 3px solid #2196f3;
-}
-
-.page-entry {
-  display: flex;
-  align-items: center;
-  gap: 17px;
-}
-
-.page-thumb {
-  position: relative;
-  width: 69px;
-  height: 98px;
-  background: #fff;
-  border: 1px solid #ddd;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
-}
-
-.page-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.del-page-btn {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  background: #f44336;
-  color: white;
-  border-radius: 50%;
-  width: 21px;
-  height: 21px;
-  line-height: 21px;
-  text-align: center;
-  font-size: 14px;
-  display: none;
-}
-
-.page-item-sidebar:hover .del-page-btn {
-  display: block;
-}
-
-.page-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.page-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #333;
-}
-
-.add-page-actions-sidebar {
-  margin-top: 17px;
-  padding-top: 17px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.add-pg-btn {
-  width: 100%;
-  padding: 12px;
-  background: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 7px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  transition: background 0.2s;
-}
-
-.add-pg-btn:hover:not(:disabled) {
-  background: #1976d2;
-}
-
-.add-pg-btn.secondary {
-  background: #607d8b;
-}
-
-.add-pg-btn.secondary:hover:not(:disabled) {
-  background: #455a64;
-}
-
-.add-pg-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
 }
 
 .sidebar-toggle {
@@ -917,34 +1163,10 @@ export default {
   letter-spacing: 0.5px;
 }
 
-.section.master-templates {
-  background: #f8f9fa;
-  padding: 14px;
-  border-radius: 7px;
-  border: 1px solid #eee;
-}
-
-.section.mode-selector {
-  background: #fff;
-  padding: 14px;
-  border-radius: 7px;
-  border: 1px solid #2196f3;
-}
-
-.template-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px solid #eee;
-}
-
 .btn-save,
 .btn-new,
-.btn-mode-toggle,
 .btn-upload,
-.btn-print,
-.var-btn {
+.btn-print {
   padding: 9px 14px;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -961,11 +1183,6 @@ export default {
   justify-content: center;
 }
 
-.btn-save.template-save {
-  background: #4caf50;
-  color: white;
-}
-
 .btn-save.project-save {
   background: #2196f3;
   color: white;
@@ -979,49 +1196,24 @@ export default {
 
 .btn-new {
   width: 298px;
-  /* กว้างเท่ากล่อง template-save-pane เป๊ะ */
   height: 46px;
   margin-top: 17px;
-  /* ระยะห่างปรับอิงตามขอบล่างของกล่องเทา (dynamic) */
   background: #FFFFFF 0% 0% no-repeat padding-box;
   border: 1px dashed #F65189;
-  /* ใช้เส้นประสีชมพูให้ดูเป็นปุ่ม 'สร้างใหม่' */
   border-radius: 5px;
   opacity: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-
-  /* จัดฟอนต์ให้อยู่กึ่งกลาง */
   text-align: center;
   font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  letter-spacing: 0px;
   color: #F65189;
-  /* ใช้สีชมพูให้เข้ากับธีม */
   transition: all 0.2s ease;
 }
 
 .btn-new:hover {
   background: #FFF5F8;
-  /* เอฟเฟกต์ตอนเอาเมาส์ชี้ */
-}
-
-.btn-mode-toggle {
-  width: 100%;
-  font-weight: bold;
-}
-
-.btn-mode-toggle.edit-mode {
-  background: #e3f2fd;
-  color: #1565c0;
-  border: 1px solid #bbdefb;
-}
-
-.btn-mode-toggle.preview-mode {
-  background: #fff3e0;
-  color: #e65100;
-  border: 1px solid #ffe0b2;
 }
 
 .btn-upload {
@@ -1037,28 +1229,6 @@ export default {
   font-weight: bold;
 }
 
-.var-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.var-btn {
-  background: #fff;
-  border: 1px solid #ccc !important;
-  color: #333 !important;
-  text-align: left;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  justify-content: flex-start;
-  width: 100%;
-}
-
-.var-btn:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #bbb !important;
-  transform: translateX(2px);
-}
-
 .hint {
   font-size: 14px;
   color: #666;
@@ -1066,25 +1236,9 @@ export default {
   font-style: italic;
 }
 
-.label-small {
-  font-size: 14px;
-  font-weight: 700;
-  color: #444;
-  margin-bottom: 5px;
-  display: block;
-}
-
-.category-header {
-  font-size: 15px;
-  color: #444;
-  margin: 12px 0 6px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 input[type='text'],
-input:not([type]) {
+input:not([type]),
+select {
   width: 100%;
   padding: 9px;
   border: 1px solid #ccc;
@@ -1094,18 +1248,13 @@ input:not([type]) {
   background: #fff;
 }
 
-/* ========================================== */
-/* 5. เก็บตก Hover Effects & Scrollbar */
-/* ========================================== */
-
-/* เอฟเฟกต์ตอนเอาเมาส์ชี้ปุ่มบันทึก */
+/* ── Hover Effects ── */
 .template-save-btn:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(246, 81, 137, 0.2);
 }
 
-/* เอฟเฟกต์ตอนชี้ปุ่มประวัติรายงาน */
 .btn-history:hover {
   background: #FFF5F8;
 }
@@ -1115,24 +1264,311 @@ input:not([type]) {
 }
 
 .btn-history.active .btn-history-icon {
-  /* 📌 สลับเป็นไอคอนสีขาว */
-  background: transparent url('../assets/icons/history.png') center/contain no-repeat;
+  background: transparent url('../assets/icons/history_white.png') center/contain no-repeat;
 }
 
 .btn-history.active .btn-history-text {
-  /* 📌 สลับเป็นตัวอักษรสีขาว */
   color: #FFFFFF;
 }
 
-/* ทำให้รายชื่อเทมเพลตดูเป็นปุ่มกดได้ชัดเจนขึ้น */
 .template-item-row:hover .t-name {
   color: #F65189;
-  /* เปลี่ยนสีเป็นสีชมพูตอนเมาส์ชี้ */
   text-decoration: underline;
 }
 
 .btn-del:hover {
   background: #f44336;
   color: white;
+}
+
+/* ── ไอคอนสำหรับแท็บรูปภาพ (Assets) ── */
+.icon-image {
+  background-image: url('../assets/icons/image.png');
+}
+
+.rail-btn.active .icon-image {
+  background-image: url('../assets/icons/image-active.png');
+}
+
+.icon-image-header {
+  background-image: url('../assets/icons/image-active.png');
+}
+
+/* ========================================================================= */
+/* ── ส่วนของแท็บ "จัดการโปรเจกต์" (ดีไซน์ใหม่) ── */
+/* ========================================================================= */
+
+.tab-pane-project {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 15px;
+  width: 100%;
+}
+
+.project-section {
+  width: 298px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+
+/* ── 1. ปุ่มนำเข้าโปรเจกต์ (เส้นประปรับแต่งเอง) ── */
+.btn-upload-dashed {
+  width: 298px;
+  height: 46px;
+  background-color: #F8F9FA;
+  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='5' ry='5' stroke='%23DEE2E6' stroke-width='2.5' stroke-dasharray='5, 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-upload-dashed:hover:not(:disabled) {
+  background-color: #F1F3F5;
+}
+
+.btn-upload-dashed-icon {
+  width: 20px;
+  height: 20px;
+  background: transparent url('../assets/icons/upload.svg') center/contain no-repeat;
+}
+
+.upload-icon-wrapper {
+  position: relative;
+  width: 14px;
+  height: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.upload-icon-top {
+  width: 6px;
+  height: 10px;
+  background: #546267;
+  clip-path: polygon(50% 0%, 100% 35%, 75% 35%, 75% 100%, 25% 100%, 25% 35%, 0% 35%);
+}
+
+.upload-icon-bottom {
+  position: absolute;
+  bottom: 0;
+  width: 14px;
+  height: 4px;
+  background: #546267;
+}
+
+.btn-upload-dashed-text {
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #546267;
+}
+
+.hint-text {
+  text-align: left;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #A4A4A4;
+  margin: 6px 0 0 0;
+}
+
+/* ── 2. ปุ่มบันทึกโปรเจกต์ (สีชมพู) ── */
+.btn-project-save {
+  width: 298px;
+  height: 46px;
+  background: #F65189 0% 0% no-repeat padding-box;
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.btn-project-save:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.btn-project-save-text {
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 16/21 * 1.15 */
+  color: #FFFFFF;
+}
+
+/* ── เส้นคั่นบางๆ ── */
+.divider-line {
+  width: 298px;
+  height: 1px;
+  background: #F3F3F3;
+  margin-bottom: 25px;
+}
+
+/* ── 3. กลุ่มตัวเลือก (Radio Cards) สำหรับ Quality และ Engine ── */
+.radio-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* ระยะห่างระหว่างแต่ละกล่อง */
+}
+
+.radio-card {
+  width: 298px;
+  /* 📌 259 * 1.15 */
+  height: 62px;
+  /* 📌 54 * 1.15 */
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #E3E3E3;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+/* 📌 เพิ่ม Hover และอนิเมชันให้การ์ด */
+.radio-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.radio-card:hover:not(.active) {
+  border-color: #FFD5E3;
+  /* ตอน hover ให้ขอบแอบเป็นสีชมพูอ่อนๆ */
+}
+
+/* 📌 สถานะเมื่อถูกเลือก (Active) */
+.radio-card.active {
+  background: #FFF9FB 0% 0% no-repeat padding-box;
+  border: 1px solid #FFD5E3;
+}
+
+/* วงกลม Radio ด้านซ้าย */
+.radio-circle {
+  width: 20px;
+  /* 📌 17 * 1.15 */
+  height: 20px;
+  /* 📌 17 * 1.15 */
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #E3E3E3;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.radio-card.active .radio-circle {
+  border: 1px solid #F65189;
+}
+
+/* จุดสีชมพูตรงกลางเมื่อถูกเลือก */
+.radio-inner {
+  width: 12px;
+  /* 📌 11 * 1.15 */
+  height: 12px;
+  background: #F65189 0% 0% no-repeat padding-box;
+  border-radius: 50%;
+}
+
+/* พื้นที่ตัวหนังสือ 2 บรรทัด */
+.radio-text-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.radio-title {
+  text-align: left;
+  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 18/24 * 1.15 */
+  color: #000000;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.radio-subtitle {
+  text-align: left;
+  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 16/21 * 1.15 */
+  color: #4D4D4D;
+  line-height: 1;
+}
+
+/* 📌 ป้ายบอกตัวคูณ (1x, 2x, etc.) */
+.radio-badge {
+  width: 48px;
+  /* 📌 42 * 1.15 */
+  height: 24px;
+  /* 📌 21 * 1.15 */
+  background: #ECECEC 0% 0% no-repeat padding-box;
+  border-radius: 12px;
+  /* 📌 11 * 1.15 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  /* 📌 16/21 * 1.15 */
+  color: #4D4D4D;
+}
+
+.radio-card.active .radio-badge {
+  background: #FFD5E3 0% 0% no-repeat padding-box;
+  color: #F65189;
+}
+
+/* ── 4. ปุ่มส่งออก PDF (กรอบชมพู พื้นขาว) ── */
+.btn-print-outline {
+  width: 298px;
+  height: 46px;
+  /* 📌 40 * 1.15 */
+  background: #FFFFFF 0% 0% no-repeat padding-box;
+  border: 1px solid #F65189;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-print-outline:hover:not(:disabled) {
+  background: #FFF5F8;
+}
+
+.btn-print-outline:disabled {
+  border-color: #ccc;
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-print-text {
+  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  color: #F65189;
+}
+
+.btn-print-outline:disabled .btn-print-text {
+  color: #ccc;
+}
+
+.icon-project {
+  background-image: url('../assets/icons/project.png');
+}
+
+.rail-btn.active .icon-project {
+  background-image: url('../assets/icons/project-active.png');
+}
+
+.icon-project-header {
+  background-image: url('../assets/icons/project-active.png');
 }
 </style>

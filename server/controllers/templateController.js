@@ -88,40 +88,40 @@ const getVariables = asyncHandler(async (req, res) => {
             { id: '12', key: 'semester', label: 'ภาคการศึกษา', scope: 'GLOBAL' },
             { id: '13', key: 'grade_level', label: 'ระดับชั้น', scope: 'GLOBAL' }
         ];
-        
+
         // Add categories dynamically to mock variables
         const categorizedMockVariables = mockVariables.map(v => {
-            let category = 'General';
+            let category = 'GENERAL';
             if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
-                category = 'Student Info';
+                category = 'STUDENT INFO';
             } else if (v.key.includes('teacher')) {
-                category = 'Teacher Info';
+                category = 'TEACHER INFO';
             } else if (v.key.includes('school')) {
-                category = 'School Info';
+                category = 'SCHOOL INFO';
             } else if (v.key.includes('report')) {
-                category = 'Report Info';
+                category = 'REPORT INFO';
             } else if (v.key.includes('semester') || v.key.includes('grade')) {
-                category = 'Academic Info';
+                category = 'ACADEMIC INFO';
             }
             return { ...v, category };
         });
-        
+
         return res.json(categorizedMockVariables);
     }
 
     // Add categories dynamically to database variables
     const categorizedVariables = variables.map(v => {
-        let category = 'General';
+        let category = 'GENERAL';
         if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
-            category = 'Student Info';
+            category = 'STUDENT INFO';
         } else if (v.key.includes('teacher')) {
-            category = 'Teacher Info';
+            category = 'TEACHER INFO';
         } else if (v.key.includes('school')) {
-            category = 'School Info';
+            category = 'SCHOOL INFO';
         } else if (v.key.includes('report')) {
-            category = 'Report Info';
+            category = 'REPORT INFO';
         } else if (v.key.includes('semester') || v.key.includes('grade')) {
-            category = 'Academic Info';
+            category = 'ACADEMIC INFO';
         }
         return { ...v, category };
     });
