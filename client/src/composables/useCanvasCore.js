@@ -34,6 +34,7 @@ export function useCanvasCore() {
       console.error('initCanvas: Canvas element with id "c" not found!');
       return;
     }
+
     const fabricCanvas = new fabric.Canvas('c');
     fabricCanvas.setBackgroundColor('#ffffff', fabricCanvas.renderAll.bind(fabricCanvas));
     // markRaw prevents Vue reactivity from wrapping the Fabric.js instance (which would break it)
