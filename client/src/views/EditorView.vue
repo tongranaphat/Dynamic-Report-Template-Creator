@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="app-layout">
     <header class="top-navbar">
       <div class="navbar-left">
@@ -55,7 +55,7 @@
       @update:templateName="templateName = $event" @update:pdfQuality="pdfQuality = $event"
       @save-template="handleSaveTemplate" @reset-canvas="resetCanvasWrapper" @toggle-preview="togglePreviewWrapper"
       @import-workspace="handleImportWorkspaceWrapper" @add-variable="addVariableToCanvas"
-      @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject" @generate-pdf="handleExport"
+      @save-report="handleSaveProject" @generate-pdf="handleExport" @add-container="handleAddContainer"
       @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
       @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" />
 
@@ -75,6 +75,13 @@
 
     <HistoryModal v-if="showHistoryModal" :reportInstances="reportHistory" :currentInstanceId="currentReportId"
       @close="showHistoryModal = false" @edit="openReportFromHistory" @delete="handleDeleteReport" />
+
+    <!-- Linked Container Blocks: Floating Toolbar -->
+    <ContainerToolbar 
+      :isVisible="showContainerToolbar" 
+      :position="containerToolbarPosition" 
+      @add-below="handleAddLinkedBlockBelow" 
+    />
   </div>
 </template>
 
@@ -88,10 +95,12 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import PropertiesPanel from '../components/PropertiesPanel.vue';
 import Sidebar from '../components/Sidebar.vue';
 import HistoryModal from '../components/HistoryModal.vue';
+import ContainerToolbar from '../components/ContainerToolbar.vue';
 
 import { useCanvas } from '../composables/useCanvas';
 import { useTemplate } from '../composables/useTemplate';
 import { useCanvasEvents } from '../composables/useCanvasEvents';
+import { useContainerBlocks } from '../composables/useContainerBlocks';
 import { useRealTime } from '../composables/useRealTime';
 import { useEditablePdf } from '../composables/useEditablePdf';
 import { usePreviewData } from '../composables/usePreviewData';
@@ -257,6 +266,69 @@ const { connect, emitUpdate } = useRealTime();
 const { generateHybridPdfBlob } = useEditablePdf();
 const { getMockData } = usePreviewData();
 const editorStore = useEditorStore();
+
+// --- Container Blocks setup ---
+const { 
+  selectedContainer, 
+  addContainerBlock, 
+  addLinkedBlockBelow, 
+  assignToContainerIfIntersecting,
+  getContainerDomPosition, 
+  setupSelectionTracking 
+} = useContainerBlocks();
+
+const showContainerToolbar = ref(false);
+const containerToolbarPosition = ref(null);
+
+const updateToolbarPosition = () => {
+  if (selectedContainer.value && canvas.value) {
+    const pos = getContainerDomPosition(canvas.value, selectedContainer.value);
+    if (pos) {
+      containerToolbarPosition.value = pos;
+      showContainerToolbar.value = true;
+      return;
+    }
+  }
+  showContainerToolbar.value = false;
+};
+
+// Watch for selectedContainer changes to show/hide toolbar
+watch(selectedContainer, (newVal) => {
+  if (newVal) {
+    updateToolbarPosition();
+  } else {
+    showContainerToolbar.value = false;
+  }
+});
+
+// Watch for canvas zoom/scroll to update toolbar position dynamically
+watch(() => [zoomLevel.value, currentPageIndex.value], () => {
+  if (showContainerToolbar.value) {
+    updateToolbarPosition();
+  }
+});
+
+const handleAddContainer = () => {
+  if (!canvas.value) return;
+  
+  // Calculate center of visible screen roughly relative to current page
+  const P_W = CANVAS_CONSTANTS.PAGE_WIDTH;
+  const GAP = CANVAS_CONSTANTS.PAGE_GAP;
+  const currentY = currentPageIndex.value * (CANVAS_CONSTANTS.PAGE_HEIGHT + GAP);
+  
+  const centerX = P_W / 2;
+  const centerY = currentY + (CANVAS_CONSTANTS.PAGE_HEIGHT / 2); // default center of current page
+  
+  // Adjust to center the object perfectly based on dimensions 250x150
+  addContainerBlock(canvas.value, centerX - (250 / 2), centerY - (150 / 2), 250, 150);
+  saveHistory();
+};
+
+const handleAddLinkedBlockBelow = () => {
+  if (!canvas.value || !selectedContainer.value) return;
+  addLinkedBlockBelow(canvas.value, selectedContainer.value);
+  saveHistory();
+};
 
 watch(zoomLevel, (newZoom) => {
   if (canvas.value && canvasBaseDimensions.value) {
@@ -1140,7 +1212,7 @@ const saveCurrentPageState = () => {
       if (pageIndex >= pages.value.length) pageIndex = pages.value.length - 1;
 
       try {
-        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
+        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle', 'isContainerBlock', 'groupId']);
         const pageTopY = pageIndex * (P_H + GAP);
 
         serialized.left = Math.round(obj.left * 100) / 100;
@@ -1399,12 +1471,14 @@ const onDrop = (e) => {
 
   if (variable) {
     if (typeof addVariableToCanvas !== 'undefined') {
-      addVariableToCanvas(variable, x, y)
+      canvas.value.once('object:added', (e) => assignToContainerIfIntersecting(canvas.value, e.target));
+      addVariableToCanvas(variable, x, y);
     }
   }
 
   if (asset) {
     if (typeof addImageToCanvas !== 'undefined') {
+      canvas.value.once('object:added', (e) => assignToContainerIfIntersecting(canvas.value, e.target));
       addImageToCanvas(asset, x, y);
     }
   }
@@ -1412,7 +1486,15 @@ const onDrop = (e) => {
   // 📌 เพิ่มโค้ดชุดนี้ต่อท้ายลงไป เพื่อรับการลากวางกล่องอิสระ
   const customText = e.dataTransfer.getData('customText');
   if (customText) {
+    canvas.value.once('object:added', (e) => assignToContainerIfIntersecting(canvas.value, e.target));
     addCustomTextToCanvas(x, y);
+  }
+
+  // 📌 Container Blocks drag and drop
+  const isContainerBlock = e.dataTransfer.getData('containerBlock');
+  if (isContainerBlock) {
+    addContainerBlock(canvas.value, x, y);
+    saveHistory();
   }
 };
 
@@ -1421,6 +1503,27 @@ onMounted(async () => {
   initCanvas();
   isCanvasReady.value = true;
   initCanvasEvents();
+  setupSelectionTracking(canvas);
+
+  // When an object moves, update the floating toolbar position if the selected container is moving
+  if (canvas.value) {
+    canvas.value.on('object:moving', (e) => {
+      if (showContainerToolbar.value && selectedContainer.value) {
+        if (e.target === selectedContainer.value || e.target.groupId === selectedContainer.value.groupId) {
+          updateToolbarPosition();
+        }
+      }
+    });
+    canvas.value.on('object:scaling', (e) => {
+      if (showContainerToolbar.value && e.target === selectedContainer.value) {
+        updateToolbarPosition();
+      }
+    });
+    // BUG-014 fix: viewport changes
+    document.querySelector('.viewport')?.addEventListener('scroll', () => {
+      if (showContainerToolbar.value) updateToolbarPosition();
+    });
+  }
 
   if (canvas.value) {
     canvas.value.on('history:restored', syncPagesFromCanvas);

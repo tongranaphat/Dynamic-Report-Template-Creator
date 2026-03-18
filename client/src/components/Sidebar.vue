@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <aside class="sidebar-container" @mouseleave="handleMouseLeave">
     <div class="sidebar-rail">
       <div class="rail-items">
@@ -146,6 +146,18 @@
               <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
               <span class="var-btn-text">ข้อความอิสระ (พิมพ์เอง)</span>
             </button>
+            <button @click="$emit('add-container')" class="var-btn" :disabled="isPreviewMode" draggable="true"
+              @dragstart="onContainerDragStart($event)">
+              <div class="var-btn-icon-holder">
+                <span class="var-btn-icon" style="display: flex; align-items: center; justify-content: center;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray: 4 2;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  </svg>
+                </span>
+              </div>
+              <span class="var-btn-text">กล่องคอนเทนเนอร์</span>
+            </button>
           </div>
 
           <div class="data-section">
@@ -173,9 +185,7 @@
           <div class="project-section">
             <h4 class="label">นำเข้าโปรเจกต์ / PDF / รูปภาพ</h4>
             <div class="upload-container">
-              <input type="file" ref="workspaceInput" @change="onWorkspaceFileChange"
-                accept=".json, application/pdf, image/jpeg, image/png, image/gif, image/webp" style="display: none" />
-              <button class="btn-upload-dashed" @click="$refs.workspaceInput.click()" :disabled="!isCanvasReady">
+              <button class="btn-upload-dashed" @click="$emit('import-workspace')" :disabled="!isCanvasReady">
                 <span class="btn-upload-dashed-icon"></span>
                 <span class="btn-upload-dashed-text">นำเข้าโปรเจกต์</span>
               </button>
@@ -291,11 +301,6 @@
 <script setup>
 import { ref } from 'vue';
 
-const workspaceInput = ref(null);
-const onWorkspaceFileChange = (e) => {
-  emit('import-workspace', e); // หรือฟังก์ชันที่คุณใช้รับไฟล์ import ของเดิมครับ
-};
-
 const activeTab = ref('templates');
 const isPinned = ref(false);
 
@@ -372,7 +377,8 @@ const emit = defineEmits([
   'import-page',
   'page-click',
   'page-drop',
-  'update:pdfMode'
+  'update:pdfMode',
+  'add-container'
 ]);
 
 const draggedPageIndex = ref(null);
@@ -443,6 +449,11 @@ const handleAddCustomText = () => {
 // 📌 เมื่อผู้ใช้ "ลาก" ปุ่ม (Drag & Drop)
 const onCustomTextDragStart = (e) => {
   e.dataTransfer.setData('customText', 'true');
+  e.dataTransfer.effectAllowed = 'copy';
+};
+
+const onContainerDragStart = (e) => {
+  e.dataTransfer.setData('containerBlock', 'true');
   e.dataTransfer.effectAllowed = 'copy';
 };
 
