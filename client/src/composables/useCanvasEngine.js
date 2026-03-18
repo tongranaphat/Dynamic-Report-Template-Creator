@@ -76,7 +76,7 @@ export function useCanvasEngine() {
 
     const saveHistory = () => {
         if (!canvas.value || isHistoryLocked.value) return;
-        const json = canvas.value.toJSON(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
+        const json = canvas.value.toJSON(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle', 'isContainerBlock', 'groupId']);
         historyStack.value.push(JSON.stringify(json));
         redoStack.value = [];
     };
@@ -206,7 +206,7 @@ export function useCanvasEngine() {
             pageIndex = Math.max(0, Math.min(pageIndex, pages.length - 1));
 
             try {
-                const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
+                const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle', 'isContainerBlock', 'groupId']);
                 const pageTopY = pageIndex * STRIDE;
 
                 serialized.left = Math.round(exportLeft * 100) / 100;

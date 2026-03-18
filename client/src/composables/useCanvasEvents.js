@@ -1,6 +1,8 @@
 import { CANVAS_CONSTANTS } from '../constants/canvas';
+import { useContainerBlocks } from './useContainerBlocks';
 
 export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, setHistoryLock) {
+  const { setupLinkedMovement, assignToContainerIfIntersecting, getGroupBoundingBox } = useContainerBlocks();
   if (!canvas || !pages) return { initCanvasEvents: () => { } };
 
   // [UPDATED] Uncap constraints (Removed strict bounds)
@@ -140,12 +142,125 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
       if (movingRafId) return; // already scheduled
       movingRafId = requestAnimationFrame(() => {
         movingRafId = null;
-        if (e.target) updateObjectClipPath(e.target);
+        if (e.target) {
+          updateObjectClipPath(e.target);
+        }
       });
     });
 
     canvas.value.on('object:scaling', (e) => {
-      if (e.target) updateObjectClipPath(e.target);
+      const target = e.target;
+      if (!target) return;
+      
+      updateObjectClipPath(target);
+      
+      // Phase 6: Scale Normalization & Shrink Limiting for Containers
+      if (target.isContainerBlock) {
+        // 1. Normalize Scale (prevent dashed stroke distortion)
+        const newWidth = target.width * target.scaleX;
+        const newHeight = target.height * target.scaleY;
+        
+        target.set({
+          width: newWidth,
+          height: newHeight,
+          scaleX: 1,
+          scaleY: 1
+        });
+        
+        // Ensure coords are instantly updated before bounds checking
+        target.setCoords();
+
+        // 2. Container Shrink Limiting (prevent crushing children)
+        const bbox = getGroupBoundingBox(canvas.value, target.groupId);
+        if (bbox) {
+          const padding = 10;
+          let changed = false;
+
+          // X-Axis Left Edge Check
+          if (target.left > bbox.minX - padding) {
+            target.set({
+              left: bbox.minX - padding,
+              width: target.width + (target.left - (bbox.minX - padding)) // recover width
+            });
+            changed = true;
+          }
+          // X-Axis Right Edge Check
+          if (target.left + target.width < bbox.maxX + padding) {
+            target.set({
+              width: (bbox.maxX + padding) - target.left
+            });
+            changed = true;
+          }
+
+          // Y-Axis Top Edge Check
+          if (target.top > bbox.minY - padding) {
+            target.set({
+              top: bbox.minY - padding,
+              height: target.height + (target.top - (bbox.minY - padding)) // recover height
+            });
+            changed = true;
+          }
+          // Y-Axis Bottom Edge Check
+          if (target.top + target.height < bbox.maxY + padding) {
+            target.set({
+              height: (bbox.maxY + padding) - target.top
+            });
+            changed = true;
+          }
+
+          if (changed) {
+            target.setCoords();
+          }
+        }
+      } else if (target.groupId) {
+        // Phase 6: Auto-Expand Container if child scales/resizes outside
+        const parentContainer = canvas.value.getObjects().find(
+          (o) => o.isContainerBlock && o.groupId === target.groupId
+        );
+        
+        if (parentContainer) {
+          const bbox = target.getBoundingRect(true, true);
+          const padding = 10;
+          let expandX = false;
+          let expandY = false;
+
+          let newLeft = parentContainer.left;
+          let newTop = parentContainer.top;
+          let newWidth = parentContainer.width * (parentContainer.scaleX || 1);
+          let newHeight = parentContainer.height * (parentContainer.scaleY || 1);
+
+          if (bbox.left - padding < newLeft) {
+            newWidth += (newLeft - (bbox.left - padding));
+            newLeft = bbox.left - padding;
+            expandX = true;
+          }
+          if (bbox.left + bbox.width + padding > newLeft + newWidth) {
+            newWidth = (bbox.left + bbox.width + padding) - newLeft;
+            expandX = true;
+          }
+          if (bbox.top - padding < newTop) {
+            newHeight += (newTop - (bbox.top - padding));
+            newTop = bbox.top - padding;
+            expandY = true;
+          }
+          if (bbox.top + bbox.height + padding > newTop + newHeight) {
+            newHeight = (bbox.top + bbox.height + padding) - newTop;
+            expandY = true;
+          }
+
+          if (expandX || expandY) {
+            parentContainer.set({
+              left: newLeft,
+              top: newTop,
+              width: newWidth,
+              height: newHeight,
+              scaleX: 1,
+              scaleY: 1
+            });
+            parentContainer.setCoords();
+          }
+        }
+      }
     });
 
     canvas.value.on('object:rotating', (e) => {
@@ -201,6 +316,76 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
     // (e.g., shift-click to deselect one from a group)
     canvas.value.on('before:selection:cleared', (e) => {
       // nothing needed here — selection:cleared handles it
+    });
+    // ──────────────────────────────────────────────────────────────────────────
+    // ── Linked Container Blocks: move siblings with same groupId ──────────────
+    setupLinkedMovement(canvas);
+    
+    // Auto-link objects dropped into containers after dragging/scaling finishes
+    // and ONLY auto-expand parent bounds if the item was pushed outside its edges.
+    canvas.value.on('object:modified', (e) => {
+      const target = e.target;
+      if (target && !target.isContainerBlock) {
+        
+        // 1. FIRST calculate intersection to link/unlink/transfer freely
+        assignToContainerIfIntersecting(canvas.value, target);
+        
+        // 2. Process Auto-Expand for the active container (if linked)
+        if (target.groupId) {
+          const parentContainer = canvas.value.getObjects().find(
+            (o) => o.isContainerBlock && o.groupId === target.groupId
+          );
+          
+          if (parentContainer) {
+            const bbox = target.getBoundingRect(true, true);
+            const padding = 10;
+            let expandX = false;
+            let expandY = false;
+
+            let newLeft = parentContainer.left;
+            let newTop = parentContainer.top;
+            let newWidth = parentContainer.width * (parentContainer.scaleX || 1);
+            let newHeight = parentContainer.height * (parentContainer.scaleY || 1);
+
+            // Left Edge Push
+            if (bbox.left - padding < newLeft) {
+              newWidth += (newLeft - (bbox.left - padding));
+              newLeft = bbox.left - padding;
+              expandX = true;
+            }
+            // Right Edge Push
+            if (bbox.left + bbox.width + padding > newLeft + newWidth) {
+              newWidth = (bbox.left + bbox.width + padding) - newLeft;
+              expandX = true;
+            }
+            // Top Edge Push
+            if (bbox.top - padding < newTop) {
+              newHeight += (newTop - (bbox.top - padding));
+              newTop = bbox.top - padding;
+              expandY = true;
+            }
+            // Bottom Edge Push
+            if (bbox.top + bbox.height + padding > newTop + newHeight) {
+              newHeight = (bbox.top + bbox.height + padding) - newTop;
+              expandY = true;
+            }
+
+            // ONLY apply expansion. Never shrink automatically.
+            if (expandX || expandY) {
+              parentContainer.set({
+                left: newLeft,
+                top: newTop,
+                width: newWidth,
+                height: newHeight,
+                scaleX: 1,
+                scaleY: 1
+              });
+              parentContainer.setCoords();
+              canvas.value.requestRenderAll();
+            }
+          }
+        }
+      }
     });
     // ──────────────────────────────────────────────────────────────────────────
   };
