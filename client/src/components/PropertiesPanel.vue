@@ -126,9 +126,9 @@
       </div>
     </template>
 
-    <div class="divider"></div>
+    <div class="divider" v-show="false"></div>
 
-    <div class="tool-group">
+    <div class="tool-group" v-show="false">
       <button @click="showLayerControls = !showLayerControls" :class="['icon-btn', { active: showLayerControls }]"
         title="การจัดลำดับชั้น">
         ชั้นที่ ▾

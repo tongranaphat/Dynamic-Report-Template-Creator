@@ -20,7 +20,7 @@
           <span class="rail-label">ข้อมูล</span>
         </button>
 
-        <button @click="handleTabClick('layers')" @mouseenter="handleMouseEnter('layers')"
+        <button v-show="false" @click="handleTabClick('layers')" @mouseenter="handleMouseEnter('layers')"
           :class="['rail-btn', { active: activeTab === 'layers' && isOpen, pinned: isPinned && activeTab === 'layers' }]">
           <span class="rail-icon icon-project"></span>
           <span class="rail-label">เลเยอร์</span>
@@ -58,7 +58,7 @@
           <h3 class="panel-header-text">จัดการข้อมูล</h3>
         </div>
 
-        <div class="panel-header-title" v-if="activeTab === 'layers'">
+        <div class="panel-header-title" v-if="false && activeTab === 'layers'">
           <span class="panel-header-icon icon-project-header"></span>
           <h3 class="panel-header-text">จัดการลำดับชั้นวัตถุ</h3>
         </div>
@@ -175,7 +175,7 @@
 
         </div>
 
-        <div v-if="activeTab === 'layers'" class="tab-pane-layers"
+        <div v-if="false && activeTab === 'layers'" class="tab-pane-layers"
           style="display: flex; flex-direction: column; align-items: center; padding-top: 15px;">
           <div class="layers-section" style="width: 298px;">
             <div class="layers-list">

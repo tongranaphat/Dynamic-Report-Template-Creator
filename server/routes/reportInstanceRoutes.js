@@ -7,7 +7,6 @@ const prisma = require('../prismaClient');
 router.post('/report-instances', asyncHandler(saveReport));
 router.get('/report-instances', asyncHandler(getAllReports));
 router.get('/report-instances/:id', asyncHandler(getReportById));
-
 router.put('/report-instances/:id', asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, pages, templateId, status } = req.body;
@@ -31,12 +30,16 @@ router.put('/report-instances/:id', asyncHandler(async (req, res) => {
 
     res.json(report);
 }));
-
 router.delete('/report-instances/:id', asyncHandler(deleteReport));
 
 router.post('/save-report', asyncHandler(saveReport));
+
+router.post('/reports', asyncHandler(saveReport));
+
 router.get('/reports/:id', asyncHandler(getReportById));
+
 router.get('/reports', asyncHandler(getAllReports));
+
 router.delete('/reports/:id', asyncHandler(deleteReport));
 
 module.exports = router;
