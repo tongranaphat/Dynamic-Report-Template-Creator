@@ -1,0 +1,42 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Environment Variables (สำคัญมาก ห้ามลืม!)
+.env
+.env.*
+!.env.example
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Agents & AI (Windsurf, Gemini, Cursor)
+.agents
+.gemini
+.antigravity
+.cursor
+
+# Uploads (สูตร: เก็บโฟลเดอร์ไว้ แต่ไม่เอาไฟล์ข้างใน)
+uploads/*
+!uploads/.gitkeep

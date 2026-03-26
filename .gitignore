@@ -1,0 +1,67 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+.npm
+.yarn-integrity
+
+# Build
+dist
+dist-ssr
+build
+out
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Server Uploads (User Data)
+server/uploads/*
+!server/uploads/.gitkeep
+client/src/assets/uploads/* 
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing
+coverage
+.nyc_output
+
+# Temporary, System & AI Agents
+.temp
+.tmp
+.agents
+.gemini
+.antigravity
+.cursor
+
+# Scripts & Debug
+*.ps1
+scripts/
+download_*.js
+force_*.js
+create_*.js
+debug-*.js
+test-*.js
+verify-*.js
+find_missing_file.js
+restore_file.js
+cleanup.js

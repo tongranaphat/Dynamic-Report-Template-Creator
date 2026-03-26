@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  username  String     @unique
+  password  String     // ควรเข้ารหัสก่อนเก็บ
+  
+  templates Template[]
+  variables Variable[]
+}
+
+model Template {
+  id               String   @id @default(uuid())
+  name             String
+  
+  // [Modified] ใช้ชื่อ pages เพื่อให้ตรงกับ Logic Fabric.js ใน Frontend
+  pages            Json     @default("[]") 
+  
+  preview          String?  // Base64 หรือ URL รูปตัวอย่าง
+  background       String?  // URL ของรูป/PDF พื้นหลัง
+  
+  isMaster         Boolean  @default(false)
+  
+  // Ownership
+  ownerId          String?
+  owner            User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  
+  // Inheritance (Save As)
+  originTemplateId String?
+  originTemplate   Template? @relation("TemplateOrigin", fields: [originTemplateId], references: [id])
+  derivedTemplates Template[] @relation("TemplateOrigin")
+  
+  reportInstances  ReportInstance[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ReportInstance {
+  id               String   @id @default(uuid())
+  name             String
+  
+  // [Modified] ถ้า Template หาย Report ควรยังอยู่ (SetNull) หรือจะ Cascade ก็ได้ตาม Business Logic
+  templateId       String?
+  template         Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  
+  variableSnapshot Json?    // เก็บค่าตัวแปร ณ ตอนที่สร้าง
+  
+  // [Modified] ใช้ชื่อ pages เพื่อให้ Restore กลับมาแก้ไขบน Canvas ได้ง่าย
+  pages            Json     @default("[]")
+  
+  status           String   @default("DRAFT") // DRAFT, GENERATED
+  pdfUrl           String?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Variable {
+  id      String  @id @default(uuid())
+  key     String
+  label   String
+  scope   String  @default("USER") // GLOBAL, USER
+  
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+}
+
+model Asset {
+  id        String   @id @default(uuid())
+  filename  String
+  mimetype  String
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
+model PdfCache {
+  id          String   @id @default(uuid())
+  originalUrl String   @unique 
+  filepath    String
+  createdAt   DateTime @default(now())
+}
