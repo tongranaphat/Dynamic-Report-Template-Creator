@@ -1,9 +1,8 @@
-// Simple notification system
 let notificationContainer = null;
 
 const createNotificationContainer = () => {
   if (notificationContainer) return;
-  
+
   notificationContainer = document.createElement('div');
   notificationContainer.id = 'notification-container';
   notificationContainer.style.cssText = `
@@ -18,7 +17,7 @@ const createNotificationContainer = () => {
 
 export const showNotification = (message, type = 'info', duration = 3000) => {
   createNotificationContainer();
-  
+
   const notification = document.createElement('div');
   notification.className = `notification notification-${type}`;
   notification.style.cssText = `
@@ -34,15 +33,13 @@ export const showNotification = (message, type = 'info', duration = 3000) => {
     word-wrap: break-word;
   `;
   notification.textContent = message;
-  
+
   notificationContainer.appendChild(notification);
-  
-  // Animate in
+
   setTimeout(() => {
     notification.style.transform = 'translateX(0)';
   }, 10);
-  
-  // Remove after duration
+
   setTimeout(() => {
     notification.style.transform = 'translateX(100%)';
     setTimeout(() => {

@@ -2,7 +2,6 @@ const request = require('supertest');
 const { app, prisma } = require('../index');
 
 describe('API Integration Tests', () => {
-    // Cleanup after tests
     afterAll(async () => {
         await prisma.$disconnect();
     });
@@ -25,7 +24,7 @@ describe('API Integration Tests', () => {
 
     describe('POST /api/templates', () => {
         it('should reject invalid template (400) due to Zod validation', async () => {
-            const res = await request(app).post('/api/templates').send({ background: 'no-name' }); // Missing 'name'
+            const res = await request(app).post('/api/templates').send({ background: 'no-name' });
 
             expect(res.statusCode).toBe(400);
             expect(res.body.status).toBe('error');
@@ -40,7 +39,6 @@ describe('API Integration Tests', () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.id).toBeDefined();
 
-            // Cleanup: Delete created template
             if (res.body.id) {
                 await request(app).delete(`/api/templates/${res.body.id}`);
             }

@@ -116,6 +116,7 @@ const connectionStatus = ref('offline');
 const isGenerating = ref(false);
 const pdfQuality = ref(2);
 const pdfMode = ref('flatten');
+const pdfUrl = ref(null);
 let isRendering = false;
 
 
@@ -142,7 +143,6 @@ const openHistoryModal = async () => {
 const openReportFromHistory = async (instance) => {
   if (!confirm('การดำเนินการนี้จะแทนที่โปรเจกต์ปัจจุบัน คุณต้องการดำเนินการต่อหรือไม่?')) return;
   try {
-    // Load by ID
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     const res = await axios.get(`${apiUrl}/reports/${instance.id}`);
 
@@ -152,7 +152,6 @@ const openReportFromHistory = async (instance) => {
       currentTemplateId.value = r.templateId;
       templateName.value = r.name;
 
-      // Sanitize pages (normalizes textBaseline etc.)
       if (r.pages && Array.isArray(r.pages)) {
         pages.value = sanitizePagesData(JSON.parse(JSON.stringify(r.pages)));
         currentPageIndex.value = 0;
@@ -177,7 +176,7 @@ const handleDeleteReport = async (instance) => {
   try {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     await axios.delete(`${apiUrl}/reports/${instance.id}`);
-    await fetchReports(); // Refresh list
+    await fetchReports();
   } catch (e) {
     alert('ลบรายงานล้มเหลว: ' + e.message);
   }
@@ -188,15 +187,15 @@ const handleUrlImport = async (url) => {
     showNotification('กำลังดาวน์โหลดไฟล์จากลิงก์...', 'info');
 
     const response = await apiService.importPdfFromUrl(url);
-    const newPdfId = response.data.id || response.data.fileId;
+    const newPdfId = response.data.OriginalFileId || response.data.id;
 
     if (newPdfId) {
       window.history.pushState({}, '', `/pdf/${newPdfId}`);
-      window.location.reload(); // Reload to trigger the onMounted PDF fetcher
+      window.location.reload();
       return;
     }
 
-    const filepath = response.data.filepath;
+    const filepath = response.data.FilePath || response.data.filepath;
 
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     const backendUrl = apiUrl.replace('/api', '');
@@ -301,7 +300,6 @@ const {
   preparePagesForSave,
   sanitizePagesData,
 
-  // Unified Exports
   unifiedSave,
   handleUnifiedImport,
   ensureFileHandle,
@@ -338,8 +336,8 @@ watch(zoomLevel, (newZoom) => {
 
 const handleSaveTemplate = async () => {
   try {
-    await saveTemplate(false); // false = show notifications
-    await editorStore.fetchTemplates(); // Refresh sidebar
+    await saveTemplate(false);
+    await editorStore.fetchTemplates();
     saveHistory();
   } catch (e) {
     console.error('Save Template failed:', e);
@@ -348,210 +346,34 @@ const handleSaveTemplate = async () => {
 
 
 const handleSaveProject = async () => {
-  if (!canvas.value) return;
-
-  // STRICT: Only allow overwrite if file is already linked
-  if (!currentFileHandle || !currentFileHandle.value) {
-    showNotification('No local file linked. Please use Export first.', 'error');
-    return;
-  }
-
-  try {
-    saveCurrentPageState();
-    // Collect data for PDF generation
-    const pagesData = preparePagesForSave();
-    const projectData = {
-      name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
-      pages: pagesData,
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      type: 'hybrid-project'
-    };
-
-
-
-    const variableMap = {};
-
     try {
-      const realData = await apiService.getVariables();
+        const pathSegments = window.location.pathname.split('/');
+        const fileIdToSave = pathSegments[pathSegments.length - 1];
 
-      if (Array.isArray(realData)) {
-        realData.forEach(item => {
-          if (item.key) {
-            variableMap[item.key] = item.value || '';
-          }
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to fetch live variables, using sidebar defaults:', error);
-      // Fallback to sidebar variable values if API is unavailable
-      if (variables.value) {
-        variables.value.forEach((v) => {
-          if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`;
-        });
-      }
-    }
-
-    // Capture canvas images first
-    const canvasImages = [];
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-    const qualityMultiplier = 2;
-    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-    // Include images in overlay types for mode-based separation
-    const OVERLAY_TYPES = ['textbox', 'text', 'i-text', 'image'];
-
-    // Enter preview mode for capture
-    const wasPreview = isPreviewMode.value;
-    const originalPage = currentPageIndex.value;
-
-    try {
-      canvas.value.requestRenderAll();
-      if (!wasPreview) saveCurrentPageState();
-      isPreviewMode.value = true;
-      await renderAllPages();
-      await nextTick();
-      applyPreviewDataToCanvas(variableMap);
-      await nextTick();
-
-      // Capture each page as image
-      for (let i = 0; i < pages.value.length; i++) {
-        const allObjects = canvas.value.getObjects();
-        const hiddenForCapture = [];
-
-        // Flatten vs Vector object hiding logic
-        allObjects.forEach((obj) => {
-          const center = obj.getCenterPoint();
-          const objPageIndex = Math.floor(center.y / (P_H + GAP));
-          const isWrongPage = objPageIndex !== i;
-
-          const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
-          const isOverlay = OVERLAY_TYPES.includes(obj.type) && !isBackground;
-
-          let shouldHide = false;
-          if (pdfMode.value === 'flatten') {
-            // Flatten: hide only wrong-page objects (text bakes into image)
-            shouldHide = isWrongPage;
-          } else {
-            // Vector: hide overlays from JPEG (pdf-lib renders them as AcroForm)
-            shouldHide = isWrongPage || isOverlay;
-          }
-
-          if (shouldHide && obj.visible) {
-            obj.visible = false;
-            hiddenForCapture.push(obj);
-          }
-        });
-
-
-        canvas.value.renderAll();
-
-        const topOffset = i * (P_H + GAP) * zoomLevel.value;
-
-        try {
-          const canvasImage = canvas.value.toDataURL({
-            format: 'jpeg',
-            quality: 0.92,
-            multiplier: qualityMultiplier / zoomLevel.value,
-            left: 0,
-            top: topOffset,
-            width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
-            height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
-          });
-
-          if (canvasImage && canvasImage.length > 100) {
-            canvasImages.push(canvasImage);
-          }
-        } catch (canvasError) {
-          console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
-          // Use fallback image
-          const fallbackCanvas = document.createElement('canvas');
-          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
-          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
-          const fallbackCtx = fallbackCanvas.getContext('2d');
-          fallbackCtx.fillStyle = '#ffffff';
-          fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
-          const fallbackImage = fallbackCanvas.toDataURL('image/jpeg', 0.92);
-          if (fallbackImage.length > 100) {
-            canvasImages.push(fallbackImage);
-          }
+        if (!fileIdToSave || fileIdToSave === 'undefined' || fileIdToSave === 'pdf') {
+            alert("ไม่พบ ID ของไฟล์ในระบบ (Cannot find OriginalFileId).");
+            return;
         }
 
-        // Restore visibility
-        hiddenForCapture.forEach((obj) => { obj.visible = true; });
-      }
-      canvas.value.requestRenderAll();
 
-      if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
+        const payload = {
+            OriginalFileId: fileIdToSave,
+            editState: JSON.stringify(pages.value)
+        };
 
-      // ==========================================
-      // 📌 เตรียมข้อมูลให้ PDF (คำนวณ \n ใหม่ โดยห้ามลบข้อมูลทิ้งเด็ดขาด!)
-      // ==========================================
-      const exportProjectData = JSON.parse(JSON.stringify(projectData));
-      const liveObjects = canvas.value.getObjects();
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/save-state`, payload);
 
-      exportProjectData.pages.forEach((page, pageIndex) => {
-        if (page.objects) {
-          page.objects.forEach(jsonObj => {
-            if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
-              const liveObj = liveObjects.find(o => {
-                if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
-                return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
-              });
-
-              if (liveObj) {
-                if (liveObj.textLines && liveObj.textLines.length > 0) {
-                  const cleanLines = liveObj.textLines.map(line => {
-                    return (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd();
-                  });
-                  jsonObj.text = cleanLines.join('\n');
-                } else if (liveObj.text) {
-                  jsonObj.text = liveObj.text.replace(/\u200B/g, '');
-                }
-              }
-              if (jsonObj.text) jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
+        if (response.status === 200) {
+            alert("บันทึกโปรเจกต์เรียบร้อยแล้ว! (ระบบแยกไฟล์ฉบับแก้ไขสำเร็จ)");
+            
+            if (response.data.EditedFile) {
             }
-          });
         }
-      });
-      // ==========================================
 
-      // Step 1: Generate PDF blob (ส่งตัวแปรที่ 4, 5, 6 ไปให้ครบเพื่อบอกโหมด)
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
-
-      // STRICT: Only overwrite existing file
-      const writable = await currentFileHandle.value.createWritable();
-      await writable.write(pdfBlob);
-      await writable.close();
-
-      showNotification('Project saved successfully!', 'success');
-      saveHistory();
-    } finally {
-      // Restore canvas state
-      if (canvas.value) {
-        canvas.value.selection = true;
-        canvas.value.getObjects().forEach((obj) => {
-          if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
-            obj.set({ selectable: true, evented: true, visible: true });
-            if (TEXT_TYPES.includes(obj.type)) obj.set('editable', true);
-          }
-        });
-        canvas.value.renderAll();
-      }
-
-      if (!wasPreview) {
-        isPreviewMode.value = false;
-        await nextTick();
-        loadPageToCanvas(originalPage);
-      } else {
-        loadPageToCanvas(originalPage);
-      }
+    } catch (error) {
+        console.error("Failed to save project to DB:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกโปรเจกต์ลง Database");
     }
-  } catch (e) {
-    console.error('Save Project failed:', e);
-    showNotification('Save Project failed: ' + e.message, 'error');
-  }
 };
 
 
@@ -560,7 +382,6 @@ const handleExport = async () => {
 
   try {
     saveCurrentPageState();
-    // Collect data for PDF generation
     const pagesData = preparePagesForSave();
     const projectData = {
       name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
@@ -586,7 +407,6 @@ const handleExport = async () => {
       }
     } catch (error) {
       console.warn('Failed to fetch live variables, using sidebar defaults:', error);
-      // Fallback to sidebar variable values if API is unavailable
       if (variables.value) {
         variables.value.forEach((v) => {
           if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`;
@@ -594,16 +414,13 @@ const handleExport = async () => {
       }
     }
 
-    // Capture canvas images first
     const canvasImages = [];
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
     const qualityMultiplier = 2;
     const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-    // Include images in overlay types for mode-based separation
     const OVERLAY_TYPES = ['textbox', 'text', 'i-text', 'image'];
 
-    // Enter preview mode for capture
     const wasPreview = isPreviewMode.value;
     const originalPage = currentPageIndex.value;
 
@@ -616,12 +433,10 @@ const handleExport = async () => {
       applyPreviewDataToCanvas(variableMap);
       await nextTick();
 
-      // Capture each page as image
       for (let i = 0; i < pages.value.length; i++) {
         const allObjects = canvas.value.getObjects();
         const hiddenForCapture = [];
 
-        // Flatten vs Vector object hiding logic
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
           const objPageIndex = Math.floor(center.y / (P_H + GAP));
@@ -632,10 +447,8 @@ const handleExport = async () => {
 
           let shouldHide = false;
           if (pdfMode.value === 'flatten') {
-            // Flatten: hide only wrong-page objects (text bakes into image)
             shouldHide = isWrongPage;
           } else {
-            // Vector: hide overlays from JPEG (pdf-lib renders them as AcroForm)
             shouldHide = isWrongPage || isOverlay;
           }
 
@@ -665,7 +478,6 @@ const handleExport = async () => {
           }
         } catch (canvasError) {
           console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
-          // Use fallback image
           const fallbackCanvas = document.createElement('canvas');
           fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
           fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
@@ -678,14 +490,12 @@ const handleExport = async () => {
           }
         }
 
-        // Restore visibility
         hiddenForCapture.forEach((obj) => { obj.visible = true; });
       }
       canvas.value.requestRenderAll();
 
       if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
 
-      // Use live textLines for accurate line-break data in the PDF
       const exportProjectData = JSON.parse(JSON.stringify(projectData));
       const liveObjects = canvas.value.getObjects();
 
@@ -716,7 +526,6 @@ const handleExport = async () => {
       });
 
 
-      // Step 1: Generate PDF blob (ส่งตัวแปรที่ 4, 5, 6 ไปให้ครบเพื่อบอกโหมด)
       const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
 
       const options = {
@@ -728,10 +537,8 @@ const handleExport = async () => {
       await writable.write(pdfBlob);
       await writable.close();
 
-      // Reassign handle for future saves
       currentFileHandle.value = newHandle;
 
-      // Register new report instance in database
       try {
         const reportInstanceData = {
           name: templateName.value || 'Untitled Report',
@@ -753,9 +560,23 @@ const handleExport = async () => {
         showNotification('Report exported but database registration failed', 'warning');
       }
 
+      try {
+        const historyPayload = {
+          name: templateName.value || 'Exported Document',
+          pages: pages.value,
+          data: JSON.stringify(pages.value),
+          pdfUrl: newHandle.name || null,
+          templateId: currentTemplateId.value || null
+        };
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        await axios.post(`${apiUrl}/reports`, historyPayload);
+        if (typeof fetchReports === 'function') fetchReports();
+      } catch (e) {
+        console.error('Failed to log export history', e);
+      }
+
       saveHistory();
     } finally {
-      // Restore canvas state
       if (canvas.value) {
         canvas.value.selection = true;
         canvas.value.getObjects().forEach((obj) => {
@@ -836,7 +657,6 @@ const cleanupCanvasObjects = () => {
 
   objects.forEach(obj => {
     try {
-      // Clear clipPath safely
       if (obj.clipPath) {
         if (obj.clipPath.dispose && typeof obj.clipPath.dispose === 'function') {
           obj.clipPath.dispose();
@@ -844,12 +664,10 @@ const cleanupCanvasObjects = () => {
         obj.clipPath = null;
       }
 
-      // Clear event listeners
       if (obj.off && typeof obj.off === 'function') {
         obj.off();
       }
 
-      // Dispose custom objects
       if (obj.dispose && typeof obj.dispose === 'function') {
         obj.dispose();
       }
@@ -871,7 +689,6 @@ const renderAllPages = async () => {
   isRendering = true;
   setHistoryLock(true);
   try {
-    // Cleanup before clear to prevent memory leaks
     cleanupCanvasObjects();
 
     if (!pages.value || !Array.isArray(pages.value) || pages.value.length === 0) {
@@ -881,7 +698,6 @@ const renderAllPages = async () => {
 
     canvas.value.discardActiveObject();
     canvas.value.clear();
-    // Transparent background so gaps are visible
     canvas.value.setBackgroundColor(null, () => { });
 
     const P_W = CANVAS_CONSTANTS.PAGE_WIDTH;
@@ -895,15 +711,12 @@ const renderAllPages = async () => {
     canvas.value.setDimensions({ width: P_W * actualZoom, height: canvasHeight * actualZoom });
     canvas.value.setZoom(actualZoom);
 
-    // Clip Path Group REMOVED to allow free dragging/visibility
     canvas.value.clipPath = null;
 
-    // Draw Pages
     for (let i = 0; i < currentPages.length; i++) {
       const page = currentPages[i];
       const offsetTop = i * (P_H + P_GAP);
 
-      // Paper Background
       const pagePaper = new fabric.Rect({
         id: 'page-bg',
         left: 0,
@@ -919,7 +732,6 @@ const renderAllPages = async () => {
       });
       canvas.value.add(pagePaper);
 
-      // Image Background
       if (page.background) {
         await new Promise((resolve) => {
           fabric.Image.fromURL(
@@ -943,7 +755,6 @@ const renderAllPages = async () => {
         });
       }
 
-      // Objects (Variables + User Images)
       if (page.objects && page.objects.length > 0) {
         await new Promise((resolve) => {
           const rawObjects = JSON.parse(JSON.stringify(page.objects));
@@ -956,7 +767,6 @@ const renderAllPages = async () => {
               if (obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
               obj.set({ top: obj.top + offsetTop, _pageIndex: i });
 
-              // Apply clip path on load
               obj.clipPath = new fabric.Rect({
                 left: 0,
                 top: offsetTop,
@@ -969,32 +779,25 @@ const renderAllPages = async () => {
               canvas.value.add(obj);
               forceUnlockObject(obj);
 
-              // ASSET CORS FIX: Re-load image objects with crossOrigin:'anonymous' พร้อม error handling.
-              // enlivenObjects creates img elements without CORS headers, which taints
-              // the canvas and makes canvas.toDataURL() return a blank image for PDF export.
-              // We replace the image source after adding to force a clean CORS-safe load.
               if (obj.type === 'image' && obj.getSrc && obj.getSrc().startsWith('http')) {
                 const src = obj.getSrc();
                 const p = new Promise((imgResolve) => {
                   fabric.Image.fromURL(
                     src,
                     (freshImg) => {
-                      // Swap the element on the existing obj so position/scale/id are preserved
                       if (freshImg._element) {
                         obj.setElement(freshImg._element);
                         obj.dirty = true;
                       } else {
                         console.warn(`Failed to load image: ${src} - No element returned`);
-                        // Fallback: ใช้ image เดิมแทน
                       }
                       imgResolve();
                     },
                     {
                       crossOrigin: 'anonymous',
-                      // Add timeout and error callback
                       onError: (err) => {
                         console.error(`CORS/Network error loading image: ${src}`, err);
-                        imgResolve(); // Continue without image reload
+                        imgResolve();
                       }
                     }
                   );
@@ -1003,10 +806,8 @@ const renderAllPages = async () => {
               }
             });
 
-            // Wait for all image re-loads before resolving the page
             Promise.all(imageReloadPromises).catch((err) => {
               console.error('Some images failed to load:', err);
-              // Continue even if some images fail
             }).then(() => {
               if (canvas.value) canvas.value.requestRenderAll();
               resolve();
@@ -1017,7 +818,6 @@ const renderAllPages = async () => {
 
     }
     canvas.value.requestRenderAll();
-    // Re-render once all web fonts are loaded — prevents "default font on first open" glitch
     document.fonts.ready.then(() => { if (canvas.value) canvas.value.requestRenderAll(); });
   } finally {
     isRendering = false;
@@ -1038,7 +838,7 @@ const scrollToPage = (index) => {
 const forceUnlockObject = (obj) => {
   if (!obj) return;
   const isText = ['i-text', 'textbox', 'text'].includes(obj.type);
-  const isImage = obj.type === 'image'; // เช็คว่าเป็นรูปภาพหรือไม่
+  const isImage = obj.type === 'image';
 
   if (!obj._originalState) {
     obj._originalState = {
@@ -1061,16 +861,14 @@ const forceUnlockObject = (obj) => {
     lockRotation: false,
     lockScalingX: false,
     lockScalingY: false,
-    // ปลดล็อคให้ยืดหดได้อย่างอิสระ (สำหรับรูปภาพจะได้ยืดได้)
     lockUniScaling: false
   });
 
-  // กำหนดว่าใครโชว์ปุ่มไหนดึงได้บ้าง
   obj.setControlsVisibility({
-    mt: isImage, // รูปภาพโชว์ดึงบน / ข้อความซ่อน
-    mb: isImage, // รูปภาพโชว์ดึงล่าง / ข้อความซ่อน
-    ml: true,    // โชว์ทั้งคู่ (รูปไว้บีบ, ข้อความไว้ยืดกรอบ)
-    mr: true,    // โชว์ทั้งคู่
+    mt: isImage,
+    mb: isImage,
+    ml: true,
+    mr: true,
     tl: true,
     tr: true,
     bl: true,
@@ -1093,8 +891,8 @@ const addCustomTextToCanvas = (x = 50, y = 50) => {
 
   const text = new fabric.Textbox('พิมพ์ข้อความที่นี่...', {
     id: 'custom_text_' + Date.now(),
-    left: x, // ใช้พิกัดที่ส่งมา (ค่าเริ่มต้นคือ 50)
-    top: y,  // ใช้พิกัดที่ส่งมา (ค่าเริ่มต้นคือ 50)
+    left: x,
+    top: y,
     width: 200,
     fontFamily: 'Sarabun',
     fontSize: 16,
@@ -1118,9 +916,7 @@ const addCustomTextToCanvas = (x = 50, y = 50) => {
     saveCurrentPageState();
   }
 };
-// ==========================================
 
-// Prevents race conditions during page state serialization
 let isSavingState = false;
 
 const saveCurrentPageState = () => {
@@ -1128,7 +924,6 @@ const saveCurrentPageState = () => {
 
   isSavingState = true;
   try {
-    // Ungroup active selection to restore absolute coordinates before saving
     if (canvas.value && canvas.value.getActiveObject() && canvas.value.getActiveObject().type === 'activeSelection') {
       canvas.value.discardActiveObject();
     }
@@ -1137,14 +932,12 @@ const saveCurrentPageState = () => {
     const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
 
-    // Build page objects map first, then assign atomically
     const pageObjectMap = pages.value.map(() => []);
 
     allObjects.forEach((obj) => {
       if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
       if (typeof obj.top !== 'number' || isNaN(obj.top)) return;
 
-      // Zoom-independent coordinates (DO NOT divide by zoomLevel)
       const center = obj.getCenterPoint();
       const actualCenterY = center.y;
       let pageIndex = Math.floor(actualCenterY / (P_H + GAP));
@@ -1168,7 +961,6 @@ const saveCurrentPageState = () => {
       }
     });
 
-    // Atomic assignment: only update after all objects are processed successfully
     pages.value.forEach((p, i) => {
       if (p) p.objects = pageObjectMap[i];
     });
@@ -1196,7 +988,6 @@ const applyPreviewDataToCanvas = (customData = null) => {
     if (['textbox', 'text', 'i-text'].includes(obj.type) && obj.text) {
       let newText = obj.text;
 
-      // Replace {{variables}} with live data
       Object.keys(dataToUse).forEach((key) => {
         newText = newText.replace(new RegExp(`{{${key}}}`, 'g'), dataToUse[key] || '');
       });
@@ -1215,14 +1006,12 @@ const applyPreviewDataToCanvas = (customData = null) => {
   canvas.value.requestRenderAll();
 };
 
-// Safe toggle with template backup
 const togglePreviewWrapper = async () => {
   saveCurrentPageState();
   const wasPreview = isPreviewMode.value;
 
   try {
     if (!wasPreview) {
-      // Entering preview - backup templates first
       const textObjects = canvas.value.getObjects().filter(obj =>
         ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text
       );
@@ -1235,7 +1024,6 @@ const togglePreviewWrapper = async () => {
         evented: obj.evented
       }));
 
-      // Fetch live preview data from DB
       const previewVariableMap = {};
       try {
         const realData = await apiService.getVariables();
@@ -1250,11 +1038,9 @@ const togglePreviewWrapper = async () => {
 
       togglePreview();
       await nextTick();
-      // Apply live data to canvas preview
       applyPreviewDataToCanvas(previewVariableMap);
 
     } else {
-      // Exiting preview - restore templates
       togglePreview();
       await nextTick();
 
@@ -1396,7 +1182,6 @@ const onDrop = (e) => {
     x = e.clientX - rect.left;
     y = e.clientY - rect.top;
 
-    // Fallback requires applying zoomLevel manually
     if (typeof zoomLevel !== 'undefined' && zoomLevel.value) {
       x = x / zoomLevel.value;
       y = y / zoomLevel.value;
@@ -1416,7 +1201,6 @@ const onDrop = (e) => {
     }
   }
 
-  // Handle free- text box drag-and-drop
   const customText = e.dataTransfer.getData('customText');
   if (customText) {
     addCustomTextToCanvas(x, y);
@@ -1424,6 +1208,50 @@ const onDrop = (e) => {
 };
 
 const handleRouteChange = async () => {
+    const fullHref = window.location.href;
+    const directUrlMatch = fullHref.match(/\/(https?:\/\/.+)/i) || fullHref.match(/\/(https?:\/.+)/i);
+    
+    if (directUrlMatch && directUrlMatch[1]) {
+      let externalUrl = directUrlMatch[1];
+      if (externalUrl.startsWith('https:/') && !externalUrl.startsWith('https://')) externalUrl = externalUrl.replace('https:/', 'https://');
+      if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://')) externalUrl = externalUrl.replace('http:/', 'http://');
+
+      try {
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-url`, { url: externalUrl });
+        
+        const newPdfId = response.data.OriginalFileId || response.data.id || response.data.fileId;
+        
+        if (newPdfId) {
+          window.history.replaceState({}, '', `/pdf/${newPdfId}`);
+          window.location.reload();
+          return;
+        }
+      } catch (error) {
+        console.error("Direct URL Import Failed:", error);
+        alert("ไม่สามารถดึงไฟล์จากลิงก์ที่ระบุได้ (นำเข้าไม่สำเร็จ)");
+      }
+    }
+
+    const decodedPath = decodeURIComponent(window.location.pathname);
+    const localPathMatch = decodedPath.match(/^\/(["']?[A-Za-z]:[\\/].+)/);
+    
+    if (localPathMatch && localPathMatch[1]) {
+      const localPath = localPathMatch[1];
+      try {
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-local`, { localPath });
+        
+        const newPdfId = response.data.OriginalFileId || response.data.id;
+        if (newPdfId) {
+          window.history.replaceState({}, '', `/pdf/${newPdfId}`);
+          window.location.reload();
+          return;
+        }
+      } catch (error) {
+        console.error("Local Import Failed:", error);
+        alert("ไม่สามารถดึงไฟล์จากเครื่องได้ (ตรวจสอบว่าไฟล์มีอยู่จริง)");
+      }
+    }
+
   const currentPath = window.location.pathname;
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -1462,34 +1290,55 @@ const handleRouteChange = async () => {
     return;
   }
 
-  // 1. Check for PDF URL
   const pdfMatch = currentPath.match(/^\/pdf\/([a-zA-Z0-9-]+)/i);
   if (pdfMatch && pdfMatch[1]) {
     const fileId = pdfMatch[1];
     try {
-      // 1. Get filepath from DB
-      const dbRes = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/cache/${fileId}`);
-      const filepath = dbRes.data.filepath;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const backendUrl = apiUrl.replace('/api', '');
+      const dbRes = await axios.get(`${apiUrl}/pdf/cache/${fileId}`);
 
-      // 2. Fetch the actual physical file blob
-      const fileUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace('/api', '')}${filepath}`;
-      const blobRes = await axios.get(fileUrl, { responseType: 'blob' });
+      const resolvedFilepath = (dbRes.data.EditedFile && dbRes.data.EditedFilePath) ? dbRes.data.EditedFilePath : (dbRes.data.FilePath || dbRes.data.filepath);
 
-      // 3. Convert to File and load to canvas
-      const downloadedFile = new File([blobRes.data], dbRes.data.originalUrl || 'document.pdf', { type: 'application/pdf' });
+      if (dbRes.data.EditedFile && dbRes.data.editState) {
+        try {
+          pdfUrl.value = backendUrl + resolvedFilepath;
 
-      // Bypass the upload redirect and directly process images
-      await resetCanvasWrapper();
-      const images = await processPdfToImages(downloadedFile);
-      if (images.length > 0) {
-        pages.value = images.map((img, idx) => ({
-          id: Date.now() + idx,
-          background: img,
-          objects: [],
-          originalBackgroundType: 'PDF'
-        }));
-        currentPageIndex.value = 0;
-        await renderAllPages();
+          let parsedState = dbRes.data.editState;
+          while (typeof parsedState === 'string') {
+            parsedState = JSON.parse(parsedState);
+          }
+
+          pages.value = parsedState;
+          currentPageIndex.value = 0;
+
+          await nextTick();
+          setTimeout(async () => {
+            if (typeof renderAllPages === 'function') {
+              await renderAllPages();
+            }
+          }, 500);
+
+        } catch (e) {
+          console.error('Restoration Error: Failed to parse and render editState', e);
+        }
+      } else {
+        const fileUrl = `${backendUrl}${resolvedFilepath}`;
+        const blobRes = await axios.get(fileUrl, { responseType: 'blob' });
+        const downloadedFile = new File([blobRes.data], dbRes.data.FileName || 'document.pdf', { type: 'application/pdf' });
+
+        await resetCanvasWrapper();
+        const images = await processPdfToImages(downloadedFile);
+        if (images.length > 0) {
+          pages.value = images.map((img, idx) => ({
+            id: Date.now() + idx,
+            background: img,
+            objects: [],
+            originalBackgroundType: 'PDF'
+          }));
+          currentPageIndex.value = 0;
+          await renderAllPages();
+        }
       }
     } catch (error) {
       console.error('Failed to load PDF from URL:', error);
@@ -1498,24 +1347,19 @@ const handleRouteChange = async () => {
     return;
   }
 
-  // 2. Check for Template URL
   const templateMatch = currentPath.match(/^\/template\/([a-zA-Z0-9-]+)/i);
   if (templateMatch && templateMatch[1]) {
     const templateId = templateMatch[1];
     try {
-      // Fetch the template data from the backend
       const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/templates/${templateId}`);
 
-      // Load it into the canvas using your existing store/canvas functions
       await loadTemplateWrapper(res.data);
-      console.log("Template loaded from URL", res.data);
     } catch (error) {
       console.error('Failed to load template from URL:', error);
     }
     return;
   }
 
-  // 3. Check for History URL
   const historyMatch = currentPath.match(/^\/history\/([a-zA-Z0-9-]+)/i);
   if (historyMatch && historyMatch[1]) {
     const instanceId = historyMatch[1];
@@ -1533,7 +1377,6 @@ const handleRouteChange = async () => {
         if (typeof resetHistory !== 'undefined' && resetHistory) resetHistory();
         await nextTick();
         await renderAllPages();
-        console.log("History loaded from URL successfully");
       }
     } catch (error) {
       console.error('Failed to load history instance from URL:', error);
@@ -1541,25 +1384,19 @@ const handleRouteChange = async () => {
     return;
   }
 
-  // Fallback for Root '/' (User clicked Back to the home state)
   if (currentPath === '/' || currentPath === '') {
-    console.log("Navigated to root, forcing workspace reset...");
     try {
-      // 1. Force clear the canvas
       if (typeof resetCanvasWrapper === 'function') {
         await resetCanvasWrapper();
       } else if (typeof resetCanvas === 'function') {
         await resetCanvas();
       } else if (typeof pages !== 'undefined') {
-        // Hard reset if wrapper functions are out of scope
         pages.value = [{ id: Date.now(), background: null, objects: [] }];
         if (typeof currentPageIndex !== 'undefined') currentPageIndex.value = 0;
       }
 
-      // 2. Clear active store states so Sidebar un-highlights items
       if (typeof editorStore !== 'undefined') {
         if (typeof editorStore.setActiveTemplate === 'function') editorStore.setActiveTemplate(null);
-        // Clear any other active states if they exist
       }
     } catch (error) {
       console.error("Error resetting workspace on back navigation:", error);
@@ -1573,7 +1410,6 @@ onMounted(async () => {
   isCanvasReady.value = true;
   initCanvasEvents();
 
-  // 1. ALWAYS fetch core data first so the Sidebar is populated
   try {
     await fetchVariables();
     await fetchTemplates();
@@ -1607,7 +1443,6 @@ onMounted(async () => {
     window.applyPreviewDataToCanvas = applyPreviewDataToCanvas;
     window.renderAllPages = renderAllPages;
     window.forceUnlockObject = forceUnlockObject;
-    // Expose page state so useCanvas.js keyboard handler can paste cross-page
     window.__editorState = {
       get currentPageIndex() { return currentPageIndex.value; },
       get pageCount() { return pages.value?.length ?? 1; },
@@ -1626,7 +1461,6 @@ onMounted(async () => {
   connectionStatus.value = 'connected';
   if (canvas.value) {
     canvas.value.on('canvas:changed-by-user', (e) => {
-      // Only emit local changes, not remote ones
       if (!isRemoteUpdating) {
         emitUpdate(roomId, e.json);
       }
@@ -1657,7 +1491,6 @@ onMounted(async () => {
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // Copy (Ctrl+C)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
       const activeObj = canvas.value?.getActiveObject();
       if (activeObj && !activeObj.isEditing) {
@@ -1667,7 +1500,6 @@ onMounted(async () => {
       return;
     }
 
-    // Paste (Ctrl+V)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
       if (clipboard && canvas.value) {
         e.preventDefault();
@@ -1696,7 +1528,6 @@ onMounted(async () => {
       return;
     }
 
-    // Delete / Backspace
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const activeObj = canvas.value?.getActiveObject();
       if (activeObj && !activeObj.isEditing) {
@@ -1717,13 +1548,9 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Scoped styles specific to the editor */
-
-/* VIEWPORT */
 .viewport {
   position: fixed;
   left: 392px;
-  /* Rail (72px) + Panel (320px) */
   right: 0;
   top: 60px;
   bottom: 0;
@@ -1737,7 +1564,6 @@ onUnmounted(() => {
 
 .viewport.full-width {
   left: 72px;
-  /* Rail (72px) only */
 }
 
 .scroll-center-helper {
@@ -1773,7 +1599,6 @@ onUnmounted(() => {
   display: block;
 }
 
-/* ── Top Navbar ── */
 .top-navbar {
   position: fixed;
   top: 0;
@@ -1790,7 +1615,6 @@ onUnmounted(() => {
   z-index: 1000;
   box-sizing: border-box;
 
-  /* 📌 เพิ่ม 2 บรรทัดนี้เพื่อบังคับให้ตัวอักษรและไอคอนทั้งหมดในแถบนี้คมกริบ */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -1801,7 +1625,6 @@ onUnmounted(() => {
   height: 100%;
 }
 
-/* app-title */
 .app-title {
   text-align: left;
   font: normal normal bold 26px/34px "TH Sarabun New", "Sarabun", sans-serif;
@@ -1818,7 +1641,6 @@ onUnmounted(() => {
   height: 100%;
 }
 
-/* ── 1. กลุ่ม Zoom ── */
 .zoom-group {
   display: flex;
   align-items: center;
@@ -1839,17 +1661,14 @@ onUnmounted(() => {
   width: 23px;
   height: 23px;
   margin-right: 10px;
-  /* ระยะห่างเป๊ะจาก Design */
 }
 
-/* zoom-out-icon */
 .zoom-out-icon {
   width: 13px;
   height: 1px;
   background: #4D4D4D;
 }
 
-/* zoom-value-box */
 .zoom-value-box {
   width: 72px;
   height: 39px;
@@ -1861,12 +1680,10 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* zoom-value-text */
 .zoom-value-text {
   width: 35px;
   height: 26px;
   text-align: center;
-  /* ปรับให้ตัวเลขอยู่กลางกล่อง */
   font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
   color: #000000;
   margin-top: 1px;
@@ -1876,10 +1693,8 @@ onUnmounted(() => {
   width: 23px;
   height: 23px;
   margin-left: 12px;
-  /* ระยะห่างเป๊ะจาก Design */
 }
 
-/* zoom-in-icon (9x9) สร้างกากบาทให้คมเป๊ะ */
 .zoom-in-icon {
   position: relative;
   width: 9px;
@@ -1893,7 +1708,6 @@ onUnmounted(() => {
   background: #4D4D4D;
 }
 
-/* เส้นแนวนอน */
 .zoom-in-icon::before {
   top: 4px;
   left: 0;
@@ -1901,7 +1715,6 @@ onUnmounted(() => {
   height: 1px;
 }
 
-/* เส้นแนวตั้ง */
 .zoom-in-icon::after {
   top: 0;
   left: 4px;
@@ -1909,14 +1722,11 @@ onUnmounted(() => {
   height: 9px;
 }
 
-/* ── 2. กลุ่ม Undo / Redo ── */
 .undo-redo-group {
   display: flex;
   align-items: center;
   margin-left: 24px;
-  /* ห่างจากปุ่ม + */
   gap: 24px;
-  /* ระยะห่างระหว่าง undo กับ redo */
 }
 
 .action-btn-text {
@@ -1929,7 +1739,6 @@ onUnmounted(() => {
   padding: 0;
 }
 
-/* icon-undo, icon-redo */
 .icon-undo,
 .icon-redo {
   width: 23px;
@@ -1947,7 +1756,6 @@ onUnmounted(() => {
   background-image: url('../assets/icons/redo.png');
 }
 
-/* action-text (undo/redo) */
 .action-text {
   height: 26px;
   text-align: left;
@@ -1956,23 +1764,18 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* ── เส้นคั่น ── */
 .divider-v {
   width: 1px;
   height: 49px;
   background: #E3E3E3;
-  /* เปลี่ยนมาใช้ bg แทน border ให้เส้นคม 1px */
   margin: 0 32px 0 46px;
-  /* คำนวณระยะห่างให้สมดุลตามดีไซน์ */
 }
 
-/* ── 3. ปุ่ม Preview ── */
 .mode-group {
   display: flex;
   align-items: center;
 }
 
-/* preview-btn */
 .preview-btn {
   width: 105px;
   height: 39px;
@@ -1992,7 +1795,6 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-/* icon-eye */
 .icon-eye {
   width: 16px;
   height: 16px;
@@ -2007,7 +1809,6 @@ onUnmounted(() => {
   background-size: contain;
 }
 
-/* preview-text */
 .preview-text {
   height: 26px;
   text-align: left;

@@ -90,18 +90,15 @@ const formatDate = (dateString) => {
 };
 
 const getStatusDisplay = (instance) => {
-  // ถ้า ID ของแถวนี้ ตรงกับ ID ที่กำลังเปิดแก้ไขอยู่ ให้บังคับเป็น "ใช้งาน" ทันที
   if (props.currentInstanceId && instance.id === props.currentInstanceId) {
     return { text: 'ใช้งาน', cssClass: 'inuse' };
   }
 
-  // ถ้าไม่ใช่ตัวที่กำลังเปิดอยู่ ก็เช็คตาม status ในฐานข้อมูล
   const status = instance.status?.toLowerCase();
   if (status === 'completed') {
     return { text: 'ใช้งาน', cssClass: 'inuse' };
   }
 
-  // นอกนั้น (รวมถึง draft) ให้เป็นฉบับร่าง
   return { text: 'ฉบับร่าง', cssClass: 'draft' };
 };
 
@@ -146,13 +143,11 @@ const editReport = (instance) => {
 </script>
 
 <style scoped>
-/* ── บังคับฟอนต์ให้คมชัด ── */
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── 1. พื้นหลัง (ดันกล่องชิดขอบบนสุด 0px) ── */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -162,24 +157,17 @@ const editReport = (instance) => {
   background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: flex-start;
-  /* 📌 ดันกล่องขึ้นบนสุด */
   justify-content: center;
   z-index: 9999;
   padding-top: 3.5px;
 }
 
-/* ── 2. กล่องขาว (กรอบสี่เหลี่ยม, ชิดบน, ขนาดกางตามตารางเป๊ะ) ── */
 .modal-content {
   position: relative;
-  /* 📌 แกนอ้างอิงของกากบาท */
   background: #FFFFFF 0% 0% no-repeat padding-box;
   border-radius: 0;
-  /* 📌 บังคับกรอบสี่เหลี่ยมมุมฉาก 100% */
   margin-top: 0;
-  /* 📌 ชิดขอบบนสุด */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-
-  /* 📌 size scales with table's elements */
   width: max-content;
   max-width: 100vw;
   height: auto;
@@ -189,7 +177,6 @@ const editReport = (instance) => {
   opacity: 1;
 }
 
-/* ── 3. Header ── */
 .modal-header {
   display: flex;
   align-items: center;
@@ -203,22 +190,18 @@ const editReport = (instance) => {
 .modal-header-text {
   text-align: left;
   font: normal normal bold 25px/35px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 22/30 * 1.15 */
   letter-spacing: 0px;
   color: #000000;
   margin: 0;
   opacity: 1;
 }
 
-/* ── 4. ปุ่มกากบาท (ลอยมุมขวาบนสุดของกล่องขาว) ── */
 .close-btn {
   position: absolute;
   top: 15px;
   right: 15px;
   width: 10px;
-  /* 📌 9px * 1.15 */
   height: 10px;
-  /* 📌 9px * 1.15 */
   background: transparent;
   border: none;
   font-size: 24px;
@@ -238,10 +221,8 @@ const editReport = (instance) => {
   color: #E74C3C;
 }
 
-/* ── 5. Body & Table Container ── */
 .modal-body {
   display: flex;
-  /* 📌 flex - size scales with table's elements */
   flex-direction: column;
   padding: 20px 30px 40px 30px;
   overflow-y: auto;
@@ -256,13 +237,11 @@ const editReport = (instance) => {
 
 .table-container {
   display: flex;
-  /* 📌 flex - size scales with table's size */
   overflow-x: auto;
 }
 
 .history-table {
   width: 1036px;
-  /* 📌 901px * 1.15 = 1036px (กางตามสเปคตาราง) */
   border-collapse: collapse;
 }
 
@@ -275,7 +254,6 @@ const editReport = (instance) => {
 
 .table-row {
   height: 53px;
-  /* 📌 46px * 1.15 = 53px */
   border: 1px solid #E3E3E3;
   opacity: 1;
   transition: background-color 0.2s;
@@ -285,11 +263,9 @@ const editReport = (instance) => {
   background-color: #F9F9F9;
 }
 
-/* ── 6. Typography ── */
 .cell-center-bold {
   text-align: center;
   font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 18/24 * 1.15 */
   letter-spacing: 0px;
   color: #000000;
   opacity: 1;
@@ -298,7 +274,6 @@ const editReport = (instance) => {
 .cell-center {
   text-align: center;
   font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 18/24 * 1.15 */
   letter-spacing: 0px;
   color: #000000;
   opacity: 1;
@@ -331,7 +306,6 @@ const editReport = (instance) => {
   color: #E74C3C;
 }
 
-/* ── 7. ปุ่มจัดการ ── */
 .action-buttons {
   display: flex;
   justify-content: center;
@@ -357,41 +331,29 @@ const editReport = (instance) => {
   opacity: 0.85;
 }
 
-/* ปุ่มแก้ไข */
 .btn-edit {
   width: 71px;
-  /* 📌 62px * 1.15 */
   height: 30px;
-  /* 📌 26px * 1.15 */
   background: #427EB1 0% 0% no-repeat padding-box;
   border-radius: 6px;
-  /* 📌 5px * 1.15 */
 }
 
 .btn-edit-icon {
   width: 14px;
-  /* 📌 12px * 1.15 */
   height: 14px;
-  /* 📌 12px * 1.15 */
   background: transparent url('../assets/icons/edit.png') center/contain no-repeat;
 }
 
-/* ปุ่มลบ */
 .btn-delete {
   width: 55px;
-  /* 📌 48px * 1.15 */
   height: 30px;
-  /* 📌 26px * 1.15 */
   background: #E74C3C 0% 0% no-repeat padding-box;
   border-radius: 6px;
-  /* 📌 5px * 1.15 */
 }
 
 .btn-delete-icon {
   width: 12px;
-  /* 📌 10px * 1.15 = 11.5 ปัดเป็น 12px */
   height: 14px;
-  /* 📌 12px * 1.15 = 13.8 ปัดเป็น 14px */
   background: transparent url('../assets/icons/delete.svg') center/contain no-repeat;
 }
 
@@ -405,13 +367,11 @@ const editReport = (instance) => {
 .btn-action-text {
   text-align: left;
   font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 16/21 * 1.15 */
   letter-spacing: 0px;
   color: #FFFFFF;
   opacity: 1;
 }
 
-/* ── 8. Responsive ── */
 @media (max-width: 768px) {
   .modal-content {
     max-height: 100vh;

@@ -94,7 +94,6 @@ const deleteAsset = async (asset) => {
       assets.value = assets.value.filter((a) => a.id !== targetId && !a.url.endsWith(targetId));
     } catch (err) {
       console.error('Failed to delete asset', err);
-      // Remove from UI anyway if it's already deleted in the database (404)
       if (err.response && err.response.status === 404) {
         assets.value = assets.value.filter((a) => a.id !== targetId && !a.url.endsWith(targetId));
       } else {
@@ -107,7 +106,6 @@ const deleteAsset = async (asset) => {
 const emit = defineEmits(['select-asset']);
 
 const onDragStart = (e, asset) => {
-  // We pass the URL as 'asset' type to match the new engine drop handler
   e.dataTransfer.setData('type', 'image');
   e.dataTransfer.setData('asset', asset.url);
 };
@@ -123,16 +121,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ── จัด Layout หลักให้อยู่กึ่งกลาง ── */
 .asset-manager {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding-top: 15px;
-  /* ดันลงมาจาก Header ให้เท่ากับแท็บอื่นๆ */
 }
 
-/* ── ส่วนปุ่มอัปโหลด ── */
 .upload-section {
   width: 298px;
   display: flex;
@@ -176,7 +171,6 @@ onMounted(() => {
   margin-top: 6px;
 }
 
-/* ── ส่วนหัวข้อแสดงรูป ── */
 .asset-list-header {
   width: 298px;
   text-align: left;
@@ -189,21 +183,16 @@ onMounted(() => {
   margin: 0;
 }
 
-/* ── Grid แสดงรูปภาพ ── */
 .asset-grid {
   width: 298px;
-  /* ล็อคความกว้างให้เท่าปุ่ม */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  /* ขยายช่องว่างให้รูปดูไม่เบียดกันเกินไป */
   max-height: 450px;
   overflow-y: auto;
   padding: 5px;
-  /* เผื่อพื้นที่ให้เงาปุ่มลบไม่โดนตัด */
 }
 
-/* ── กล่องรูปภาพแต่ละรูป ── */
 .asset-item {
   position: relative;
   aspect-ratio: 1;

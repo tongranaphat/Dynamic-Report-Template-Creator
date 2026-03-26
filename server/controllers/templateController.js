@@ -1,13 +1,11 @@
-// BUG-019 fix: use shared singleton to avoid connection pool exhaustion
 const prisma = require('../prismaClient');
 const { asyncHandler } = require('../utils/errorHandler');
 
 const { saveValidTextContent, deleteTextFile } = require('../utils/textSaver');
 
-// Enhanced logging utility
 const logger = {
     info: (message, ...args) => {
-        console.log(`[TEMPLATE] ${new Date().toISOString()} - ${message}`, ...args);
+        console.info(`[TEMPLATE] ${new Date().toISOString()} - ${message}`, ...args);
     },
     error: (message, error) => {
         console.error(`[TEMPLATE ERROR] ${new Date().toISOString()} - ${message}`);
@@ -22,19 +20,17 @@ const logger = {
         console.warn(`[TEMPLATE WARN] ${new Date().toISOString()} - ${message}`, ...args);
     },
     success: (message, ...args) => {
-        console.log(`✅ [TEMPLATE] ${new Date().toISOString()} - ${message}`, ...args);
+        console.info(`[TEMPLATE] ${new Date().toISOString()} - ${message}`, ...args);
     }
 };
 
-// --- Helper: Format data for frontend ---
-// แปลงข้อมูลจาก DB ให้ตรงกับที่ Frontend ต้องการ
 const formatTemplate = (t) => {
     return {
         _id: t.id,
         id: t.id,
         name: t.name,
-        background: t.background, // [Updated] ใช้ background ตาม Schema ใหม่
-        pages: t.pages || [], // [Updated] ใช้ pages ตาม Schema ใหม่
+        background: t.background,
+        pages: t.pages || [],
         isMaster: t.isMaster,
         ownerId: t.ownerId,
         createdAt: t.createdAt,
@@ -42,8 +38,6 @@ const formatTemplate = (t) => {
     };
 };
 
-// BUG-012 fix: use upsert to eliminate race condition where two concurrent requests
-// both pass the findUnique check before either creates the user, causing a unique constraint error.
 const ensureUserExists = async (userId) => {
     if (!userId) return null;
     const user = await prisma.user.upsert({
@@ -58,7 +52,6 @@ const ensureUserExists = async (userId) => {
     return user ? user.id : null;
 };
 
-// 1. GET Variables
 const getVariables = asyncHandler(async (req, res) => {
     logger.info('Fetching variables');
 
@@ -71,7 +64,6 @@ const getVariables = asyncHandler(async (req, res) => {
         ]
     });
 
-    // ถ้า DB ว่าง (รันครั้งแรก) ให้ส่ง Mock กลับไปก่อน
     if (variables.length === 0) {
         const mockVariables = [
             { id: '1', key: 'school_name', label: 'ชื่อโรงเรียน', scope: 'GLOBAL' },
@@ -89,7 +81,6 @@ const getVariables = asyncHandler(async (req, res) => {
             { id: '13', key: 'grade_level', label: 'ระดับชั้น', scope: 'GLOBAL' }
         ];
 
-        // Add categories dynamically to mock variables
         const categorizedMockVariables = mockVariables.map(v => {
             let category = 'GENERAL';
             if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
@@ -109,7 +100,6 @@ const getVariables = asyncHandler(async (req, res) => {
         return res.json(categorizedMockVariables);
     }
 
-    // Add categories dynamically to database variables
     const categorizedVariables = variables.map(v => {
         let category = 'GENERAL';
         if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
@@ -130,7 +120,6 @@ const getVariables = asyncHandler(async (req, res) => {
     res.json(categorizedVariables);
 });
 
-// 2. GET Templates
 const getTemplates = asyncHandler(async (req, res) => {
     logger.info('Fetching templates');
     const { userId } = req.query;
@@ -150,7 +139,6 @@ const getTemplates = asyncHandler(async (req, res) => {
     res.json(formatted);
 });
 
-// 3. GET Template By ID
 const getTemplateById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const template = await prisma.template.findUnique({ where: { id } });
@@ -163,9 +151,7 @@ const getTemplateById = asyncHandler(async (req, res) => {
     res.json(formatTemplate(template));
 });
 
-// 4. SAVE Template (Create Master)
 const saveTemplate = asyncHandler(async (req, res) => {
-    // [Updated] Validated by Zod Middleware
     const { name, background, pages, userId } = req.body;
 
     logger.info(`Saving new template: ${name}`);
@@ -187,17 +173,13 @@ const saveTemplate = asyncHandler(async (req, res) => {
 
     logger.success(`Template saved with ID: ${newTemplate.id}`);
 
-    // Save text content as file
-    // Save text content as file
     await saveValidTextContent(pages, 'template', newTemplate.id, name, background);
 
     res.send({ status: 'ok', id: newTemplate.id });
 });
 
-// 5. UPDATE Template
 const updateTemplate = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    // [Updated] Validated by Zod Middleware
     const { name, background, pages } = req.body;
 
     logger.info(`Updating template: ${id}`);
@@ -214,14 +196,11 @@ const updateTemplate = asyncHandler(async (req, res) => {
 
     logger.success(`Template updated: ${updated.id}`);
 
-    // Save text content as file
-    // Save text content as file
     await saveValidTextContent(pages, 'template', updated.id, name, background);
 
     res.json({ status: 'ok', id: updated.id });
 });
 
-// 6. CLONE Template
 const cloneTemplate = asyncHandler(async (req, res) => {
     const { id } = req.params;
     logger.info(`Cloning template: ${id}`);
@@ -246,11 +225,9 @@ const cloneTemplate = asyncHandler(async (req, res) => {
     res.json({ status: 'ok', id: newTemplate.id });
 });
 
-// 7. DELETE Template
 const deleteTemplate = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    // Find before delete to get name for file cleanup
     const template = await prisma.template.findUnique({ where: { id } });
 
     if (!template) {
@@ -258,16 +235,34 @@ const deleteTemplate = asyncHandler(async (req, res) => {
         throw new Error('Template not found');
     }
 
+    const fs = require('fs');
+    const pathMod = require('path');
+
+    const safeName = (template.name || 'Untitled').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const textFilePath = pathMod.join(__dirname, '../uploads/texts/templates', `${safeName}_${id}.txt`);
+    try {
+        fs.unlinkSync(textFilePath);
+    } catch (e) {
+        console.warn(`[deleteTemplate] Could not unlink text file ${textFilePath}:`, e.message);
+    }
+
+    if (template.preview) {
+        const previewPath = pathMod.join(__dirname, '..', template.preview);
+        try {
+            fs.unlinkSync(previewPath);
+        } catch (e) {
+            console.warn(`[deleteTemplate] Could not unlink preview ${previewPath}:`, e.message);
+        }
+    }
+
     await prisma.template.delete({ where: { id } });
     logger.success(`Template deleted: ${id}`);
 
-    // Cleanup text file
     await deleteTextFile('template', id, template.name);
 
     res.json({ status: 'ok' });
 });
 
-// 8. ADD Variable
 const addVariable = asyncHandler(async (req, res) => {
     const { key, label } = req.body;
     const newVar = await prisma.variable.create({
@@ -276,7 +271,6 @@ const addVariable = asyncHandler(async (req, res) => {
     res.json(newVar);
 });
 
-// 9. Seed Database
 const seedDatabase = asyncHandler(async (req, res) => {
     try {
         logger.info('Checking database seed status...');

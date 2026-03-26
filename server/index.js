@@ -8,35 +8,29 @@ const { PrismaClient } = require('@prisma/client');
 const fs = require('fs');
 require('dotenv').config();
 
-// Import Routes
 const templateRoutes = require('./routes/templateRoutes');
 const pdfRoutes = require('./routes/pdfRoutes');
-const reportInstanceRoutes = require('./routes/reportInstanceRoutes'); // [เพิ่มใหม่]
+const reportInstanceRoutes = require('./routes/reportInstanceRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 
-// Initialize
 const app = express();
 const prisma = new PrismaClient();
-const server = http.createServer(app); // สร้าง HTTP Server เพื่อใช้กับ Socket.io
+const server = http.createServer(app);
 
-// Setup Socket.io
 const io = new Server(server, {
     cors: {
-        origin: '*', // อนุญาตทุก Origin (ปรับได้ตามความเหมาะสมใน Production)
+        origin: '*',
         methods: ['GET', 'POST']
     }
 });
 
-// Logger Utility
 const logger = require('./utils/logger');
 const socketHandler = require('./sockets/socketHandler');
 
-// Middleware
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
 app.use(
     cors({
         origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps or curl requests)
             if (!origin) return callback(null, true);
             if (allowedOrigins.indexOf(origin) === -1) {
                 const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
@@ -50,12 +44,8 @@ app.use(
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve Static Files (สำหรับไฟล์ PDF ที่ Gen แล้ว)
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-// Serve Static Files — with explicit CORS headers so fabric.Image.fromURL(crossOrigin:'anonymous')
-// does not taint the canvas. Without this, canvas.toDataURL() throws SecurityError and images
-// are completely blank in exported PDFs.
 app.use('/uploads', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -63,39 +53,31 @@ app.use('/uploads', (req, res, next) => {
     next();
 }, express.static(uploadsDir));
 
-
-// Register Routes
 app.use('/api', healthRoutes);
 app.use('/api', templateRoutes);
 app.use('/api', pdfRoutes);
-app.use('/api', reportInstanceRoutes); // [ลงทะเบียน Route นี้]
+app.use('/api', reportInstanceRoutes);
 
-// Error Handling Middleware
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 app.use(notFound);
 app.use(errorHandler);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Socket.io Logic (Real-time Collaboration)
 socketHandler(io);
 
-// Start Server Function
 const startServer = async () => {
     try {
-        // Test Database Connection
         await prisma.$connect();
         logger.success('Connected to Database');
 
         const PORT = process.env.PORT || 3000;
 
-        // ใช้ server.listen แทน app.listen เพื่อให้ Socket.io ทำงานได้
         server.listen(PORT, () => {
             logger.success(`Server running on port ${PORT}`);
             logger.info(`API Documentation: http://localhost:${PORT}/api`);
         });
 
-        // Graceful Shutdown
         const shutdown = async () => {
             logger.info('Shutting down server...');
             await prisma.$disconnect();
@@ -113,10 +95,8 @@ const startServer = async () => {
     }
 };
 
-// Only start if run directly
 if (require.main === module) {
     startServer();
 }
 
-module.exports = { app, server, prisma }; // Export for testing
-// Rebooting dev server in LINE tab
+module.exports = { app, server, prisma };

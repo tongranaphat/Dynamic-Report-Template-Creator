@@ -2,7 +2,6 @@
   <div v-if="activeObject" class="minimal-panel">
     <template v-if="isText">
       <div class="tool-group">
-        <!-- Custom font picker with Thai/Latin classification -->
         <div class="font-picker-wrapper" ref="pickerRef">
           <button class="font-display-btn" @click.stop="togglePicker"
             :style="{ fontFamily: activeObject.fontFamily || 'Sarabun' }">
@@ -14,7 +13,6 @@
             <input v-model="fontSearch" class="font-search" placeholder="ค้นหาฟอนต์..." @input="filterFonts" />
 
             <div class="font-list" ref="fontListRef">
-              <!-- Thai-capable fonts group -->
               <div v-if="filteredThaiFonts.length" class="font-group">
                 <div class="font-group-header thai-header">
                   🇹🇭 รองรับภาษาไทย ({{ filteredThaiFonts.length }})
@@ -27,7 +25,6 @@
                 </div>
               </div>
 
-              <!-- Latin-only fonts group -->
               <div v-if="filteredLatinFonts.length" class="font-group">
                 <div class="font-group-header latin-header">
                   🔤 ภาษาอังกฤษเท่านั้น ({{ filteredLatinFonts.length }})
@@ -131,7 +128,6 @@
 
     <div class="divider"></div>
 
-    <!-- Layer Management Controls -->
     <div class="tool-group">
       <button @click="showLayerControls = !showLayerControls" :class="['icon-btn', { active: showLayerControls }]"
         title="การจัดลำดับชั้น">
@@ -175,15 +171,10 @@ const props = defineProps({
   isPreviewMode: Boolean
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FONT DEFINITIONS
-// Thai-capable: confirmed to have Thai Unicode glyphs (U+0E00–U+0E7F) in TTF
-// All Thai fonts are also available from Google Fonts for canvas web preview
-// Latin-only: no Thai glyphs — user sees warning in PDF about fallback font
-// ─────────────────────────────────────────────────────────────────────────────
+
+
 
 const THAI_FONTS = [
-  // ── Modern / Sans-Serif Thai ────────────────────────────────────────────
   { label: 'Sarabun', value: 'Sarabun' },
   { label: 'Kanit', value: 'Kanit' },
   { label: 'Prompt', value: 'Prompt' },
@@ -194,7 +185,6 @@ const THAI_FONTS = [
   { label: 'Krub', value: 'Krub' },
   { label: 'Niramit', value: 'Niramit' },
   { label: 'Srisakdi', value: 'Srisakdi' },
-  // ── Serif Thai ──────────────────────────────────────────────────────────
   { label: 'Pridi', value: 'Pridi' },
   { label: 'Taviraj', value: 'Taviraj' },
   { label: 'Trirong', value: 'Trirong' },
@@ -202,33 +192,25 @@ const THAI_FONTS = [
   { label: 'Fahkwang', value: 'Fahkwang' },
   { label: 'Pattaya', value: 'Pattaya' },
   { label: 'Thasadith', value: 'Thasadith' },
-  // ── Display / Decorative Thai ───────────────────────────────────────────
   { label: 'Chonburi', value: 'Chonburi' },
   { label: 'Charmonman', value: 'Charmonman' },
   { label: 'Chakra Petch', value: 'Chakra Petch' },
   { label: 'Mali', value: 'Mali' },
   { label: 'Maitree', value: 'Maitree' },
   { label: 'Sriracha', value: 'Sriracha' },
-  // Watone removed: commercial demo font — not available as free TTF, always falls back
-  // ── Noto (Unicode fallback, very complete Thai coverage) ────────────────
   { label: 'Noto Sans Thai', value: 'Noto Sans Thai' },
   { label: 'Noto Serif Thai', value: 'Noto Serif Thai' },
   { label: 'Noto Sans Thai Looped', value: 'Noto Sans Thai Looped' },
-  // ── Multilingual (Thai + Latin ready) ───────────────────────────────────
   { label: 'IBM Plex Thai', value: 'IBM Plex Thai' },
   { label: 'IBM Plex Thai Looped', value: 'IBM Plex Thai Looped' },
   { label: 'Anuphan', value: 'Anuphan' },
-  // Noto Sans → moved to Latin section (Thai glyphs are in "Noto Sans Thai" separately)
 ];
 
+
 const LATIN_FONTS = [
-  // ── Standard PDF Built-in (no download, always safe) ────────────────────
   { label: 'Helvetica / Arial', value: 'Helvetica' },
   { label: 'Times New Roman', value: 'Times New Roman' },
   { label: 'Courier New', value: 'Courier New' },
-  // Noto Sans removed: shows as Sarabun in Acrobat when text contains Thai.
-  // Use "Noto Sans Thai" from the Thai section instead.
-  // ── Popular Google Fonts (Latin/Greek/Cyrillic, no Thai) ──────────────
   { label: 'Roboto', value: 'Roboto' },
   { label: 'Open Sans', value: 'Open Sans' },
   { label: 'Lato', value: 'Lato' },
@@ -249,20 +231,17 @@ const LATIN_FONTS = [
   { label: 'Pacifico', value: 'Pacifico' },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Load Google Fonts for canvas preview using a SINGLE batched request
-// Only subset with display=swap — minimal network cost
-// ─────────────────────────────────────────────────────────────────────────────
-const loadGoogleFontsForPreview = () => {
-  if (document.getElementById('gf-thai-fonts')) return; // already loaded
 
-  // All Thai + web Latin fonts (skip Helvetica/Times/Courier — system/built-in)
+const loadGoogleFontsForPreview = () => {
+  if (document.getElementById('gf-thai-fonts')) return;
+
+
   const allGoogleFonts = [
     ...THAI_FONTS,
     ...LATIN_FONTS.filter(f => !['Helvetica', 'Times New Roman', 'Courier New'].includes(f.value))
   ];
 
-  // Build Google Fonts URL with families batched
+
   const families = allGoogleFonts.map(f => {
     const name = f.value.replace(/\s+/g, '+');
     return `family=${name}:wght@400;700`;
@@ -275,9 +254,7 @@ const loadGoogleFontsForPreview = () => {
   document.head.appendChild(link);
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────────────────────
+
 const activeObject = ref(null);
 const showSpacing = ref(false);
 const showOpacity = ref(false);
@@ -407,14 +384,12 @@ const getHexColor = (color) => {
 const updateProp = (key, value, saveHistory = true) => {
   if (!activeObject.value || !props.canvas) return;
 
-  // ── VALIDATION GUARDS ──────────────────────────────────────────────────────
-  // Prevent setting values that crash Fabric.js cache (NaN or invalid ranges)
-  // Especially critical when users "spam delete" or leave inputs empty.
+
+
   if (key === 'fontSize' && (isNaN(value) || value <= 0 || value > 1000)) return;
   if (key === 'opacity' && (isNaN(value) || value < 0 || value > 1)) return;
   if (key === 'lineHeight' && (isNaN(value) || value <= 0 || value > 10)) return;
   if (key === 'charSpacing' && isNaN(value)) return;
-  // ───────────────────────────────────────────────────────────────────────────
 
   const objs = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects() : [activeObject.value];
 
@@ -472,7 +447,6 @@ const deleteObject = () => {
   }
 };
 
-// Layer Management Methods
 const bringToFront = () => {
   if (!props.canvas || !activeObject.value) return;
   const targets = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects() : [activeObject.value];
@@ -480,10 +454,9 @@ const bringToFront = () => {
     props.canvas.bringToFront(obj);
   });
 
-  // 🟢 ลบ sortCanvasLayers ออก เพื่อไม่ให้มันจัดเรียงทับสิ่งที่เราจัดเอง
 
   props.canvas.requestRenderAll();
-  props.canvas.fire('object:modified'); // 🟢 ยิง Event ไปบอก Sidebar ให้อัปเดต
+  props.canvas.fire('object:modified');
   showLayerControls.value = false;
 };
 
@@ -508,7 +481,6 @@ const sendBackwards = () => {
 
     if (currentIndex > 0) {
       const objBelow = objects[currentIndex - 1];
-      // 🟢 ป้องกันไม่ให้วัตถุถูกย้ายลงไปซ่อนหลังพื้นหลังสีขาว (page-bg)
       if (objBelow.id !== 'page-bg' && objBelow.id !== 'page-bg-image') {
         props.canvas.sendBackwards(obj);
       }
@@ -530,17 +502,15 @@ const sendToBack = () => {
     if (currentIndex <= 0) return;
 
     let targetIndex = currentIndex;
-    // 🟢 ถอยหลังลงไปเรื่อยๆ เพื่อหาพื้นหลัง (Background) ของหน้าปัจจุบัน
     for (let i = currentIndex - 1; i >= 0; i--) {
       if (objects[i].id === 'page-bg' || objects[i].id === 'page-bg-image') {
-        targetIndex = i + 1; // ให้อยู่เหนือ Background 1 ชั้นเสมอ
+        targetIndex = i + 1;
         break;
       } else if (i === 0) {
         targetIndex = 0;
       }
     }
 
-    // ขยับไปชั้นที่ปลอดภัย
     if (targetIndex !== currentIndex) {
       obj.moveTo(targetIndex);
     }
@@ -569,11 +539,9 @@ const updateSelection = () => {
 };
 
 const handleClickOutside = (e) => {
-  // Close font picker
   if (showFontPicker.value && pickerRef.value && !pickerRef.value.contains(e.target)) {
     showFontPicker.value = false;
   }
-  // Close spacing popup
   const spacingPopup = document.querySelector('.spacing-popup');
   const spacingBtn = document.querySelector('button[title="ระยะห่างตัวอักษรและบรรทัด"]');
   if (e.target.type === 'range') return;
@@ -585,7 +553,6 @@ const handleClickOutside = (e) => {
   if (showOpacity.value && opacityPopup && !opacityPopup.contains(e.target) && (!opacityBtn || !opacityBtn.contains(e.target))) {
     showOpacity.value = false;
   }
-  // Close layer controls popup
   const layerPopup = document.querySelector('.layer-popup');
   const layerBtn = document.querySelector('button[title="การจัดลำดับชั้น"]');
   if (showLayerControls.value && layerPopup && !layerPopup.contains(e.target) && (!layerBtn || !layerBtn.contains(e.target))) {
@@ -646,7 +613,6 @@ onUnmounted(() => {
   margin: 0 5px;
 }
 
-/* ── Font picker ── */
 .font-picker-wrapper {
   position: relative;
 }
@@ -793,7 +759,6 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-/* ── Other controls ── */
 .size-input {
   width: 70px;
   border: 1px solid transparent;
@@ -906,7 +871,6 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-/* ── Layer controls ── */
 .layer-btn {
   width: 100%;
   padding: 8px 12px;

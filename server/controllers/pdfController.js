@@ -7,48 +7,125 @@ const { asyncHandler } = require('../utils/errorHandler');
 const prisma = require('../prismaClient');
 const axios = require('axios');
 
+const convertGDriveUrl = (url) => {
+    if (!url || typeof url !== 'string') return url;
+    const fileIdMatch = url.match(/\/file\/d\/([^/]+)/)
+        || url.match(/[?&]id=([^&]+)/);
+    if (fileIdMatch && fileIdMatch[1]) {
+        return `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+    }
+    return url;
+};
+
 const importPdfUrl = async (req, res) => {
     try {
         const { url } = req.body;
-        if (!url) return res.status(400).json({ error: 'กรุณาระบุ URL' });
+        if (!url) return res.status(400).json({ error: 'URL is required' });
 
-        // 1. เช็คในตาราง PdfCache ว่าเคยโหลดลิงก์นี้หรือยัง
-        let cachedPdf = await prisma.pdfCache.findUnique({
-            where: { originalUrl: url }
+        let cachedPdf = await prisma.pdfCache.findFirst({
+            where: { OriginalUrlorPath: url }
         });
 
-        // ถ้ายังไม่เคยโหลด ให้ไปโหลดแล้วเซฟลง DB
         if (!cachedPdf) {
-            const response = await axios.get(url, { responseType: 'arraybuffer' });
-            const buffer = Buffer.from(response.data, 'binary');
+            const downloadUrl = convertGDriveUrl(url);
 
-            const fileName = `import_${Date.now()}.pdf`;
+            const response = await axios.get(downloadUrl, { responseType: 'stream' });
+
+            let exactName = `GDrive_Document_${Date.now()}.pdf`;
+            const contentDisposition = response.headers['content-disposition'];
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (match && match[1]) exactName = decodeURIComponent(match[1]);
+            } else {
+                const urlName = path.basename(new URL(downloadUrl).pathname);
+                if (urlName && urlName !== 'uc' && urlName !== 'download') exactName = urlName;
+            }
+
             const uploadDir = path.join(__dirname, '../uploads/cache');
-
             if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-            fs.writeFileSync(path.join(uploadDir, fileName), buffer);
+
+            const destPath = path.join(uploadDir, exactName);
+
+            const writer = fs.createWriteStream(destPath);
+            response.data.pipe(writer);
+
+            await new Promise((resolve, reject) => {
+                writer.on('finish', resolve);
+                writer.on('error', reject);
+            });
 
             cachedPdf = await prisma.pdfCache.create({
                 data: {
-                    originalUrl: url,
-                    filepath: `/uploads/cache/${fileName}`
+                    FileName: exactName,
+                    OriginalUrlorPath: url,
+                    FilePath: `/uploads/cache/${exactName}`,
+                    OriginalFile: true,
+                    EditedFile: false
                 }
             });
         }
 
-        // ส่ง path กลับไปให้หน้าบ้านดึงไฟล์
-        res.status(200).json({ filepath: cachedPdf.filepath });
+        res.status(200).json({ ...cachedPdf, id: cachedPdf.OriginalFileId, fileId: cachedPdf.OriginalFileId, filepath: cachedPdf.FilePath });
 
     } catch (error) {
         console.error('URL Import Error:', error.message);
-        res.status(500).json({ error: 'ไม่สามารถโหลดไฟล์จากลิงก์นี้ได้' });
+        res.status(500).json({ error: 'Failed to import file from URL' });
     }
 };
 
-// Enhanced logging utility
+const autoImportUniversal = async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) return res.status(400).json({ error: 'URL is required' });
+
+        const downloadUrl = convertGDriveUrl(url);
+
+        const response = await axios.get(downloadUrl, { responseType: 'stream' });
+
+        let exactName = `GDrive_Document_${Date.now()}.pdf`;
+        const contentDisposition = response.headers['content-disposition'];
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename="?([^"]+)"?/);
+            if (match && match[1]) exactName = decodeURIComponent(match[1]);
+        } else {
+            const urlName = path.basename(new URL(downloadUrl).pathname);
+            if (urlName && urlName !== 'uc' && urlName !== 'download') exactName = urlName;
+        }
+
+        const uploadDir = path.join(__dirname, '../uploads/cache');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+        const destPath = path.join(uploadDir, exactName);
+
+        const writer = fs.createWriteStream(destPath);
+        response.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+
+        const cachedPdf = await prisma.pdfCache.create({
+            data: {
+                FileName: exactName,
+                OriginalUrlorPath: url,
+                FilePath: `/uploads/cache/${exactName}`,
+                OriginalFile: true,
+                EditedFile: false
+            }
+        });
+
+        res.status(200).json({ ...cachedPdf, id: cachedPdf.OriginalFileId, fileId: cachedPdf.OriginalFileId, filepath: cachedPdf.FilePath });
+
+    } catch (error) {
+        console.error('Auto Import Error:', error.message);
+        res.status(500).json({ error: 'Failed to auto-import file' });
+    }
+};
+
 const logger = {
     info: (message, ...args) => {
-        console.log(`[PDF] ${new Date().toISOString()} - ${message}`, ...args);
+        console.info(`[PDF] ${new Date().toISOString()} - ${message}`, ...args);
     },
     error: (message, error) => {
         console.error(`[PDF ERROR] ${new Date().toISOString()} - ${message}`);
@@ -63,67 +140,44 @@ const logger = {
         console.warn(`[PDF WARN] ${new Date().toISOString()} - ${message}`, ...args);
     },
     success: (message, ...args) => {
-        console.log(`✅ [PDF] ${new Date().toISOString()} - ${message}`, ...args);
+        console.info(`[PDF] ${new Date().toISOString()} - ${message}`, ...args);
     }
 };
 
-// Ensure this multer configuration exists:
 const storage = multer.diskStorage({
     destination: function (req, file, cb) { cb(null, 'uploads/cache/'); },
-    filename: function (req, file, cb) { cb(null, 'pdf_' + Date.now() + path.extname(file.originalname)); }
+    filename: function (req, file, cb) { cb(null, file.originalname); }
 });
 const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
-// 1. Check PDF Type & Metadata (Smart Import)
 const checkPdfType = asyncHandler(async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file' });
 
-        // // Save file to database as asset
-        // const asset = await prisma.asset.create({
-        //     data: {
-        //         filename: req.file.originalname,
-        //         mimetype: req.file.mimetype,
-        //         data: req.file.buffer
-        //     }
-        // });
-
-        // const fileUrl = `${req.protocol}://${req.get('host')}/api/assets/${asset.id}`;
-
-        // Load PDF from buffer to check metadata
         const existingPdfBytes = req.file.buffer || require('fs').readFileSync(req.file.path);
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
 
-        // --- Safe Metadata Reading ---
-        // pdf-lib's getSubject() crashes on large strings due to stack overflow in recursive decoder.
-        // We implement a direct Buffer-based read here.
         let subject = null;
         let keywords = null;
 
         try {
             const { PDFName, PDFString, PDFHexString } = require('pdf-lib');
 
-            // Access Info Dictionary safely
             const infoDict = pdfDoc.context.lookup(pdfDoc.context.trailerInfo.Info);
 
             const decodePdfString = (pdfStr) => {
                 if (!pdfStr) return null;
                 const bytes = pdfStr.asBytes();
                 if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
-                    // UTF-16BE
                     return Buffer.from(bytes.slice(2)).toString('utf16le')
-                        .split('').map((c, i, a) => i % 2 === 0 ? a[i + 1] + c : '').join(''); // Manual swap if needed or just use proper decoding
+                        .split('').map((c, i, a) => i % 2 === 0 ? a[i + 1] + c : '').join('');
                 }
-                // Fallback to UTF-8 or PDFDocEncoding (treated as Latin1/UTF-8 for most cases here)
                 return Buffer.from(bytes).toString('utf-8');
             };
 
-            // Improved UTF-16BE Decoder for Buffer
             const decodeBuffer = (buf) => {
                 if (!buf || buf.length < 2) return buf?.toString('utf-8') || null;
                 if (buf[0] === 0xFE && buf[1] === 0xFF) {
-                    // PDF UTF-16BE strings start with FE FF
-                    // We need to swap bytes for Node's utf16le or use swap16()
                     const content = Buffer.from(buf.slice(2));
                     content.swap16();
                     return content.toString('utf16le');
@@ -132,13 +186,11 @@ const checkPdfType = asyncHandler(async (req, res) => {
             };
 
             if (infoDict) {
-                // 1. Safe Subject Read
                 const subjectEntry = infoDict.get(PDFName.of('Subject'));
                 if (subjectEntry instanceof PDFString || subjectEntry instanceof PDFHexString) {
                     subject = decodeBuffer(Buffer.from(subjectEntry.asBytes()));
                 }
 
-                // 2. Safe Keywords Read
                 const keywordsEntry = infoDict.get(PDFName.of('Keywords'));
                 if (keywordsEntry instanceof PDFString || keywordsEntry instanceof PDFHexString) {
                     keywords = decodeBuffer(Buffer.from(keywordsEntry.asBytes()));
@@ -146,7 +198,6 @@ const checkPdfType = asyncHandler(async (req, res) => {
             }
         } catch (unsafeErr) {
             logger.warn('Safe metadata read failed, falling back to standard', unsafeErr);
-            // Fallback (Might crash if too large)
             subject = pdfDoc.getSubject();
             keywords = pdfDoc.getKeywords();
         }
@@ -155,9 +206,7 @@ const checkPdfType = asyncHandler(async (req, res) => {
         let foundType = null;
         let embeddedLayout = null;
 
-        // 1. แกะ ID และ Type จาก Keywords
         if (keywords) {
-            // pdf-lib returns array for getKeywords(), but our safe read returns string. Handle both.
             const keywordString = Array.isArray(keywords) ? keywords.join(' ') : keywords;
             logger.info(`Checking PDF metadata: ${keywordString.substring(0, 100)}...`);
 
@@ -167,7 +216,6 @@ const checkPdfType = asyncHandler(async (req, res) => {
             const typeMatch = keywordString.match(/dynamic-type:(\S+)/);
             if (typeMatch) foundType = typeMatch[1];
 
-            // Legacy Support
             if (!foundId) {
                 const legacyMatch = keywordString.match(/dynamic-report-id:(\S+)/);
                 if (legacyMatch) {
@@ -177,10 +225,8 @@ const checkPdfType = asyncHandler(async (req, res) => {
             }
         }
 
-        // 2. แกะ Layout JSON จาก Subject (ถ้ามี)
         if (subject && subject.startsWith('layout:')) {
             try {
-                // ตัดคำว่า 'layout:' ออก แล้ว Decode Base64
                 const base64Str = subject.substring(7);
                 const jsonStr = Buffer.from(base64Str, 'base64').toString('utf-8');
                 embeddedLayout = JSON.parse(jsonStr);
@@ -203,7 +249,6 @@ const checkPdfType = asyncHandler(async (req, res) => {
     }
 });
 
-// 2. Upload Normal Background / Asset
 const uploadBackground = asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -222,7 +267,6 @@ const uploadBackground = asyncHandler(async (req, res) => {
     res.json({ url: fileUrl, id: asset.id });
 });
 
-// GET Asset from DB
 const getAssetFromDb = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const asset = await prisma.asset.findUnique({
@@ -239,10 +283,9 @@ const getAssetFromDb = asyncHandler(async (req, res) => {
         'Access-Control-Allow-Origin': '*',
         'Cross-Origin-Resource-Policy': 'cross-origin'
     });
-    res.end(asset.data); // Use res.end for raw binary buffer
+    res.end(asset.data);
 });
 
-// GET All Assets Metadata
 const getAllAssets = asyncHandler(async (req, res) => {
     const assets = await prisma.asset.findMany({
         select: {
@@ -264,11 +307,9 @@ const getAllAssets = asyncHandler(async (req, res) => {
     res.json(formattedAssets);
 });
 
-// DELETE Asset from DB
 const deleteAssetFromDb = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    // Check if it exists
     const existingAsset = await prisma.asset.findUnique({ where: { id } });
     if (!existingAsset) {
         return res.status(404).json({ error: 'Asset not found' });
@@ -281,14 +322,12 @@ const deleteAssetFromDb = asyncHandler(async (req, res) => {
     res.json({ message: 'Asset deleted successfully' });
 });
 
-// 3. Generate PDF (Embed ID, Type & Layout Data)
 const generatePDF = asyncHandler(async (req, res) => {
     logger.info('Starting PDF generation...');
     const startTime = Date.now();
     let browser = null;
 
     try {
-        // [UPDATED] รับ pagesData มาด้วย
         const { canvasImages, recordId, recordType, pagesData } = req.body;
 
         if (!canvasImages || !Array.isArray(canvasImages) || canvasImages.length === 0) {
@@ -315,9 +354,6 @@ const generatePDF = asyncHandler(async (req, res) => {
                 <link rel="preconnect" href="https://fonts.googleapis.com">
                 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
                 <style>
-                    /* FONT CONSISTENCY FIX: Use Sarabun as default fallback — same as the Hybrid PDF
-                       client path (useEditablePdf.js). This ensures both export buttons produce the
-                       same visual result when the user-selected font cannot be loaded. */
                     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
                     body, html {
                         margin: 0;
@@ -340,7 +376,6 @@ const generatePDF = asyncHandler(async (req, res) => {
             </html>
         `;
 
-
         await page.setContent(htmlContent);
         await page.setViewport({ width: A4_WIDTH_PX, height: totalHeight });
 
@@ -350,11 +385,9 @@ const generatePDF = asyncHandler(async (req, res) => {
             height: `${A4_HEIGHT_PX}px`
         });
 
-        // [UPDATED] Embed Metadata logic
         try {
             const pdfDoc = await PDFDocument.load(pdfBuffer);
 
-            // 1. Set ID & Type in Keywords
             const typeToEmbed = recordType || 'report';
             const keywords = [];
             if (recordId) keywords.push(`dynamic-id:${recordId}`);
@@ -362,23 +395,17 @@ const generatePDF = asyncHandler(async (req, res) => {
 
             pdfDoc.setKeywords(keywords);
 
-            // 2. Set Layout Data in Subject (Encode to Base64)
-            // BUG-020 fix: guard against large projects exceeding PDF Subject field limits.
-            // If the JSON is too big (> 50KB), embedding will produce a corrupt/truncated
-            // Subject field in some readers. Skip embedding and log a warning.
             if (pagesData) {
                 const jsonStr = JSON.stringify(pagesData);
-                const MAX_METADATA_BYTES = 50 * 1024; // 50 KB
+                const MAX_METADATA_BYTES = 50 * 1024;
                 if (Buffer.byteLength(jsonStr, 'utf-8') > MAX_METADATA_BYTES) {
                     logger.warn(`Layout data too large to embed (${Math.round(Buffer.byteLength(jsonStr, 'utf-8') / 1024)}KB > 50KB). Metadata will be omitted.`);
                 } else {
-                    // แปลงเป็น Base64 เพื่อรองรับภาษาไทยและอักขระพิเศษ
                     const base64Str = Buffer.from(jsonStr, 'utf-8').toString('base64');
                     pdfDoc.setSubject(`layout:${base64Str}`);
                     logger.info('Embedded full layout data into PDF metadata');
                 }
             }
-
 
             pdfDoc.setProducer('Dynamic Report Creator');
             pdfDoc.setCreator('Dynamic Report Creator System');
@@ -401,8 +428,8 @@ const generatePDF = asyncHandler(async (req, res) => {
         res.send(pdfBuffer);
     } catch (error) {
         const duration = Date.now() - startTime;
-        logger.error(`❌ PDF FAILED (${duration}ms):`, error);
-        throw error; // Rethrow to let global handler catch it
+        logger.error(`PDF FAILED (${duration}ms):`, error);
+        throw error;
     } finally {
         if (browser) {
             try {
@@ -415,35 +442,152 @@ const generatePDF = asyncHandler(async (req, res) => {
     }
 });
 
-// Ensure uploadPdf is defined:
 const uploadPdf = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
         const filepath = `/uploads/cache/${req.file.filename}`;
-        
+
         const savedPdf = await prisma.pdfCache.create({
             data: {
-                originalUrl: req.file.originalname,
-                filepath: filepath
-                // Removed 'source' to match the Prisma schema
+                FileName: req.file.originalname,
+                OriginalUrlorPath: req.file.originalname,
+                FilePath: filepath,
+                OriginalFile: true,
+                EditedFile: false
             }
         });
-        res.status(201).json(savedPdf);
+        res.status(201).json({ ...savedPdf, id: savedPdf.OriginalFileId, filepath: savedPdf.FilePath });
     } catch (error) {
         console.error("Upload DB Error:", error);
         res.status(500).json({ error: 'Failed to upload PDF' });
     }
 };
 
-// Ensure getPdfById is defined:
 const getPdfById = async (req, res) => {
     const { id } = req.params;
-    const pdf = await prisma.pdfCache.findUnique({ where: { id } });
+    const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
     if (!pdf) return res.status(404).json({ error: 'PDF not found' });
-    res.json(pdf);
+    res.json({ ...pdf, id: pdf.OriginalFileId, filepath: pdf.FilePath, originalUrl: pdf.OriginalUrlorPath });
 };
 
-// CRITICAL: Ensure ALL of them are exported at the end of the file!
+const deletePdf = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const record = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
+        if (!record) return res.status(404).json({ error: 'PDF not found' });
+
+        if (record.FilePath) {
+            const absPath = path.join(__dirname, '..', record.FilePath);
+            try { fs.unlinkSync(absPath); } catch (e) {
+                console.warn(`[deletePdf] Could not unlink FilePath ${absPath}:`, e.message);
+            }
+        }
+        if (record.EditedFilePath) {
+            const editedAbsPath = path.join(__dirname, '..', record.EditedFilePath);
+            try { fs.unlinkSync(editedAbsPath); } catch (e) {
+                console.warn(`[deletePdf] Could not unlink EditedFilePath ${editedAbsPath}:`, e.message);
+            }
+        }
+
+        await prisma.pdfCache.delete({ where: { OriginalFileId: id } });
+        res.json({ message: 'PDF deleted successfully', id });
+    } catch (error) {
+        console.error('Delete PDF Error:', error.message);
+        res.status(500).json({ error: 'Failed to delete PDF' });
+    }
+};
+
+const savePdfState = async (req, res) => {
+    try {
+        const { OriginalFileId, editState } = req.body;
+        if (!OriginalFileId || !editState) {
+            return res.status(400).json({ error: 'Missing OriginalFileId or editState' });
+        }
+
+        const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId } });
+        if (!pdf) return res.status(404).json({ error: 'PDF not found' });
+
+        let newEditedPath = pdf.EditedFilePath;
+
+        if (!pdf.EditedFile) {
+            const originalAbsPath = path.join(__dirname, '..', pdf.FilePath);
+            const editedFileName = `edited_${Date.now()}_${pdf.FileName}`;
+            newEditedPath = `/uploads/cache/${editedFileName}`;
+            const newAbsPath = path.join(__dirname, '..', newEditedPath);
+
+            try {
+                fs.copyFileSync(originalAbsPath, newAbsPath);
+            } catch (e) {
+                console.error('Failed to copy physical file:', e);
+                return res.status(500).json({ error: 'Failed to create physical copy' });
+            }
+        }
+
+        let parsedState = editState;
+        while (typeof parsedState === 'string') {
+            try {
+                parsedState = JSON.parse(parsedState);
+            } catch (e) {
+                break;
+            }
+        }
+
+        const updatedPdf = await prisma.pdfCache.update({
+            where: { OriginalFileId },
+            data: {
+                EditedFile: true,
+                EditedFilePath: newEditedPath,
+                editState: parsedState
+            }
+        });
+
+        res.json({ message: 'State saved successfully', id: updatedPdf.OriginalFileId, filepath: updatedPdf.EditedFilePath });
+
+    } catch (error) {
+        console.error('Save PDF State Error:', error);
+        res.status(500).json({ error: 'Failed to save PDF state' });
+    }
+};
+
+const importLocalPath = async (req, res) => {
+    try {
+        let { localPath } = req.body;
+        if (!localPath) return res.status(400).json({ error: 'File path is required' });
+
+        localPath = localPath.replace(/^["']|["']$/g, '');
+
+        if (!fs.existsSync(localPath)) {
+            return res.status(404).json({ error: 'File not found: ' + localPath });
+        }
+
+        const fileName = `local_${Date.now()}_${path.basename(localPath)}`;
+        const uploadDir = path.join(__dirname, '../uploads/cache');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+        const newPhysicalPath = path.join(uploadDir, fileName);
+        fs.copyFileSync(localPath, newPhysicalPath);
+
+        const cachedPdf = await prisma.pdfCache.create({
+            data: {
+                OriginalUrlorPath: localPath,
+                FileName: path.basename(localPath),
+                FilePath: `/uploads/cache/${fileName}`,
+                OriginalFile: true,
+                EditedFile: false
+            }
+        });
+
+        res.status(200).json({
+            ...cachedPdf,
+            filepath: cachedPdf.FilePath,
+            id: cachedPdf.OriginalFileId
+        });
+    } catch (error) {
+        console.error('Local Import Error:', error);
+        res.status(500).json({ error: 'Failed to import local file' });
+    }
+};
+
 module.exports = {
     upload,
     uploadBackground,
@@ -453,6 +597,10 @@ module.exports = {
     getAllAssets,
     deleteAssetFromDb,
     importPdfUrl,
+    autoImportUniversal,
+    deletePdf,
     uploadPdf,
-    getPdfById
+    getPdfById,
+    savePdfState,
+    importLocalPath
 };

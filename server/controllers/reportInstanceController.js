@@ -1,22 +1,17 @@
-// BUG-005 fix: all handlers wrapped with asyncHandler to prevent unhandled promise rejections
-// BUG-019 fix: use shared prismaClient instead of creating new PrismaClient per-controller
 const prisma = require('../prismaClient');
 const { asyncHandler } = require('../utils/errorHandler');
 const { saveValidTextContent, deleteTextFile } = require('../utils/textSaver');
 
-// Save or Create Report Instance
 const saveReport = asyncHandler(async (req, res) => {
-    const { id, name, pages, templateId, status, projectData, filePath } = req.body;
+    const { id, name, pages, templateId, status, projectData, filePath, data, pdfUrl } = req.body;
 
     let report;
 
-    // Extract data from projectData if available
     const finalName = name || (projectData?.name) || 'Untitled Report';
     const finalPages = pages || (projectData?.pages) || [];
     const finalTemplateId = templateId || (projectData?.templateId) || null;
 
     if (id) {
-        // === CASE 1: มี ID ส่งมา = UPDATE งานเดิม ===
         const existing = await prisma.reportInstance.findUnique({ where: { id } });
 
         if (existing) {
@@ -27,6 +22,8 @@ const saveReport = asyncHandler(async (req, res) => {
                     pages: finalPages,
                     templateId: finalTemplateId,
                     status: status || 'DRAFT',
+                    data: data || undefined,
+                    pdfUrl: pdfUrl || undefined,
                     updatedAt: new Date()
                 }
             });
@@ -37,18 +34,21 @@ const saveReport = asyncHandler(async (req, res) => {
                     name: finalName,
                     pages: finalPages,
                     templateId: finalTemplateId,
-                    status: 'DRAFT'
+                    status: 'DRAFT',
+                    data: data || undefined,
+                    pdfUrl: pdfUrl || undefined
                 }
             });
         }
     } else {
-        // === CASE 2: ไม่มี ID ส่งมา = CREATE งานใหม่ ===
         report = await prisma.reportInstance.create({
             data: {
                 name: finalName,
                 pages: finalPages,
                 templateId: finalTemplateId,
-                status: 'DRAFT'
+                status: 'DRAFT',
+                data: data || undefined,
+                pdfUrl: pdfUrl || undefined
             }
         });
     }
@@ -65,7 +65,6 @@ const saveReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
-// Get Report by ID
 const getReportById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -86,7 +85,6 @@ const getReportById = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
-// Get All Reports
 const getAllReports = asyncHandler(async (req, res) => {
     const reports = await prisma.reportInstance.findMany({
         orderBy: { updatedAt: 'desc' },
@@ -99,7 +97,6 @@ const getAllReports = asyncHandler(async (req, res) => {
     res.json(reports);
 });
 
-// Delete Report
 const deleteReport = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -109,11 +106,28 @@ const deleteReport = asyncHandler(async (req, res) => {
         throw new Error('Report not found');
     }
 
-    console.log(`[ReportController] Deleting report: ${id}, Name: ${existing.name}`);
+    const fs = require('fs');
+    const pathMod = require('path');
+
+    if (existing.pdfUrl) {
+        const pdfAbsPath = pathMod.join(__dirname, '..', existing.pdfUrl);
+        try {
+            fs.unlinkSync(pdfAbsPath);
+        } catch (e) {
+            console.warn(`[deleteReport] Could not unlink pdfUrl ${pdfAbsPath}:`, e.message);
+        }
+    }
+
+    const safeName = (existing.name || 'Untitled').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const textFilePath = pathMod.join(__dirname, '../uploads/texts/reports', `${safeName}_${id}.txt`);
+    try {
+        fs.unlinkSync(textFilePath);
+    } catch (e) {
+        console.warn(`[deleteReport] Could not unlink text file ${textFilePath}:`, e.message);
+    }
 
     await prisma.reportInstance.delete({ where: { id } });
 
-    console.log(`[ReportController] Triggering text file cleanup...`);
     await deleteTextFile('report', id, existing.name);
 
     res.json({ message: 'Report project deleted successfully', id });

@@ -1,10 +1,6 @@
 import { CANVAS_CONSTANTS } from '../constants/canvas';
 
-/**
- * useEditablePdf.js
- *
- * Hybrid PDF: JPEG background (pixel-perfect) + vector text (Acrobat-editable) + JSON metadata.
- */
+
 export function useEditablePdf() {
     const PDF_W = 595.28;
     const PDF_H = 841.89;
@@ -307,7 +303,6 @@ export function useEditablePdf() {
                     const isText = ['textbox', 'text', 'i-text'].includes(obj.type);
                     const isImage = obj.type === 'image';
 
-                    // 📌 ถ้ายูสเซอร์เลือกโหมด Flatten เราจะข้าม Text กับ Image ไปเลย (เพราะฝังลงฉากหลังไปแล้ว)
                     if (pdfMode === 'flatten' && (isText || isImage)) {
                         continue;
                     }
@@ -360,8 +355,6 @@ export function useEditablePdf() {
 
                         const textColor = parseColor(obj.fill);
 
-                        // Vector mode: drawText with full font embedding (subset: false)
-                        // so Acrobat's "Edit PDF" tool can modify the text
                         const lineHeight = fontSize * (obj.lineHeight || 1.16);
                         const textLines = textContent.split('\n');
                         let currentY = pdfY + (h * SCALE) - fontSize * 0.85;
@@ -385,7 +378,6 @@ export function useEditablePdf() {
                                     rotate: degrees(-obj.angle || 0)
                                 });
                             } catch (e) {
-                                // Font encoding failed — fallback to Sarabun
                                 try {
                                     const fb = await loadFont('Sarabun', weight, style);
                                     pdfPage.drawText(line, { x: lineX, y: currentY, size: fontSize, font: fb, color: textColor });

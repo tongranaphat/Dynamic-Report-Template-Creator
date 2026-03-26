@@ -1,9 +1,7 @@
-// server/routes/healthRoutes.js
 const express = require('express');
 const router = express.Router();
 const { asyncHandler } = require('../utils/errorHandler');
 
-// Health check endpoint
 router.get(
     '/health',
     asyncHandler(async (req, res) => {
@@ -16,7 +14,6 @@ router.get(
             version: process.version
         };
 
-        // Test database connection
         try {
             const { PrismaClient } = require('@prisma/client');
             const prisma = new PrismaClient();
@@ -33,7 +30,6 @@ router.get(
     })
 );
 
-// Detailed system info endpoint
 router.get(
     '/info',
     asyncHandler(async (req, res) => {

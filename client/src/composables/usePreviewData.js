@@ -1,7 +1,6 @@
 import { ref } from 'vue';
 
 export function usePreviewData() {
-  // Mock data สำหรับ preview mode - สามารถแก้ไจาก props หรือ API ได้ในอนาคต
   const defaultMockData = {
     school_name: 'โรงเรียนเวทย์มนตร์',
     school_year: '2580',
@@ -14,7 +13,6 @@ export function usePreviewData() {
     date: new Date().toLocaleDateString('th-TH')
   };
 
-  // อนุญาตให้ override mock data จากภายนอก
   const customMockData = ref({});
 
   const getMockData = () => {

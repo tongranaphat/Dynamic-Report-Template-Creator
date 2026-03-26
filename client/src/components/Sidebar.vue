@@ -175,7 +175,6 @@
 
         </div>
 
-        <!-- แท็บเลเยอร์ (ใหม่) -->
         <div v-if="activeTab === 'layers'" class="tab-pane-layers"
           style="display: flex; flex-direction: column; align-items: center; padding-top: 15px;">
           <div class="layers-section" style="width: 298px;">
@@ -355,11 +354,9 @@ const handleMouseLeave = () => {
 
 const handleTabClick = (tabId) => {
   if (isPinned.value && activeTab.value === tabId) {
-    // Already pinned on this tab, so close it
     isPinned.value = false;
     emit('close');
   } else {
-    // Pin it or switch pin
     activeTab.value = tabId;
     isPinned.value = true;
     emit('open');
@@ -393,7 +390,6 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  // Page Props
   pages: {
     type: Array,
     default: () => []
@@ -421,7 +417,6 @@ const emit = defineEmits([
   'close',
   'select-layer',
   'import-url',
-  // Page Emits
   'delete-page',
   'page-click',
   'page-drop',
@@ -489,14 +484,12 @@ const onContainerDragStart = (e, block) => {
     .substring(0, 50);
 };
 
-// 📌 เมื่อกดปุ่มเฉยๆ (คลิก) ให้ไปเกิดที่พิกัดซ้ายบน (50, 50)
 const handleAddCustomText = () => {
   if (window.addCustomTextToCanvas) {
     window.addCustomTextToCanvas(50, 50);
   }
 };
 
-// 📌 เมื่อผู้ใช้ "ลาก" ปุ่ม (Drag & Drop)
 const onCustomTextDragStart = (e) => {
   e.dataTransfer.setData('customText', 'true');
   e.dataTransfer.effectAllowed = 'copy';
@@ -512,7 +505,6 @@ export default {
 </script>
 
 <style scoped>
-/* ── Layout หลัก ── */
 .sidebar-container {
   position: absolute;
   left: 0;
@@ -524,7 +516,6 @@ export default {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── 1. Vertical Rail ── */
 .sidebar-rail {
   width: 85px;
   height: 100%;
@@ -617,7 +608,6 @@ export default {
   color: #F65189;
 }
 
-/* ── 2. Sliding Panel ── */
 .sidebar-panel {
   width: 329px;
   height: 100%;
@@ -691,7 +681,6 @@ export default {
   padding: 0px 0;
 }
 
-/* ── ส่วนกล่อง Footer ด้านล่างสุด ── */
 .panel-footer {
   width: 100%;
   background: #FFFFFF;
@@ -701,9 +690,6 @@ export default {
   z-index: 10;
 }
 
-/* ========================================================================= */
-/* ── ส่วนของแท็บ "จัดการหน้ากระดาษ" ── */
-/* ========================================================================= */
 .tab-pane-pages {
   display: flex;
   flex-direction: column;
@@ -856,9 +842,6 @@ export default {
   border-bottom: 3px solid #F65189;
 }
 
-/* ========================================================================= */
-/* ── ส่วนของแท็บ "เทมเพลต" ── */
-/* ========================================================================= */
 .tab-pane-templates {
   display: flex;
   flex-direction: column;
@@ -1057,28 +1040,21 @@ export default {
   background-size: contain;
 }
 
-/* ========================================================================= */
-/* ── ส่วนของแท็บ "ข้อมูล" (ดีไซน์ใหม่) ── */
-/* ========================================================================= */
 
 .tab-pane-data {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding-top: 15px;
-  /* 📌 ตั้งระยะห่างจากขอบบนสุดให้เท่ากัน */
 }
 
 .data-section {
   width: 298px;
 }
 
-/* 📌 1. และ 2. จัดการระยะห่างและเส้นคั่นของหมวดหมู่แรก */
 .data-section:first-child {
   padding-bottom: 18px;
-  /* เพิ่มระยะระหว่างปุ่มข้อความอิสระ กับเส้นคั่นล่าง */
   margin-bottom: 15px;
-  /* ให้คำว่า "เลือกชุดข้อมูล" ห่างจากเส้นเท่ากับ padding-top ด้านบนสุด */
   border-bottom: 1px solid #F3F3F3;
 }
 
@@ -1125,16 +1101,11 @@ export default {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 📌 4. Hover ปุ่ม ให้สีเป็นเหมือนเดิม แต่ลอยขึ้นนิดหน่อย + มีเงาให้ดูมีมิติ */
 .var-btn:hover:not(:disabled) {
   background: #FFF9FB 0% 0% no-repeat padding-box;
-  /* ล็อคสีเดิม */
   border: 1px solid #FFD5E3;
-  /* ล็อคสีขอบเดิม */
   transform: translateY(-2px);
-  /* ลอยขึ้น 2px */
   box-shadow: 0 4px 6px rgba(246, 81, 137, 0.06);
-  /* เพิ่มเงาสีชมพูอ่อนๆ ให้ดูเหมือนลอยอยู่จริงๆ */
 }
 
 .var-btn-icon-holder {
@@ -1163,9 +1134,6 @@ export default {
   text-overflow: ellipsis;
 }
 
-/* ========================================================================= */
-/* ── CSS ของเดิมสำหรับ Tab Assets และ Project ── */
-/* ========================================================================= */
 .tab-pane {
   display: flex;
   flex-direction: column;
@@ -1305,7 +1273,6 @@ select {
   background: #fff;
 }
 
-/* ── Hover Effects ── */
 .template-save-btn:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-1px);
@@ -1338,7 +1305,6 @@ select {
   color: white;
 }
 
-/* ── ไอคอนสำหรับแท็บรูปภาพ (Assets) ── */
 .icon-image {
   background-image: url('../assets/icons/image.png');
 }
@@ -1351,9 +1317,6 @@ select {
   background-image: url('../assets/icons/image-active.png');
 }
 
-/* ========================================================================= */
-/* ── ส่วนของแท็บ "จัดการโปรเจกต์" (ดีไซน์ใหม่) ── */
-/* ========================================================================= */
 
 .tab-pane-project {
   display: flex;
@@ -1370,7 +1333,6 @@ select {
   margin-bottom: 20px;
 }
 
-/* ── 1. ปุ่มนำเข้าโปรเจกต์ (เส้นประปรับแต่งเอง) ── */
 .btn-upload-dashed {
   width: 298px;
   height: 46px;
@@ -1432,7 +1394,6 @@ select {
   margin: 6px 0 0 0;
 }
 
-/* ── 2. ปุ่มบันทึกโปรเจกต์ (สีชมพู) ── */
 .btn-project-save {
   width: 298px;
   height: 46px;
@@ -1453,11 +1414,9 @@ select {
 
 .btn-project-save-text {
   font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 16/21 * 1.15 */
   color: #FFFFFF;
 }
 
-/* ── เส้นคั่นบางๆ ── */
 .divider-line {
   width: 298px;
   height: 1px;
@@ -1465,19 +1424,15 @@ select {
   margin-bottom: 25px;
 }
 
-/* ── 3. กลุ่มตัวเลือก (Radio Cards) สำหรับ Quality และ Engine ── */
 .radio-group-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  /* ระยะห่างระหว่างแต่ละกล่อง */
 }
 
 .radio-card {
   width: 298px;
-  /* 📌 259 * 1.15 */
   height: 62px;
-  /* 📌 54 * 1.15 */
   background: #FFFFFF 0% 0% no-repeat padding-box;
   border: 1px solid #E3E3E3;
   border-radius: 6px;
@@ -1489,7 +1444,6 @@ select {
   box-sizing: border-box;
 }
 
-/* 📌 เพิ่ม Hover และอนิเมชันให้การ์ด */
 .radio-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
@@ -1497,21 +1451,16 @@ select {
 
 .radio-card:hover:not(.active) {
   border-color: #FFD5E3;
-  /* ตอน hover ให้ขอบแอบเป็นสีชมพูอ่อนๆ */
 }
 
-/* 📌 สถานะเมื่อถูกเลือก (Active) */
 .radio-card.active {
   background: #FFF9FB 0% 0% no-repeat padding-box;
   border: 1px solid #FFD5E3;
 }
 
-/* วงกลม Radio ด้านซ้าย */
 .radio-circle {
   width: 20px;
-  /* 📌 17 * 1.15 */
   height: 20px;
-  /* 📌 17 * 1.15 */
   background: #FFFFFF 0% 0% no-repeat padding-box;
   border: 1px solid #E3E3E3;
   border-radius: 50%;
@@ -1526,16 +1475,13 @@ select {
   border: 1px solid #F65189;
 }
 
-/* จุดสีชมพูตรงกลางเมื่อถูกเลือก */
 .radio-inner {
   width: 12px;
-  /* 📌 11 * 1.15 */
   height: 12px;
   background: #F65189 0% 0% no-repeat padding-box;
   border-radius: 50%;
 }
 
-/* พื้นที่ตัวหนังสือ 2 บรรทัด */
 .radio-text-content {
   flex: 1;
   display: flex;
@@ -1546,7 +1492,6 @@ select {
 .radio-title {
   text-align: left;
   font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 18/24 * 1.15 */
   color: #000000;
   line-height: 1;
   margin-bottom: 2px;
@@ -1555,26 +1500,20 @@ select {
 .radio-subtitle {
   text-align: left;
   font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 16/21 * 1.15 */
   color: #4D4D4D;
   line-height: 1;
 }
 
-/* 📌 ป้ายบอกตัวคูณ (1x, 2x, etc.) */
 .radio-badge {
   width: 48px;
-  /* 📌 42 * 1.15 */
   height: 24px;
-  /* 📌 21 * 1.15 */
   background: #ECECEC 0% 0% no-repeat padding-box;
   border-radius: 12px;
-  /* 📌 11 * 1.15 */
   display: flex;
   align-items: center;
   justify-content: center;
 
   font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  /* 📌 16/21 * 1.15 */
   color: #4D4D4D;
 }
 
@@ -1583,11 +1522,9 @@ select {
   color: #F65189;
 }
 
-/* ── 4. ปุ่มส่งออก PDF (กรอบชมพู พื้นขาว) ── */
 .btn-print-outline {
   width: 298px;
   height: 46px;
-  /* 📌 40 * 1.15 */
   background: #FFFFFF 0% 0% no-repeat padding-box;
   border: 1px solid #F65189;
   border-radius: 6px;
@@ -1629,7 +1566,6 @@ select {
   background-image: url('../assets/icons/project-active.png');
 }
 
-/* ── CSS สำหรับแท็บเลเยอร์ ── */
 .tab-pane-layers {
   display: flex;
   flex-direction: column;
@@ -1648,7 +1584,6 @@ select {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* ระยะห่างระหว่างปุ่ม */
   width: 100%;
 }
 

@@ -1,7 +1,3 @@
-// server/utils/errorHandler.js
-// Centralized error handling utility for the server
-
-// Enhanced logging utility
 const logger = {
     info: (message, ...args) => {
         console.log(`[ERROR_HANDLER] ${new Date().toISOString()} - ${message}`, ...args);
@@ -20,7 +16,6 @@ const logger = {
     }
 };
 
-// Custom error classes
 class AppError extends Error {
     constructor(message, statusCode = 500, isOperational = true) {
         super(message);
@@ -50,14 +45,12 @@ class DatabaseError extends AppError {
     }
 }
 
-// Async error wrapper for route handlers
 const asyncHandler = (fn) => {
     return (req, res, next) => {
         Promise.resolve(fn(req, res, next)).catch(next);
     };
 };
 
-// Validation middleware
 const validateRequest = (schema) => {
     return (req, res, next) => {
         const { error } = schema.validate(req.body);
@@ -70,7 +63,6 @@ const validateRequest = (schema) => {
     };
 };
 
-// Prisma error handler
 const handlePrismaError = (error) => {
     logger.error('Prisma error:', error);
 
@@ -88,7 +80,6 @@ const handlePrismaError = (error) => {
     }
 };
 
-// Development vs Production error response
 const sendErrorDev = (err, res) => {
     res.status(err.statusCode).json({
         status: err.status,
@@ -99,14 +90,12 @@ const sendErrorDev = (err, res) => {
 };
 
 const sendErrorProd = (err, res) => {
-    // Operational, trusted error: send message to client
     if (err.isOperational) {
         res.status(err.statusCode).json({
             status: err.status,
             message: err.message
         });
     } else {
-        // Programming or other unknown error: don't leak error details
         logger.error('Programming error:', err);
         res.status(500).json({
             status: 'error',
@@ -115,22 +104,18 @@ const sendErrorProd = (err, res) => {
     }
 };
 
-// Global error handler middleware
 const globalErrorHandler = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
 
-    // Handle Prisma errors
     if (err.code && err.code.startsWith('P')) {
         err = handlePrismaError(err);
     }
 
-    // Handle validation errors
     if (err.name === 'ValidationError') {
         err = new ValidationError(err.message);
     }
 
-    // Handle JWT errors
     if (err.name === 'JsonWebTokenError') {
         err = new AppError('Invalid token', 401);
     }
@@ -139,7 +124,6 @@ const globalErrorHandler = (err, req, res, next) => {
         err = new AppError('Token expired', 401);
     }
 
-    // Send appropriate error response based on environment
     if (process.env.NODE_ENV === 'development') {
         sendErrorDev(err, res);
     } else {
@@ -147,7 +131,6 @@ const globalErrorHandler = (err, req, res, next) => {
     }
 };
 
-// 404 handler
 const notFound = (req, res, next) => {
     const err = new NotFoundError(`Route ${req.originalUrl}`);
     next(err);

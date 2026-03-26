@@ -7,7 +7,6 @@ const PAGE_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
 const PAGE_GAP = CANVAS_CONSTANTS.PAGE_GAP;
 const PAGE_STRIDE = PAGE_H + PAGE_GAP;
 
-// Fix 'alphabetical' crash in new Chrome/Edge
 const originalITextFromObject = fabric.IText.fromObject;
 fabric.IText.fromObject = function (object, callback) {
     if (
@@ -34,7 +33,6 @@ let saveTimeout = null;
 let _clipboard = null;
 let _pasteOffset = 0;
 
-// True while applying a remote socket update (prevents local history pollution)
 let isRemoteUpdating = false;
 
 export function useCanvasLegacy() {
@@ -55,7 +53,7 @@ export function useCanvasLegacy() {
             });
         } catch (error) {
             console.error('Failed to convert image to base64', error);
-            return url; // Fallback to original url
+            return url;
         }
     };
 
@@ -139,13 +137,11 @@ export function useCanvasLegacy() {
 
 
         isRemoteUpdating = true;
-        setHistoryLock(true); // CRITICAL: Lock history during remote updates
+        setHistoryLock(true);
 
         canvas.value.loadFromJSON(json, () => {
             canvas.value.renderAll();
 
-            // Remote changes must NOT enter local undo/redo history.
-            // Otherwise Ctrl+Z undoes a collaborator's action instead of the local user's.
             isRemoteUpdating = false;
             setHistoryLock(false);
 
@@ -176,7 +172,6 @@ export function useCanvasLegacy() {
 
             canvas.value.loadFromJSON(previousState.canvasState, () => {
                 canvas.value.renderAll();
-                // Re-render after fonts load to prevent default-font flash
                 document.fonts.ready.then(() => { if (canvas.value) canvas.value.requestRenderAll(); });
                 setHistoryLock(false);
 
@@ -207,7 +202,6 @@ export function useCanvasLegacy() {
 
             canvas.value.loadFromJSON(nextState.canvasState, () => {
                 canvas.value.renderAll();
-                // Re-render after fonts load to prevent default-font flash
                 document.fonts.ready.then(() => { if (canvas.value) canvas.value.requestRenderAll(); });
                 setHistoryLock(false);
 
@@ -443,7 +437,6 @@ export function useCanvasLegacy() {
                 if (!active) return;
                 e.preventDefault();
                 active.clone((cloned) => {
-                    // Bug Fix: Deep clone to prevent shared memory references
                     const clonedObj = JSON.parse(JSON.stringify(active));
                     Object.assign(cloned, clonedObj);
                     cloned.id = uuidv4();
@@ -459,7 +452,6 @@ export function useCanvasLegacy() {
                 _clipboard.clone((cloned) => {
                     canvas.value.discardActiveObject();
 
-                    // Remap Y from source page to the currently-viewed page
                     const srcPageIndex = Math.floor(cloned.top / PAGE_STRIDE);
                     const localTop = cloned.top - srcPageIndex * PAGE_STRIDE;
                     const tgtPageIndex = window.__editorState?.currentPageIndex ?? 0;
@@ -471,7 +463,6 @@ export function useCanvasLegacy() {
                         evented: true,
                     });
 
-                    // Clear inherited clipPath; renderAllPages will reassign on next reload
                     if (cloned.type === 'activeSelection') {
                         cloned.canvas = canvas.value;
                         cloned.forEachObject((obj) => {
@@ -508,7 +499,6 @@ export function useCanvasLegacy() {
                     });
                     _clipboard = cloned;
                     _pasteOffset = 0;
-                    console.log('� Copied', active.type);
                 });
             }
         }

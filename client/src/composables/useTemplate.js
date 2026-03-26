@@ -26,13 +26,11 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     groupedVariables
   } = storeToRefs(editorStore);
 
-  // Local state that doesn't need to be global
   const customVarName = ref('');
   const currentBackground = ref(null);
   const originalObjectStates = ref({});
   const isPagesSidebarOpen = ref(false);
 
-  // --- HELPER FUNCTIONS ---
 
   const cleanFabricObject = (obj) => {
     if (!obj) return obj;
@@ -50,9 +48,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     if ((obj.type === 'group' || obj.type === 'activeSelection') && Array.isArray(obj.objects)) {
       obj.objects = obj.objects.map(cleanFabricObject);
     }
-    // Ensure objects are interactive after save/restore.
-    // applyPreviewDataToCanvas() sets selectable/editable/evented=false — those
-    // states must never be persisted to saved JSON, or re-import breaks editing.
     obj.selectable = true;
     obj.evented = true;
     if (['textbox', 'text', 'i-text'].includes(obj.type)) {
@@ -73,7 +68,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     return pages.value.map((page) => ({
       id: page.id,
       background: page.background,
-      originalBackgroundType: page.originalBackgroundType, // Save metadata
+      originalBackgroundType: page.originalBackgroundType,
       objects: page.objects.map((obj) => {
         const serialized = JSON.parse(JSON.stringify(obj));
         const clean = cleanFabricObject(serialized);
@@ -104,14 +99,12 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   };
 
   const checkIsGeneratedPdf = async (file) => {
-    // 1. Try Server Check first
     try {
       const formData = new FormData();
       formData.append('image', file);
       const res = await axios.post(`${SERVER_URL}/check-pdf-type`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      // Return embeddedLayout if available
       return {
         id: res.data.id,
         type: res.data.type,
@@ -121,39 +114,32 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       console.warn('Server Check PDF skipped/failed. Trying Client-side...', e);
     }
 
-    // 2. Client-side Fallback (Robust)
     try {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       const metadata = await pdf.getMetadata();
 
       if (metadata && metadata.info) {
-        // Check Subject for 'layout:' prefix
         const subject = metadata.info.Subject;
         if (subject && subject.startsWith('layout:')) {
-          const base64Str = subject.substring(7); // Remove 'layout:'
+          const base64Str = subject.substring(7);
           try {
-            // Robust Base64 Decoding that handles binary/escaped content
             const binaryString = atob(base64Str);
             let jsonStr;
 
-            // Check for UTF-16BE BOM (FE FF)
             if (binaryString.charCodeAt(0) === 0xFE && binaryString.charCodeAt(1) === 0xFF) {
               const buf = new Uint8Array(binaryString.length - 2);
               for (let i = 2; i < binaryString.length; i++) buf[i - 2] = binaryString.charCodeAt(i);
-              // Swap for little-endian if needed or use TextDecoder
               jsonStr = new TextDecoder('utf-16be').decode(buf);
             } else {
-              // Try UTF-8 (URL safe)
               try {
                 jsonStr = decodeURIComponent(escape(binaryString));
               } catch {
-                jsonStr = binaryString; // Raw
+                jsonStr = binaryString;
               }
             }
 
             const layout = JSON.parse(jsonStr);
-            console.log('Client-side: Found embedded layout in Subject');
             return { embeddedLayout: layout };
           } catch (parseErr) {
             console.error('Failed to parse client-side layout:', parseErr);
@@ -188,7 +174,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     return images;
   };
 
-  // --- ACTIONS (Delegated to Store or Logic) ---
 
   const fetchVariables = editorStore.fetchVariables;
   const fetchTemplates = editorStore.fetchTemplates;
@@ -272,7 +257,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       currentPageIndex.value = 0;
       if (resetHistory) resetHistory();
 
-      // Update URL to reflect the loaded template
       if (typeof window !== 'undefined' && window.history) {
         window.history.pushState({}, '', `/template/${currentTemplateId.value}`);
       }
@@ -352,14 +336,13 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       const metadata = await checkIsGeneratedPdf(file);
       let loaded = false;
 
-      // 1. Try to load from Server by ID
       if (metadata && metadata.id) {
         if (metadata.type === 'report') {
           try {
             await loadReportById(metadata.id);
             loaded = true;
           } catch (err) {
-            console.log('Report not found on server');
+            console.error('Report not found on server');
           }
         }
         if (!loaded) {
@@ -370,19 +353,17 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
               loaded = true;
             }
           } catch (err) {
-            console.log('Template not found on server');
+            console.error('Template not found on server');
           }
         }
       }
 
-      // 2. Fallback: Use Embedded Layout (Offline Mode)
       if (!loaded && metadata && metadata.embeddedLayout) {
         try {
-          console.log('Using embedded layout from PDF...');
           pages.value = sanitizePagesData(metadata.embeddedLayout);
           currentPageIndex.value = 0;
           loaded = true;
-          alert('⚠️ Original template not found. Loaded from PDF metadata (Editable).');
+          alert('Original template not found. Loaded from PDF metadata (Editable).');
         } catch (err) {
           console.error('Failed to load embedded layout', err);
         }
@@ -486,7 +467,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     return `data:image/svg+xml;base64,${btoa('<svg width="79" height="112" xmlns="http://www.w3.org/2000/svg"><rect width="79" height="112" fill="white"/></svg>')}`;
   };
 
-  // --- Unified Workflow (Phase 3) ---
 
   const currentFileHandle = ref(null);
 
@@ -501,7 +481,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   };
 
   const unifiedSave = async (generatePdfFn, variableMap = null, isSilent = false) => {
-    // 0. Ensure we have a handle to preserve User Gesture (critical for Save As)
     if (window.showSaveFilePicker && !currentFileHandle.value) {
       try {
         const options = {
@@ -514,13 +493,12 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
           saveHistory();
         }
       } catch (err) {
-        if (err.name === 'AbortError') return false; // User cancelled
+        if (err.name === 'AbortError') return false;
         console.error('File picker failed:', err);
       }
-      return; // Exit early - file picker handled
+      return;
     }
 
-    // 1. Try to save to database first (non-blocking)
     try {
       const payload = {
         name: templateName.value || 'Untitled Template',
@@ -566,13 +544,12 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       });
 
       const file = await fileHandle.getFile();
-      currentFileHandle.value = fileHandle; // Keep handle for saving back
+      currentFileHandle.value = fileHandle;
 
       if (!isWorkspaceEmpty()) {
         if (!confirm('Replace current workspace?')) return;
       }
 
-      // 1. JSON Project
       if (
         file.type === 'application/json' ||
         file.name.endsWith('.json') ||
@@ -584,25 +561,21 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
         return;
       }
 
-      // 2. PDF
       if (file.type === 'application/pdf') {
         const formData = new FormData();
         formData.append('file', file);
         try {
-          // Upload to backend
           const res = await axios.post(`${SERVER_URL}/pdf/upload`, formData);
           const savedFileId = res.data.id;
 
-          // Change URL instantly (triggers a reload or state change)
           window.history.pushState({}, '', `/pdf/${savedFileId}`);
-          window.location.reload(); // Quickest way to trigger the direct load logic
+          window.location.reload();
         } catch (error) {
           console.error('Upload failed:', error);
         }
         return;
       }
 
-      // 3. Image
       if (file.type.startsWith('image/')) {
         await resetCanvas();
         const reader = new FileReader();
@@ -630,7 +603,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const loadProjectData = async (data, filename) => {
     await resetCanvas();
     templateName.value = data.name || filename.replace(/\.(json|pdf|drt)$/i, '');
-    currentTemplateId.value = null; // Detached
+    currentTemplateId.value = null;
     currentReportId.value = null;
     isPreviewMode.value = false;
 
@@ -698,7 +671,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     sanitizePagesData,
     currentFileHandle,
     isPagesSidebarOpen,
-    // Unified Exports
     unifiedSave,
     handleUnifiedImport,
     ensureFileHandle,

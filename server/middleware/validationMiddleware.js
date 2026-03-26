@@ -1,12 +1,9 @@
 const { z } = require('zod');
 
-// Middleware factory for validation
 const validate = (schema) => (req, res, next) => {
     try {
-        // Parse request body/query/params against schema
-        // We focus on req.body for now, but can expand to query/params
         const parsed = schema.parse(req.body);
-        req.body = parsed; // Replace body with parsed/typed data
+        req.body = parsed;
         next();
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -19,8 +16,6 @@ const validate = (schema) => (req, res, next) => {
         next(error);
     }
 };
-
-// --- Schemas ---
 
 const VariableSchema = z.object({
     key: z
@@ -35,21 +30,17 @@ const VariableSchema = z.object({
 const PageObjectSchema = z
     .object({
         type: z.string()
-        // Allow other fabric.js properties but ensure they are safe types if needed
-        // For now, we use pascal/camel case check or just allow as unknown/any for flexibility
-        // but strictly validating structure is better.
-        // Keeping it loose for Fabric object dump compatibility, but could be tightened.
     })
-    .passthrough(); // Allow unknown keys for fabric objects
+    .passthrough();
 
 const TemplateSchema = z.object({
     name: z.string().min(1).max(100),
     background: z.string().nullable().optional(),
-    pages: z.array(z.any()).default([]), // Validate pages structure if possible, else any
-    userId: z.string().uuid().optional().nullable() // Optional owner
+    pages: z.array(z.any()).default([]),
+    userId: z.string().uuid().optional().nullable()
 });
 
-const UpdateTemplateSchema = TemplateSchema.partial(); // Allow partial updates
+const UpdateTemplateSchema = TemplateSchema.partial();
 
 module.exports = {
     validate,

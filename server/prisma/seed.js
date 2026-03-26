@@ -1,19 +1,12 @@
-/**
- * Unified Seed File for Dynamic Report Creator
- * (Corrected for Schema Mismatches)
- */
 
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-    console.log('🌱 Starting Database Seeding...\n');
+    console.log('Starting Database Seeding...\n');
 
     try {
-        // --------------------------------------------------------
-        // 1. สร้าง/อัปเดต Global Variables
-        // --------------------------------------------------------
-        console.log('🌍 Seeding Global Variables...');
+        console.log('Seeding Global Variables...');
         const globalDefaults = [
             { key: 'school_name', label: 'ชื่อโรงเรียน' },
             { key: 'school_year', label: 'ปีการศึกษา' },
@@ -40,12 +33,9 @@ async function main() {
                 });
             }
         }
-        console.log('✅ Global variables processed.');
+        console.log('Global variables processed.');
 
-        // --------------------------------------------------------
-        // 2. สร้าง Users
-        // --------------------------------------------------------
-        console.log('\n👤 Seeding Users...');
+        console.log('\nSeeding Users...');
 
         const upsertUser = async (username, password) => {
             return await prisma.user.upsert({
@@ -59,26 +49,19 @@ async function main() {
         const teacherUser = await upsertUser('teacher1', 'REDACTED_CREDENTIAL');
         const studentUser = await upsertUser('student1', 'REDACTED_CREDENTIAL');
 
-        console.log(`✅ Users ready: admin, teacher1, student1`);
+        console.log(`Users ready: admin, teacher1, student1`);
 
-        // --------------------------------------------------------
-        // 3. สร้าง Templates (จุดที่เคย Error)
-        // --------------------------------------------------------
-        console.log('\n📄 Seeding Templates...');
+        console.log('\nSeeding Templates...');
 
-        // ลบ Template เก่าที่เป็น Master (เพื่อป้องกันข้อมูลซ้ำตอน Dev)
-        // await prisma.template.deleteMany({ where: { isMaster: true } });
 
         const templates = [];
 
-        // Template 1: ใบรายงานผลการเรียน
         const gradeReport = await prisma.template.create({
             data: {
                 name: 'ใบรายงานผลการเรียน (Master)',
-                background: '/uploads/report-bg.jpg', // [CORRECTED] เปลี่ยนจาก backgroundUrl
+                background: '/uploads/report-bg.jpg',
                 isMaster: true,
                 ownerId: adminUser.id,
-                // [CORRECTED] เปลี่ยนจาก layoutData เป็น pages ตาม Schema
                 pages: {
                     objects: [
                         {
@@ -99,15 +82,13 @@ async function main() {
         });
         templates.push(gradeReport);
 
-        // Template 2: ใบคำร้องขอลาหยุด
         const leaveRequest = await prisma.template.create({
             data: {
                 name: 'ใบคำร้องขอลาหยุด (Master)',
-                background: '/uploads/leave-bg.jpg', // [CORRECTED]
+                background: '/uploads/leave-bg.jpg',
                 isMaster: true,
                 ownerId: adminUser.id,
                 pages: {
-                    // [CORRECTED]
                     objects: [
                         {
                             type: 'text',
@@ -126,15 +107,13 @@ async function main() {
         });
         templates.push(leaveRequest);
 
-        // Template 3: ใบประกาศ
         const announcement = await prisma.template.create({
             data: {
                 name: 'ใบประกาศ (Teacher Draft)',
-                background: '/uploads/announcement-bg.jpg', // [CORRECTED]
+                background: '/uploads/announcement-bg.jpg',
                 isMaster: false,
                 ownerId: teacherUser.id,
                 pages: {
-                    // [CORRECTED]
                     objects: [
                         { type: 'text', left: 200, top: 100, text: 'ใบประกาศ', fontSize: 22, fontWeight: 'bold' },
                         { type: 'text', left: 100, top: 160, text: 'โรงเรียน: {{school_name}}', fontSize: 16 },
@@ -145,18 +124,14 @@ async function main() {
         });
         templates.push(announcement);
 
-        console.log(`✅ Created ${templates.length} templates.`);
+        console.log(`Created ${templates.length} templates.`);
 
-        // --------------------------------------------------------
-        // 4. สร้าง Report Instances
-        // --------------------------------------------------------
-        console.log('\n📊 Seeding Report Instances...');
+        console.log('\nSeeding Report Instances...');
 
         await prisma.reportInstance.create({
             data: {
                 name: 'ตัวอย่างรายงาน 1',
                 templateId: gradeReport.id,
-                // ownerId: studentUser.id, // Schema คุณไม่มี ownerId ใน ReportInstance (เช็คจากไฟล์ล่าสุด)
                 status: 'COMPLETED',
                 pdfUrl: '/uploads/reports/report-sample-64001.pdf',
                 variableSnapshot: {
@@ -165,15 +140,12 @@ async function main() {
                     student_name: 'นายสมชาย ใจดี',
                     student_id: '64001'
                 },
-                pages: gradeReport.pages // [CORRECTED] ใช้ field 'pages' แทน dataJson
+                pages: gradeReport.pages
             }
         });
-        console.log(`✅ Created sample report instances.`);
+        console.log(`Created sample report instances.`);
 
-        // --------------------------------------------------------
-        // 5. สร้าง User-specific Variables
-        // --------------------------------------------------------
-        console.log('\n🏷️ Seeding User-specific Variables...');
+        console.log('\nSeeding User-specific Variables...');
 
         const userVars = [
             { key: 'my_signature', label: 'ลายเซ็นของฉัน', ownerId: teacherUser.id },
@@ -197,11 +169,11 @@ async function main() {
                 });
             }
         }
-        console.log(`✅ Created user-specific variables for ${teacherUser.username}.`);
+        console.log(`Created user-specific variables for ${teacherUser.username}.`);
 
-        console.log('\n🎉 Seeding completed successfully!');
+        console.log('\nSeeding completed successfully!');
     } catch (error) {
-        console.error('❌ Error during seeding:', error);
+        console.error('Error during seeding:', error);
         process.exit(1);
     } finally {
         await prisma.$disconnect();

@@ -17,7 +17,6 @@ export function useCanvasEngine() {
     const zoomLevel = ref(1);
     const viewportRef = ref(null);
 
-
     const historyStack = ref([]);
     const redoStack = ref([]);
     const isHistoryLocked = ref(false);
@@ -33,26 +32,22 @@ export function useCanvasEngine() {
             renderOnAddRemove: true
         });
 
-        // Handle text scaling in real-time during resize
         canvas.value.on('object:scaling', (e) => {
             const obj = e.target;
             if (!obj) return;
 
-            // จัดการสเกลเฉพาะข้อความ (ส่วนรูปภาพปล่อยให้ Fabric.js จัดการยืดหดตามธรรมชาติ)
             if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
                 const corner = e.transform ? e.transform.corner : '';
                 const sx = obj.scaleX;
                 const sy = obj.scaleY;
 
                 if (corner === 'ml' || corner === 'mr') {
-                    // ดึงซ้าย/ขวา -> เปลี่ยนความกว้าง (Width) เพื่อให้ข้อความตัดบรรทัด
                     obj.set({
                         width: obj.width * sx,
                         scaleX: 1,
                         scaleY: 1
                     });
                 } else {
-                    // ดึงมุม (tl, tr, bl, br) -> เปลี่ยนขนาดตัวหนังสือ (Font Size)
                     const newFontSize = (obj.fontSize || 16) * Math.max(sx, sy);
                     obj.set({
                         fontSize: Math.round(newFontSize),
@@ -65,8 +60,6 @@ export function useCanvasEngine() {
                 obj.setCoords();
             }
         });
-
-
     };
 
     const render = async () => {
@@ -176,7 +169,6 @@ export function useCanvasEngine() {
         const pageObjectMap = new Map();
         pages.forEach((page, index) => { pageObjectMap.set(index, []); });
 
-        // Remove ghosted objects (no nodeId, not page backgrounds) before exporting
         const objects = [...canvas.getObjects()];
         objects.forEach(obj => {
             if (!obj.nodeId && obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
@@ -190,7 +182,6 @@ export function useCanvasEngine() {
             if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
             if (typeof obj.top !== 'number' || isNaN(obj.top)) return;
 
-            // Normalize origin to top-left for standard PDF generation compatibility
             let exportLeft = obj.left;
             let exportTop = obj.top;
             if (obj.originX === 'center') exportLeft = obj.left - (obj.width * obj.scaleX) / 2;
@@ -212,7 +203,7 @@ export function useCanvasEngine() {
                 serialized.top = Math.round((exportTop - pageTopY) * 100) / 100;
                 serialized.width = Math.round((obj.width || 0) * 100) / 100;
                 serialized.height = Math.round((obj.height || 0) * 100) / 100;
-                serialized.angle = obj.angle || 0; // Force explicitly
+                serialized.angle = obj.angle || 0;
 
                 if (serialized.textBaseline === 'alphabetical') serialized.textBaseline = 'alphabetic';
 
@@ -228,7 +219,6 @@ export function useCanvasEngine() {
     };
 
     const capturePageAsImage = (pageIndex, pageHeight, pageGap, multiplier = 2) => {
-        // Capture a single page as a data URL image with CORS fallback
         try {
             const c = canvas.value;
             if (!c) return null;
@@ -276,7 +266,6 @@ export function useCanvasEngine() {
             } catch (canvasError) {
                 console.warn(`Canvas taint detected on page ${pageIndex + 1}, using fallback:`, canvasError);
 
-                // Fallback: draw only background elements
                 try {
                     const fallbackCanvas = document.createElement('canvas');
                     fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * multiplier;
@@ -304,41 +293,32 @@ export function useCanvasEngine() {
         }
     };
 
-
     const cleanupCanvasObjects = (canvas, deep = true) => {
         if (!canvas) return;
 
         let cleanedCount = 0;
-        let clipPathCleanupCount = 0;
-        let eventCleanupCount = 0;
 
         const objects = canvas.getObjects();
 
         objects.forEach(obj => {
             try {
-                // Clear clipPath
                 if (obj.clipPath) {
                     if (obj.clipPath.dispose && typeof obj.clipPath.dispose === 'function') {
                         obj.clipPath.dispose();
                     }
                     obj.clipPath = null;
-                    clipPathCleanupCount++;
                     memoryStats.clipPathsDestroyed++;
                 }
 
-                // Remove event listeners
                 if (obj.off && typeof obj.off === 'function') {
                     obj.off();
-                    eventCleanupCount++;
                     memoryStats.eventListenersRemoved++;
                 }
 
-                // Dispose custom objects
                 if (obj.dispose && typeof obj.dispose === 'function') {
                     obj.dispose();
                 }
 
-                // Clear internal references
                 if (deep) {
                     if (obj._cacheContext) {
                         obj._cacheContext = null;
@@ -359,8 +339,6 @@ export function useCanvasEngine() {
             }
         });
 
-
-
         return cleanedCount;
     };
 
@@ -375,21 +353,17 @@ export function useCanvasEngine() {
         canvas.value.loadFromJSON(json, () => {
             canvas.value.renderAll();
 
-
             document.fonts.ready.then(() => {
                 if (canvas.value) canvas.value.requestRenderAll();
             });
 
-
             canvas.value.fire('history:restored');
         });
     };
+
     const zoomIn = () => { zoomLevel.value = Math.min(3, zoomLevel.value + 0.1); };
     const zoomOut = () => { zoomLevel.value = Math.max(0.1, zoomLevel.value - 0.1); };
     const fitToScreen = () => { zoomLevel.value = 1; };
-
-    // Layer Management
-    // ─────────────────────────────────────────────────────────────────
 
     const bringForward = (objOrId) => {
         if (!canvas.value) return;
@@ -435,7 +409,6 @@ export function useCanvasEngine() {
         }
     };
 
-
     const getMemoryStats = () => {
         return { ...memoryStats };
     };
@@ -449,21 +422,16 @@ export function useCanvasEngine() {
         memoryStats.eventListenersRemoved = 0;
     };
 
-
     const trackObjectCreation = (obj) => {
         memoryStats.objectsCreated++;
-
-        // Track clip paths
         if (obj.clipPath) {
             memoryStats.clipPathsCreated++;
         }
     };
 
-
     const trackEventListener = () => {
         memoryStats.eventListenersAdded++;
     };
-
 
     const periodicCleanup = (canvas, intervalMs = 30000) => {
         let cleanupInterval = null;
@@ -473,21 +441,16 @@ export function useCanvasEngine() {
 
             cleanupInterval = setInterval(() => {
                 if (canvas) {
-
                     const objects = canvas.getObjects();
-                    let cleaned = 0;
 
                     objects.forEach(obj => {
                         if (obj._cacheContext) {
                             obj._cacheContext = null;
-                            cleaned++;
                         }
                         if (obj._cacheCanvas) {
                             obj._cacheCanvas = null;
-                            cleaned++;
                         }
                     });
-
                 }
             }, intervalMs);
         };
@@ -502,7 +465,6 @@ export function useCanvasEngine() {
         return { startCleanup, stopCleanup };
     };
 
-    // Compatibility stubs
     const setHistoryLock = (status) => { isHistoryLocked.value = status; };
 
     return {
@@ -533,13 +495,11 @@ export function useCanvasEngine() {
         zoomOut,
         fitToScreen,
 
-        // Layer Management
         bringForward,
         sendBackwards,
         bringToFront,
         sendToBack,
 
-        // Memory Management
         cleanupCanvasObjects,
         getMemoryStats,
         resetMemoryStats,
@@ -547,10 +507,8 @@ export function useCanvasEngine() {
         trackEventListener,
         periodicCleanup,
 
-        // Page State Management
         saveCurrentPageStateAtomic,
 
-        // Expose layout/render tools
         render
     };
 }

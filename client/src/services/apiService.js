@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Create axios instance with base configuration
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
   timeout: 10000,
@@ -9,10 +8,8 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth or other headers if needed
 api.interceptors.request.use(
   (config) => {
-    // Add machine ID for user identification
     const machineId = localStorage.getItem('report_machine_id');
     if (machineId) {
       config.headers['X-Machine-ID'] = machineId;
@@ -24,7 +21,6 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -33,9 +29,7 @@ api.interceptors.response.use(
   }
 );
 
-// API Service methods
 export const apiService = {
-  // Variables
   async getVariables() {
     const response = await api.get('/variables');
     return response.data;
@@ -46,7 +40,6 @@ export const apiService = {
     return response.data;
   },
 
-  // Templates
   async getTemplates(userId = null) {
     const params = userId ? { userId } : {};
     const response = await api.get('/templates', { params });
@@ -78,7 +71,6 @@ export const apiService = {
     return response.data;
   },
 
-  // Reports
   async saveReport(reportData) {
     const response = await api.post('/save-report', reportData);
     return response.data;
@@ -89,7 +81,6 @@ export const apiService = {
     return response.data;
   },
 
-  // Report Instances
   async createReportInstance(reportInstanceData) {
     const response = await api.post('/report-instances', reportInstanceData);
     return response.data;
@@ -116,13 +107,11 @@ export const apiService = {
     return response.data;
   },
 
-  // Health check
   async healthCheck() {
     const response = await api.get('/health');
     return response.data;
   },
 
-  // PDF Import
   importPdfFromUrl: async (url) => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     return await axios.post(`${apiUrl}/pdf/import-url`, { url });
