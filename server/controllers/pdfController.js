@@ -407,23 +407,40 @@ const deletePdf = async (req, res) => {
     try {
         const { id } = req.params;
         const record = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
+
         if (!record) return res.status(404).json({ error: 'PDF not found' });
 
         if (record.FilePath) {
-            const absPath = path.join(__dirname, '..', record.FilePath);
-            try { fs.unlinkSync(absPath); } catch (e) {
-                console.warn(`[deletePdf] Could not unlink FilePath ${absPath}:`, e.message);
+            const cleanPath = record.FilePath.replace(/^\//, '');
+            const absPath = path.join(__dirname, '..', cleanPath);
+
+            try {
+                if (fs.existsSync(absPath)) {
+                    fs.unlinkSync(absPath);
+                    console.log(`[deletePdf] ลบไฟล์ต้นฉบับสำเร็จ: ${absPath}`);
+                }
+            } catch (e) {
+                console.warn(`[deletePdf] ลบไฟล์ต้นฉบับไม่สำเร็จ ${absPath}:`, e.message);
             }
         }
+
         if (record.EditedFilePath) {
-            const editedAbsPath = path.join(__dirname, '..', record.EditedFilePath);
-            try { fs.unlinkSync(editedAbsPath); } catch (e) {
-                console.warn(`[deletePdf] Could not unlink EditedFilePath ${editedAbsPath}:`, e.message);
+            const cleanEditedPath = record.EditedFilePath.replace(/^\//, '');
+            const editedAbsPath = path.join(__dirname, '..', cleanEditedPath);
+
+            try {
+                if (fs.existsSync(editedAbsPath)) {
+                    fs.unlinkSync(editedAbsPath);
+                    console.log(`[deletePdf] ลบไฟล์ Edited สำเร็จ: ${editedAbsPath}`);
+                }
+            } catch (e) {
+                console.warn(`[deletePdf] ลบไฟล์ Edited ไม่สำเร็จ ${editedAbsPath}:`, e.message);
             }
         }
 
         await prisma.pdfCache.delete({ where: { OriginalFileId: id } });
-        res.json({ message: 'PDF deleted successfully', id });
+
+        res.json({ message: 'PDF and physical files deleted successfully', id });
     } catch (error) {
         console.error('Delete PDF Error:', error.message);
         res.status(500).json({ error: 'Failed to delete PDF' });

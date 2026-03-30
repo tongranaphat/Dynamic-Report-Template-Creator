@@ -76,7 +76,8 @@ model Asset {
   id        String   @id @default(uuid())
   filename  String
   mimetype  String
-  data      Bytes
+  filepath  String
+  url       String
   createdAt DateTime @default(now())
 }
 

@@ -4,7 +4,6 @@ const assetController = require('../controllers/assetController');
 
 router.post('/upload', assetController.uploadAsset.single('file'), assetController.uploadBackground);
 router.get('/', assetController.getAllAssets);
-router.get('/:id', assetController.getAssetFromDb);
 router.delete('/:id', assetController.deleteAssetFromDb);
 
 module.exports = router;
