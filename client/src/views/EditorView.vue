@@ -346,34 +346,175 @@ const handleSaveTemplate = async () => {
 
 
 const handleSaveProject = async () => {
+  if (!canvas.value) return;
+
+  const pathSegments = window.location.pathname.split('/');
+  const fileIdToSave = pathSegments[pathSegments.length - 1];
+
+  if (!fileIdToSave || fileIdToSave === 'undefined' || fileIdToSave === 'pdf') {
+    showNotification("ไม่พบ ID ของไฟล์ในระบบ (Cannot find OriginalFileId)", "error");
+    return;
+  }
+
+  try {
+    showNotification('กำลังประมวลผล PDF และบันทึกลงฐานข้อมูล...', 'info');
+    saveCurrentPageState();
+
+    const pagesData = preparePagesForSave();
+    const projectData = {
+      name: templateName.value || 'โปรเจกต์ไม่มีชื่อ',
+      pages: pagesData,
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      type: 'hybrid-project'
+    };
+
+    const variableMap = {};
     try {
-        const pathSegments = window.location.pathname.split('/');
-        const fileIdToSave = pathSegments[pathSegments.length - 1];
-
-        if (!fileIdToSave || fileIdToSave === 'undefined' || fileIdToSave === 'pdf') {
-            alert("ไม่พบ ID ของไฟล์ในระบบ (Cannot find OriginalFileId).");
-            return;
-        }
-
-
-        const payload = {
-            OriginalFileId: fileIdToSave,
-            editState: JSON.stringify(pages.value)
-        };
-
-        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/save-state`, payload);
-
-        if (response.status === 200) {
-            alert("บันทึกโปรเจกต์เรียบร้อยแล้ว! (ระบบแยกไฟล์ฉบับแก้ไขสำเร็จ)");
-            
-            if (response.data.EditedFile) {
-            }
-        }
-
+      const realData = await apiService.getVariables();
+      if (Array.isArray(realData)) {
+        realData.forEach(item => { if (item.key) variableMap[item.key] = item.value || ''; });
+      }
     } catch (error) {
-        console.error("Failed to save project to DB:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกโปรเจกต์ลง Database");
+      if (variables.value) {
+        variables.value.forEach((v) => { if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`; });
+      }
     }
+
+    const canvasImages = [];
+    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
+    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
+    const qualityMultiplier = 2;
+    const TEXT_TYPES = ['textbox', 'text', 'i-text'];
+    const OVERLAY_TYPES = ['textbox', 'text', 'i-text', 'image'];
+
+    const wasPreview = isPreviewMode.value;
+    const originalPage = currentPageIndex.value;
+
+    try {
+      canvas.value.requestRenderAll();
+      if (!wasPreview) saveCurrentPageState();
+      isPreviewMode.value = true;
+      await renderAllPages();
+      await nextTick();
+      applyPreviewDataToCanvas(variableMap);
+      await nextTick();
+
+      for (let i = 0; i < pages.value.length; i++) {
+        const allObjects = canvas.value.getObjects();
+        const hiddenForCapture = [];
+
+        allObjects.forEach((obj) => {
+          const center = obj.getCenterPoint();
+          const objPageIndex = Math.floor(center.y / (P_H + GAP));
+          const isWrongPage = objPageIndex !== i;
+          const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
+          const isOverlay = OVERLAY_TYPES.includes(obj.type) && !isBackground;
+
+          let shouldHide = false;
+          if (pdfMode.value === 'flatten') shouldHide = isWrongPage;
+          else shouldHide = isWrongPage || isOverlay;
+
+          if (shouldHide && obj.visible) {
+            obj.visible = false;
+            hiddenForCapture.push(obj);
+          }
+        });
+
+        canvas.value.renderAll();
+        const topOffset = i * (P_H + GAP) * zoomLevel.value;
+
+        try {
+          const canvasImage = canvas.value.toDataURL({
+            format: 'jpeg', quality: 0.92,
+            multiplier: qualityMultiplier / zoomLevel.value,
+            left: 0, top: topOffset,
+            width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
+            height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
+          });
+          if (canvasImage && canvasImage.length > 100) canvasImages.push(canvasImage);
+        } catch (canvasError) {
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
+          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
+          const fallbackCtx = fallbackCanvas.getContext('2d');
+          fallbackCtx.fillStyle = '#ffffff';
+          fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+          canvasImages.push(fallbackCanvas.toDataURL('image/jpeg', 0.92));
+        }
+        hiddenForCapture.forEach((obj) => { obj.visible = true; });
+      }
+      canvas.value.requestRenderAll();
+
+      if (canvasImages.length === 0) throw new Error('ไม่สามารถประมวลผลหน้ากระดาษเป็นรูปภาพได้');
+
+      const exportProjectData = JSON.parse(JSON.stringify(projectData));
+      const liveObjects = canvas.value.getObjects();
+
+      exportProjectData.pages.forEach((page, pageIndex) => {
+        if (page.objects) {
+          page.objects.forEach(jsonObj => {
+            if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
+              const liveObj = liveObjects.find(o => {
+                if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
+                const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
+              });
+              if (liveObj) {
+                if (liveObj.textLines && liveObj.textLines.length > 0) {
+                  const cleanLines = liveObj.textLines.map(line => (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd());
+                  jsonObj.text = cleanLines.join('\n');
+                } else if (liveObj.text) {
+                  jsonObj.text = liveObj.text.replace(/\u200B/g, '');
+                }
+              }
+              if (jsonObj.text) jsonObj.text = jsonObj.text.replace(/\u200B/g, '');
+            }
+          });
+        }
+      });
+
+      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
+
+      const formData = new FormData();
+      formData.append('OriginalFileId', fileIdToSave);
+      formData.append('editState', JSON.stringify(pages.value));
+      formData.append('pdfFile', pdfBlob, `edited_${fileIdToSave}.pdf`);
+
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/save-generated-state`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (response.status === 200) {
+        showNotification('บันทึกโปรเจกต์ลง Database พร้อมฝัง PDF เรียบร้อย!', 'success');
+        console.log("Database state saved/updated successfully!");
+      }
+
+      saveHistory();
+    } finally {
+      if (canvas.value) {
+        canvas.value.selection = true;
+        canvas.value.getObjects().forEach((obj) => {
+          if (obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
+            obj.set({ selectable: true, evented: true, visible: true });
+            if (TEXT_TYPES.includes(obj.type)) obj.set('editable', true);
+          }
+        });
+        canvas.value.renderAll();
+      }
+
+      if (!wasPreview) {
+        isPreviewMode.value = false;
+        await nextTick();
+        loadPageToCanvas(originalPage);
+      } else {
+        loadPageToCanvas(originalPage);
+      }
+    }
+  } catch (e) {
+    console.error('Save Project failed:', e);
+    showNotification('เกิดข้อผิดพลาดในการบันทึกโปรเจกต์: ' + e.message, 'error');
+  }
 };
 
 
@@ -1208,49 +1349,49 @@ const onDrop = (e) => {
 };
 
 const handleRouteChange = async () => {
-    const fullHref = window.location.href;
-    const directUrlMatch = fullHref.match(/\/(https?:\/\/.+)/i) || fullHref.match(/\/(https?:\/.+)/i);
-    
-    if (directUrlMatch && directUrlMatch[1]) {
-      let externalUrl = directUrlMatch[1];
-      if (externalUrl.startsWith('https:/') && !externalUrl.startsWith('https://')) externalUrl = externalUrl.replace('https:/', 'https://');
-      if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://')) externalUrl = externalUrl.replace('http:/', 'http://');
+  const fullHref = window.location.href;
+  const directUrlMatch = fullHref.match(/\/(https?:\/\/.+)/i) || fullHref.match(/\/(https?:\/.+)/i);
 
-      try {
-        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-url`, { url: externalUrl });
-        
-        const newPdfId = response.data.OriginalFileId || response.data.id || response.data.fileId;
-        
-        if (newPdfId) {
-          window.history.replaceState({}, '', `/pdf/${newPdfId}`);
-          window.location.reload();
-          return;
-        }
-      } catch (error) {
-        console.error("Direct URL Import Failed:", error);
-        alert("ไม่สามารถดึงไฟล์จากลิงก์ที่ระบุได้ (นำเข้าไม่สำเร็จ)");
-      }
-    }
+  if (directUrlMatch && directUrlMatch[1]) {
+    let externalUrl = directUrlMatch[1];
+    if (externalUrl.startsWith('https:/') && !externalUrl.startsWith('https://')) externalUrl = externalUrl.replace('https:/', 'https://');
+    if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://')) externalUrl = externalUrl.replace('http:/', 'http://');
 
-    const decodedPath = decodeURIComponent(window.location.pathname);
-    const localPathMatch = decodedPath.match(/^\/(["']?[A-Za-z]:[\\/].+)/);
-    
-    if (localPathMatch && localPathMatch[1]) {
-      const localPath = localPathMatch[1];
-      try {
-        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-local`, { localPath });
-        
-        const newPdfId = response.data.OriginalFileId || response.data.id;
-        if (newPdfId) {
-          window.history.replaceState({}, '', `/pdf/${newPdfId}`);
-          window.location.reload();
-          return;
-        }
-      } catch (error) {
-        console.error("Local Import Failed:", error);
-        alert("ไม่สามารถดึงไฟล์จากเครื่องได้ (ตรวจสอบว่าไฟล์มีอยู่จริง)");
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-url`, { url: externalUrl });
+
+      const newPdfId = response.data.OriginalFileId || response.data.id || response.data.fileId;
+
+      if (newPdfId) {
+        window.history.replaceState({}, '', `/pdf/${newPdfId}`);
+        window.location.reload();
+        return;
       }
+    } catch (error) {
+      console.error("Direct URL Import Failed:", error);
+      alert("ไม่สามารถดึงไฟล์จากลิงก์ที่ระบุได้ (นำเข้าไม่สำเร็จ)");
     }
+  }
+
+  const decodedPath = decodeURIComponent(window.location.pathname);
+  const localPathMatch = decodedPath.match(/^\/(["']?[A-Za-z]:[\\/].+)/);
+
+  if (localPathMatch && localPathMatch[1]) {
+    const localPath = localPathMatch[1];
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-local`, { localPath });
+
+      const newPdfId = response.data.OriginalFileId || response.data.id;
+      if (newPdfId) {
+        window.history.replaceState({}, '', `/pdf/${newPdfId}`);
+        window.location.reload();
+        return;
+      }
+    } catch (error) {
+      console.error("Local Import Failed:", error);
+      alert("ไม่สามารถดึงไฟล์จากเครื่องได้ (ตรวจสอบว่าไฟล์มีอยู่จริง)");
+    }
+  }
 
   const currentPath = window.location.pathname;
 

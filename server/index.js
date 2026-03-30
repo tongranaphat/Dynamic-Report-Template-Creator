@@ -12,6 +12,7 @@ const templateRoutes = require('./routes/templateRoutes');
 const pdfRoutes = require('./routes/pdfRoutes');
 const reportInstanceRoutes = require('./routes/reportInstanceRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const assetRoutes = require('./routes/assetRoutes');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -57,12 +58,14 @@ app.use('/api', healthRoutes);
 app.use('/api', templateRoutes);
 app.use('/api', pdfRoutes);
 app.use('/api', reportInstanceRoutes);
+app.use('/api/assets', assetRoutes);
 
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 app.use(notFound);
 app.use(errorHandler);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 socketHandler(io);
 

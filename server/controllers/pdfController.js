@@ -7,6 +7,18 @@ const { asyncHandler } = require('../utils/errorHandler');
 const prisma = require('../prismaClient');
 const axios = require('axios');
 
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const dir = path.join(__dirname, '../uploads/cache');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname); // เติมเวลาเข้าไปกันชื่อซ้ำ
+    }
+});
+const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } });
+
 const convertGDriveUrl = (url) => {
     if (!url || typeof url !== 'string') return url;
     const fileIdMatch = url.match(/\/file\/d\/([^/]+)/)
@@ -144,12 +156,6 @@ const logger = {
     }
 };
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) { cb(null, 'uploads/cache/'); },
-    filename: function (req, file, cb) { cb(null, file.originalname); }
-});
-const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } });
-
 const checkPdfType = asyncHandler(async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file' });
@@ -247,79 +253,6 @@ const checkPdfType = asyncHandler(async (req, res) => {
         logger.error('Failed to check PDF:', error);
         res.json({ isGenerated: false, url: null });
     }
-});
-
-const uploadBackground = asyncHandler(async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    const fileData = req.file.buffer || require('fs').readFileSync(req.file.path);
-
-    const asset = await prisma.asset.create({
-        data: {
-            filename: req.file.originalname,
-            mimetype: req.file.mimetype,
-            data: fileData
-        }
-    });
-
-    const fileUrl = `${req.protocol}://${req.get('host')}/api/assets/${asset.id}`;
-    logger.success('Asset uploaded to DB:', fileUrl);
-    res.json({ url: fileUrl, id: asset.id });
-});
-
-const getAssetFromDb = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const asset = await prisma.asset.findUnique({
-        where: { id }
-    });
-
-    if (!asset) {
-        return res.status(404).json({ error: 'Asset not found' });
-    }
-
-    res.set({
-        'Content-Type': asset.mimetype,
-        'Cache-Control': 'public, max-age=31536000',
-        'Access-Control-Allow-Origin': '*',
-        'Cross-Origin-Resource-Policy': 'cross-origin'
-    });
-    res.end(asset.data);
-});
-
-const getAllAssets = asyncHandler(async (req, res) => {
-    const assets = await prisma.asset.findMany({
-        select: {
-            id: true,
-            filename: true,
-            createdAt: true
-        },
-        orderBy: {
-            createdAt: 'desc'
-        }
-    });
-
-    const formattedAssets = assets.map(asset => ({
-        url: `${req.protocol}://${req.get('host')}/api/assets/${asset.id}`,
-        name: asset.filename,
-        id: asset.id
-    }));
-
-    res.json(formattedAssets);
-});
-
-const deleteAssetFromDb = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-
-    const existingAsset = await prisma.asset.findUnique({ where: { id } });
-    if (!existingAsset) {
-        return res.status(404).json({ error: 'Asset not found' });
-    }
-
-    await prisma.asset.delete({
-        where: { id }
-    });
-
-    res.json({ message: 'Asset deleted successfully' });
 });
 
 const generatePDF = asyncHandler(async (req, res) => {
@@ -588,19 +521,46 @@ const importLocalPath = async (req, res) => {
     }
 };
 
+const saveGeneratedPdfState = async (req, res) => {
+    try {
+        const { OriginalFileId, editState } = req.body;
+        if (!req.file) return res.status(400).json({ error: 'ไม่พบไฟล์ PDF ที่ส่งมา' });
+        const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId } });
+        if (!pdf) return res.status(404).json({ error: 'ไม่พบโปรเจกต์ในระบบ' });
+        const fs = require('fs');
+        const path = require('path');
+        const newEditedPath = `/uploads/cache/${req.file.filename}`;
+        if (pdf.EditedFile && pdf.EditedFilePath) {
+            const oldPath = path.join(__dirname, '..', pdf.EditedFilePath);
+            if (fs.existsSync(oldPath) && oldPath !== path.join(__dirname, '..', pdf.FilePath)) {
+                fs.unlinkSync(oldPath);
+            }
+        }
+        const updatedPdf = await prisma.pdfCache.update({
+            where: { OriginalFileId },
+            data: {
+                EditedFile: true,
+                EditedFilePath: newEditedPath,
+                editState: editState ? JSON.parse(editState) : pdf.editState
+            }
+        });
+        res.status(200).json(updatedPdf);
+    } catch (error) {
+        console.error('Save Generated PDF Error:', error);
+        res.status(500).json({ error: 'บันทึกโปรเจกต์พร้อมไฟล์ PDF ไม่สำเร็จ' });
+    }
+};
+
 module.exports = {
     upload,
-    uploadBackground,
     checkPdfType,
     generatePDF,
-    getAssetFromDb,
-    getAllAssets,
-    deleteAssetFromDb,
     importPdfUrl,
     autoImportUniversal,
     deletePdf,
     uploadPdf,
     getPdfById,
     savePdfState,
-    importLocalPath
+    importLocalPath,
+    saveGeneratedPdfState
 };
