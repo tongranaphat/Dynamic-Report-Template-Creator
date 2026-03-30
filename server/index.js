@@ -3,10 +3,17 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
-const fs = require('fs');
 require('dotenv').config();
+
+// ==========================================
+// 1. นำเข้า Local Modules & Routes
+// ==========================================
+const logger = require('./utils/logger');
+const socketHandler = require('./sockets/socketHandler');
+const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
 const templateRoutes = require('./routes/templateRoutes');
 const pdfRoutes = require('./routes/pdfRoutes');
@@ -14,10 +21,12 @@ const reportInstanceRoutes = require('./routes/reportInstanceRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const assetRoutes = require('./routes/assetRoutes');
 
+// ==========================================
+// 2. ตั้งค่า Server & อินสแตนซ์ต่างๆ
+// ==========================================
 const app = express();
-const prisma = new PrismaClient();
 const server = http.createServer(app);
-
+const prisma = new PrismaClient();
 const io = new Server(server, {
     cors: {
         origin: '*',
@@ -25,28 +34,43 @@ const io = new Server(server, {
     }
 });
 
-const logger = require('./utils/logger');
-const socketHandler = require('./sockets/socketHandler');
+// ==========================================
+// 3. ตั้งค่า Middleware (CORS, BodyParser, Logger)
+// ==========================================
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost:5173'];
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
-app.use(
-    cors({
-        origin: function (origin, callback) {
-            if (!origin) return callback(null, true);
-            if (allowedOrigins.indexOf(origin) === -1) {
-                const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-                return callback(new Error(msg), false);
-            }
-            return callback(null, true);
-        },
-        credentials: true
-    })
-);
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
+
 app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
+// Request Logger (แสดง Log ทุกครั้งที่มีการยิง API)
+app.use((req, res, next) => {
+    logger.info(`${req.method} ${req.url}`);
+    next();
+});
+
+// ==========================================
+// 4. จัดการโฟลเดอร์ Static (Uploads)
+// ==========================================
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true }); // เพิ่ม recursive ให้สร้างโฟลเดอร์ย่อยได้ไม่ error
+}
+
+// เปิดให้บริการไฟล์ Static พร้อมตั้งค่า Header ป้องกันปัญหา Cross-Origin
 app.use('/uploads', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -54,21 +78,29 @@ app.use('/uploads', (req, res, next) => {
     next();
 }, express.static(uploadsDir));
 
+// ==========================================
+// 5. เชื่อมต่อ API Routes
+// ==========================================
 app.use('/api', healthRoutes);
 app.use('/api', templateRoutes);
 app.use('/api', pdfRoutes);
 app.use('/api', reportInstanceRoutes);
 app.use('/api/assets', assetRoutes);
 
-const { errorHandler, notFound } = require('./middleware/errorMiddleware');
+// ==========================================
+// 6. จัดการ Error (404 และ Error ทั่วไป)
+// ==========================================
 app.use(notFound);
 app.use(errorHandler);
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-
+// ==========================================
+// 7. เริ่มต้น Socket.io
+// ==========================================
 socketHandler(io);
 
+// ==========================================
+// 8. เริ่มต้น Server และจัดการการปิดระบบ (Graceful Shutdown)
+// ==========================================
 const startServer = async () => {
     try {
         await prisma.$connect();
@@ -81,6 +113,7 @@ const startServer = async () => {
             logger.info(`API Documentation: http://localhost:${PORT}/api`);
         });
 
+        // จัดการเมื่อกด Ctrl+C หรือปิดเซิร์ฟเวอร์ ให้ตัดการเชื่อมต่อ DB อย่างปลอดภัย
         const shutdown = async () => {
             logger.info('Shutting down server...');
             await prisma.$disconnect();
@@ -102,4 +135,4 @@ if (require.main === module) {
     startServer();
 }
 
-module.exports = { app, server, prisma };
+module.exports = { app, server, io };

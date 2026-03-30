@@ -488,6 +488,21 @@ const handleSaveProject = async () => {
       if (response.status === 200) {
         showNotification('บันทึกโปรเจกต์ลง Database พร้อมฝัง PDF เรียบร้อย!', 'success');
         console.log("Database state saved/updated successfully!");
+
+        try {
+          const historyPayload = {
+            name: templateName.value || 'โปรเจกต์ที่บันทึกแล้ว',
+            pages: pages.value,
+            data: JSON.stringify(pages.value),
+            pdfUrl: response.data.EditedFilePath || response.data.filepath || null,
+            templateId: currentTemplateId.value || null
+          };
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+          await axios.post(`${apiUrl}/reports`, historyPayload);
+          if (typeof fetchReports === 'function') fetchReports();
+        } catch (err) {
+          console.error('Failed to log database save to history', err);
+        }
       }
 
       saveHistory();
@@ -681,39 +696,28 @@ const handleExport = async () => {
       currentFileHandle.value = newHandle;
 
       try {
-        const reportInstanceData = {
-          name: templateName.value || 'Untitled Report',
-          templateId: currentTemplateId.value || null,
-          projectData: projectData,
-          filePath: newHandle.name || `${templateName.value || 'report'}.pdf`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
+        const finalName = templateName.value || 'Untitled Report';
 
-        const response = await apiService.createReportInstance(reportInstanceData);
-        const responseData = response?.data || response;
-        if (responseData && responseData.id) {
-          currentReportId.value = responseData.id;
-          showNotification('Report exported and registered successfully!', 'success');
-        }
-      } catch (dbError) {
-        console.error('Failed to register report instance:', dbError);
-        showNotification('Report exported but database registration failed', 'warning');
-      }
-
-      try {
         const historyPayload = {
-          name: templateName.value || 'Exported Document',
+          name: finalName,
           pages: pages.value,
           data: JSON.stringify(pages.value),
           pdfUrl: newHandle.name || null,
           templateId: currentTemplateId.value || null
         };
+
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-        await axios.post(`${apiUrl}/reports`, historyPayload);
+        const response = await axios.post(`${apiUrl}/reports`, historyPayload);
+
+        if (response.data && response.data.id) {
+          currentReportId.value = response.data.id;
+        }
+
+        showNotification('ส่งออก PDF และบันทึกประวัติสำเร็จ!', 'success');
         if (typeof fetchReports === 'function') fetchReports();
       } catch (e) {
-        console.error('Failed to log export history', e);
+        console.error('Failed to log export history:', e);
+        showNotification('ส่งออก PDF สำเร็จ แต่บันทึกประวัติลง Database ล้มเหลว', 'warning');
       }
 
       saveHistory();

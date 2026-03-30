@@ -1,21 +1,11 @@
-const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
 const { asyncHandler } = require('../utils/errorHandler');
 const prisma = require('../prismaClient');
 
-const assetStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const dir = path.join(__dirname, '../uploads/assets');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
+const uploadAsset = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }
 });
-const uploadAsset = multer({ storage: assetStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 const uploadBackground = asyncHandler(async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });

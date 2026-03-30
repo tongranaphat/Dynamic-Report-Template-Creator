@@ -1,6 +1,5 @@
 const prisma = require('../prismaClient');
 const { asyncHandler } = require('../utils/errorHandler');
-const { saveValidTextContent, deleteTextFile } = require('../utils/textSaver');
 
 const saveReport = asyncHandler(async (req, res) => {
     const { id, name, pages, templateId, status, projectData, filePath, data, pdfUrl } = req.body;
@@ -51,15 +50,6 @@ const saveReport = asyncHandler(async (req, res) => {
                 pdfUrl: pdfUrl || undefined
             }
         });
-    }
-
-    if (report) {
-        let bgUrl = null;
-        if (report.templateId) {
-            const tmpl = await prisma.template.findUnique({ where: { id: report.templateId } });
-            if (tmpl) bgUrl = tmpl.background;
-        }
-        await saveValidTextContent(report.pages, 'report', report.id, report.name, bgUrl);
     }
 
     res.json(report);
@@ -118,17 +108,7 @@ const deleteReport = asyncHandler(async (req, res) => {
         }
     }
 
-    const safeName = (existing.name || 'Untitled').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const textFilePath = pathMod.join(__dirname, '../uploads/texts/reports', `${safeName}_${id}.txt`);
-    try {
-        fs.unlinkSync(textFilePath);
-    } catch (e) {
-        console.warn(`[deleteReport] Could not unlink text file ${textFilePath}:`, e.message);
-    }
-
     await prisma.reportInstance.delete({ where: { id } });
-
-    await deleteTextFile('report', id, existing.name);
 
     res.json({ message: 'Report project deleted successfully', id });
 });

@@ -1,8 +1,6 @@
 const prisma = require('../prismaClient');
 const { asyncHandler } = require('../utils/errorHandler');
 
-const { saveValidTextContent, deleteTextFile } = require('../utils/textSaver');
-
 const logger = {
     info: (message, ...args) => {
         console.info(`[TEMPLATE] ${new Date().toISOString()} - ${message}`, ...args);
@@ -173,8 +171,6 @@ const saveTemplate = asyncHandler(async (req, res) => {
 
     logger.success(`Template saved with ID: ${newTemplate.id}`);
 
-    await saveValidTextContent(pages, 'template', newTemplate.id, name, background);
-
     res.send({ status: 'ok', id: newTemplate.id });
 });
 
@@ -195,8 +191,6 @@ const updateTemplate = asyncHandler(async (req, res) => {
     });
 
     logger.success(`Template updated: ${updated.id}`);
-
-    await saveValidTextContent(pages, 'template', updated.id, name, background);
 
     res.json({ status: 'ok', id: updated.id });
 });
@@ -238,14 +232,6 @@ const deleteTemplate = asyncHandler(async (req, res) => {
     const fs = require('fs');
     const pathMod = require('path');
 
-    const safeName = (template.name || 'Untitled').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const textFilePath = pathMod.join(__dirname, '../uploads/texts/templates', `${safeName}_${id}.txt`);
-    try {
-        fs.unlinkSync(textFilePath);
-    } catch (e) {
-        console.warn(`[deleteTemplate] Could not unlink text file ${textFilePath}:`, e.message);
-    }
-
     if (template.preview) {
         const previewPath = pathMod.join(__dirname, '..', template.preview);
         try {
@@ -257,8 +243,6 @@ const deleteTemplate = asyncHandler(async (req, res) => {
 
     await prisma.template.delete({ where: { id } });
     logger.success(`Template deleted: ${id}`);
-
-    await deleteTextFile('template', id, template.name);
 
     res.json({ status: 'ok' });
 });
