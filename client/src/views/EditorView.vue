@@ -11,10 +11,6 @@
           </button>
           <button @click="redo" class="action-btn-text" title="ทำซ้ำ">
           </button>
-
-          <button @click="handleReset" class="action-btn-text" title="เริ่มใหม่จากต้นฉบับ">
-            <span style="color: #F44336; font-weight: bold; cursor: pointer;">เริ่มใหม่</span>
-          </button>
         </div>
         <div class="zoom-group">
           <button @click="zoomOut" class="btn-zoom-out" title="ซูมออก">
@@ -67,7 +63,7 @@
       @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject" @generate-pdf="handleExport"
       @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
       @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" :layers="layers"
-      @select-layer="handleSelectLayer" @import-url="handleUrlImport" />
+      @select-layer="handleSelectLayer" @import-url="handleUrlImport" @reset-project="handleReset" />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
       <div class="scroll-center-helper">

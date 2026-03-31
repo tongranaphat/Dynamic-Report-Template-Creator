@@ -298,6 +298,19 @@
             </button>
           </div>
 
+          <div class="danger-zone">
+            <div class="danger-zone-title">พื้นที่อันตราย</div>
+            <button @click="$emit('reset-project')" class="btn-reset-project" title="ล้างข้อมูลการแก้ไขทั้งหมด">
+              <svg class="reset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+              เริ่มใหม่จากต้นฉบับ
+            </button>
+            <p class="danger-hint">การกระทำนี้จะล้างการแก้ไขที่ยังไม่ได้บันทึกทั้งหมด</p>
+          </div>
+
         </div>
       </div>
 
@@ -1612,5 +1625,68 @@ select {
   border-color: #F65189;
   color: #F65189;
   font-weight: bold;
+}
+
+/* --- Danger Zone UI --- */
+.danger-zone {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px dashed #ffcdd2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.danger-zone-title {
+  font-size: 18px;
+  color: #d32f2f;
+  font-weight: bold;
+  font-family: "TH Sarabun New", "Sarabun", sans-serif;
+}
+
+.btn-reset-project {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background-color: transparent;
+  border: 1.5px solid #f44336;
+  color: #f44336;
+  border-radius: 6px;
+  font-size: 18px;
+  font-family: "TH Sarabun New", "Sarabun", sans-serif;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-reset-project:hover {
+  background-color: #f44336;
+  color: #ffffff;
+  box-shadow: 0 4px 8px rgba(244, 67, 54, 0.2);
+}
+
+.btn-reset-project:active {
+  transform: translateY(1px);
+}
+
+.reset-icon {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.3s ease;
+}
+
+.btn-reset-project:hover .reset-icon {
+  transform: rotate(-45deg);
+}
+
+.danger-hint {
+  font-size: 13px;
+  color: #757575;
+  text-align: center;
+  margin: 0;
+  line-height: 1.2;
 }
 </style>
