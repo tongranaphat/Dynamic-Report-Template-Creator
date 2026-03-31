@@ -116,6 +116,23 @@ export const apiService = {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     return await axios.post(`${apiUrl}/pdf/import-url`, { url });
   },
+
+  async prepareWorkspace(id) {
+    const response = await api.get(`/pdf/workspace/${id}`);
+    return response.data;
+  },
+
+  async savePdfState(formData) {
+    const response = await api.post('/pdf/save-state', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  async resetToOriginal(id) {
+    const response = await api.post(`/pdf/reset/${id}`);
+    return response.data;
+  }
 };
 
 export default apiService;

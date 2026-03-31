@@ -7,6 +7,94 @@ const { asyncHandler } = require('../utils/errorHandler');
 const prisma = require('../prismaClient');
 const axios = require('axios');
 
+const prepareWorkspace = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
+
+        if (!pdf) return res.status(404).json({ error: 'ไม่พบไฟล์ในฐานข้อมูล' });
+
+        const rawSourcePath = pdf.EditedFile && pdf.EditedFilePath ? pdf.EditedFilePath : pdf.FilePath;
+        if (!rawSourcePath) {
+            return res.status(400).json({ error: 'ข้อมูล Path ใน Database ว่างเปล่า' });
+        }
+        const cleanSourcePath = rawSourcePath.replace(/^\//, '');
+        const absoluteSource = path.join(__dirname, '..', cleanSourcePath);
+
+        if (!fs.existsSync(absoluteSource)) {
+            console.error(`[prepareWorkspace] File not found on disk: ${absoluteSource}`);
+            return res.status(404).json({ error: 'ไม่พบไฟล์ต้นฉบับบนเซิร์ฟเวอร์' });
+        }
+
+        const tempDirPath = path.join(__dirname, '../uploads/temp');
+        if (!fs.existsSync(tempDirPath)) {
+            fs.mkdirSync(tempDirPath, { recursive: true });
+        }
+
+        const tempFileName = `temp_${id}.pdf`;
+        const tempFilePath = `/uploads/temp/${tempFileName}`;
+        const cleanTempPath = tempFilePath.replace(/^\//, '');
+        const absoluteTemp = path.join(__dirname, '..', cleanTempPath);
+
+        fs.copyFileSync(absoluteSource, absoluteTemp);
+
+        res.json({
+            message: 'เตรียม Workspace สำเร็จ',
+            tempPath: tempFilePath,
+            editState: pdf.editState
+        });
+    } catch (error) {
+        console.error('[prepareWorkspace] Error:', error);
+        res.status(500).json({ error: 'ไม่สามารถเตรียมไฟล์ใน Temp ได้', details: error.message });
+    }
+};
+const resetToOriginal = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
+
+        if (!pdf) return res.status(404).json({ error: 'ไม่พบไฟล์ในระบบ' });
+
+        if (pdf.EditedFile && pdf.EditedFilePath) {
+            const cleanEditedPath = pdf.EditedFilePath.replace(/^\//, '');
+            const oldEditedPath = path.join(__dirname, '..', cleanEditedPath);
+            if (fs.existsSync(oldEditedPath)) {
+                fs.unlinkSync(oldEditedPath);
+            }
+        }
+
+        await prisma.pdfCache.update({
+            where: { OriginalFileId: id },
+            data: {
+                EditedFile: false,
+                EditedFilePath: null,
+                editState: null
+            }
+        });
+
+        const cleanSourcePath = pdf.FilePath.replace(/^\//, '');
+        const absoluteOriginal = path.join(__dirname, '..', cleanSourcePath);
+
+        const tempDirPath = path.join(__dirname, '../uploads/temp');
+        if (!fs.existsSync(tempDirPath)) fs.mkdirSync(tempDirPath, { recursive: true });
+
+        const absoluteTemp = path.join(__dirname, '..', `uploads/temp/temp_${id}.pdf`);
+
+        if (fs.existsSync(absoluteOriginal)) {
+            fs.copyFileSync(absoluteOriginal, absoluteTemp);
+        }
+
+        res.json({
+            message: 'รีเซ็ตข้อมูลสำเร็จ กลับสู่เวอร์ชันต้นฉบับแล้ว',
+            tempPath: `/uploads/temp/temp_${id}.pdf`
+        });
+
+    } catch (error) {
+        console.error('[resetToOriginal] Error:', error);
+        res.status(500).json({ error: 'การรีเซ็ตข้อมูลล้มเหลว' });
+    }
+};
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const dir = path.join(__dirname, '../uploads/cache');
@@ -14,10 +102,16 @@ const storage = multer.diskStorage({
         cb(null, dir);
     },
     filename: function (req, file, cb) {
-        cb(null, Date.now() + '-' + file.originalname); // เติมเวลาเข้าไปกันชื่อซ้ำ
+        cb(null, Date.now() + '-' + file.originalname);
     }
 });
-const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 50 * 1024 * 1024,
+        fieldSize: 50 * 1024 * 1024
+    }
+});
 
 const convertGDriveUrl = (url) => {
     if (!url || typeof url !== 'string') return url;
@@ -450,6 +544,7 @@ const deletePdf = async (req, res) => {
 const savePdfState = async (req, res) => {
     try {
         const { OriginalFileId, editState } = req.body;
+
         if (!OriginalFileId || !editState) {
             return res.status(400).json({ error: 'Missing OriginalFileId or editState' });
         }
@@ -459,29 +554,27 @@ const savePdfState = async (req, res) => {
 
         let newEditedPath = pdf.EditedFilePath;
 
-        if (!pdf.EditedFile) {
-            const originalAbsPath = path.join(__dirname, '..', pdf.FilePath);
+        if (!pdf.EditedFile || !newEditedPath) {
             const editedFileName = `edited_${Date.now()}_${pdf.FileName}`;
             newEditedPath = `/uploads/cache/${editedFileName}`;
-            const newAbsPath = path.join(__dirname, '..', newEditedPath);
+        }
 
-            try {
-                fs.copyFileSync(originalAbsPath, newAbsPath);
-            } catch (e) {
-                console.error('Failed to copy physical file:', e);
-                return res.status(500).json({ error: 'Failed to create physical copy' });
+        const absoluteEditedPath = path.join(__dirname, '..', newEditedPath.replace(/^\//, ''));
+
+        if (req.file) {
+            fs.copyFileSync(req.file.path, absoluteEditedPath);
+            fs.unlinkSync(req.file.path);
+        } else {
+            const absoluteTemp = path.join(__dirname, '..', `uploads/temp/temp_${OriginalFileId}.pdf`);
+            if (fs.existsSync(absoluteTemp)) {
+                fs.copyFileSync(absoluteTemp, absoluteEditedPath);
             }
         }
 
         let parsedState = editState;
         while (typeof parsedState === 'string') {
-            try {
-                parsedState = JSON.parse(parsedState);
-            } catch (e) {
-                break;
-            }
+            try { parsedState = JSON.parse(parsedState); } catch (e) { break; }
         }
-
         const updatedPdf = await prisma.pdfCache.update({
             where: { OriginalFileId },
             data: {
@@ -491,11 +584,15 @@ const savePdfState = async (req, res) => {
             }
         });
 
-        res.json({ message: 'State saved successfully', id: updatedPdf.OriginalFileId, filepath: updatedPdf.EditedFilePath });
+        res.json({
+            message: 'บันทึกสถานะสำเร็จ',
+            id: updatedPdf.OriginalFileId,
+            filepath: updatedPdf.EditedFilePath
+        });
 
     } catch (error) {
         console.error('Save PDF State Error:', error);
-        res.status(500).json({ error: 'Failed to save PDF state' });
+        res.status(500).json({ error: 'บันทึกข้อมูลไม่สำเร็จ' });
     }
 };
 
@@ -579,5 +676,7 @@ module.exports = {
     getPdfById,
     savePdfState,
     importLocalPath,
-    saveGeneratedPdfState
+    saveGeneratedPdfState,
+    prepareWorkspace,
+    resetToOriginal
 };

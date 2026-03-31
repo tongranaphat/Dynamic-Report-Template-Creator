@@ -12,10 +12,16 @@ const {
     getPdfById,
     savePdfState,
     importLocalPath,
-    saveGeneratedPdfState
+    saveGeneratedPdfState,
+    prepareWorkspace,
+    resetToOriginal
 } = require('../controllers/pdfController');
 
 const { asyncHandler } = require('../utils/errorHandler');
+
+router.get('/pdf/workspace/:id', asyncHandler(prepareWorkspace));
+router.post('/pdf/reset/:id', asyncHandler(resetToOriginal));
+router.post('/pdf/save-state', upload.single('pdfFile'), asyncHandler(savePdfState));
 
 router.post('/generate-pdf', asyncHandler(generatePDF));
 router.post('/check-pdf-type', upload.single('image'), asyncHandler(checkPdfType));
@@ -25,7 +31,6 @@ router.post('/pdf/auto-import', asyncHandler(autoImportUniversal));
 router.post('/pdf/upload', upload.single('file'), asyncHandler(uploadPdf));
 router.get('/pdf/cache/:id', asyncHandler(getPdfById));
 router.delete('/pdf/cache/:id', asyncHandler(deletePdf));
-router.post('/pdf/save-state', asyncHandler(savePdfState));
 router.post('/pdf/import-local', asyncHandler(importLocalPath));
 router.post('/pdf/save-generated-state', upload.single('pdfFile'), saveGeneratedPdfState);
 module.exports = router;

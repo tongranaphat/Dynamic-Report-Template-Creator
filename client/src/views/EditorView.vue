@@ -6,7 +6,16 @@
       </div>
 
       <div class="navbar-right">
+        <div class="undo-redo-group">
+          <button @click="undo" class="action-btn-text" title="ย้อนกลับ">
+          </button>
+          <button @click="redo" class="action-btn-text" title="ทำซ้ำ">
+          </button>
 
+          <button @click="handleReset" class="action-btn-text" title="เริ่มใหม่จากต้นฉบับ">
+            <span style="color: #F44336; font-weight: bold; cursor: pointer;">เริ่มใหม่</span>
+          </button>
+        </div>
         <div class="zoom-group">
           <button @click="zoomOut" class="btn-zoom-out" title="ซูมออก">
             <span class="zoom-out-icon"></span>
@@ -101,6 +110,9 @@ import { CANVAS_CONSTANTS } from '../constants/canvas';
 import { showNotification } from '../utils/notifications';
 import apiService from '../services/apiService';
 import { useLayers } from '../composables/useLayers';
+
+const currentPdfId = window.location.pathname.split('/').pop();
+const pdfUrlToRender = ref('');
 
 const PAGE_WIDTH_CONST = CANVAS_CONSTANTS.PAGE_WIDTH;
 const PAGE_HEIGHT_CONST = CANVAS_CONSTANTS.PAGE_HEIGHT;
@@ -317,6 +329,7 @@ const { initCanvasEvents } = useCanvasEvents(
 );
 const { connect, emitUpdate } = useRealTime();
 const { generateHybridPdfBlob } = useEditablePdf();
+
 const { getMockData } = usePreviewData();
 const editorStore = useEditorStore();
 
@@ -344,6 +357,28 @@ const handleSaveTemplate = async () => {
   }
 };
 
+const handleReset = async () => {
+  const fileIdToReset = window.location.pathname.split('/').pop();
+
+  if (!fileIdToReset || fileIdToReset === 'pdf') {
+    showNotification('ไม่พบ ID สำหรับการรีเซ็ต', 'error');
+    return;
+  }
+
+  const confirmed = confirm("ข้อมูลทั้งหมดที่เคยแก้ไขจะหายไปทั้งหมด แน่ใจหรือไม่?");
+
+  if (confirmed) {
+    try {
+      showNotification('กำลังรีเซ็ตข้อมูล...', 'info');
+      await apiService.resetToOriginal(fileIdToReset);
+      window.location.reload();
+
+    } catch (error) {
+      console.error("Reset failed:", error);
+      showNotification('เกิดข้อผิดพลาดในการรีเซ็ตข้อมูล', 'error');
+    }
+  }
+};
 
 const handleSaveProject = async () => {
   if (!canvas.value) return;
@@ -481,11 +516,9 @@ const handleSaveProject = async () => {
       formData.append('editState', JSON.stringify(pages.value));
       formData.append('pdfFile', pdfBlob, `edited_${fileIdToSave}.pdf`);
 
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/save-generated-state`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const savedData = await apiService.savePdfState(formData);
 
-      if (response.status === 200) {
+      if (savedData) {
         showNotification('บันทึกโปรเจกต์ลง Database พร้อมฝัง PDF เรียบร้อย!', 'success');
         console.log("Database state saved/updated successfully!");
 
@@ -494,11 +527,12 @@ const handleSaveProject = async () => {
             name: templateName.value || 'โปรเจกต์ที่บันทึกแล้ว',
             pages: pages.value,
             data: JSON.stringify(pages.value),
-            pdfUrl: response.data.EditedFilePath || response.data.filepath || null,
+            pdfUrl: savedData.filepath || null,
             templateId: currentTemplateId.value || null
           };
           const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
           await axios.post(`${apiUrl}/reports`, historyPayload);
+
           if (typeof fetchReports === 'function') fetchReports();
         } catch (err) {
           console.error('Failed to log database save to history', err);
@@ -1441,36 +1475,29 @@ const handleRouteChange = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       const backendUrl = apiUrl.replace('/api', '');
-      const dbRes = await axios.get(`${apiUrl}/pdf/cache/${fileId}`);
 
-      const resolvedFilepath = (dbRes.data.EditedFile && dbRes.data.EditedFilePath) ? dbRes.data.EditedFilePath : (dbRes.data.FilePath || dbRes.data.filepath);
+      const workspaceData = await apiService.prepareWorkspace(fileId);
+      const tempUrl = `${backendUrl}${workspaceData.tempPath}`;
 
-      if (dbRes.data.EditedFile && dbRes.data.editState) {
+      if (workspaceData.editState) {
         try {
-          pdfUrl.value = backendUrl + resolvedFilepath;
-
-          let parsedState = dbRes.data.editState;
+          pdfUrl.value = tempUrl;
+          let parsedState = workspaceData.editState;
           while (typeof parsedState === 'string') {
             parsedState = JSON.parse(parsedState);
           }
-
           pages.value = parsedState;
           currentPageIndex.value = 0;
-
           await nextTick();
           setTimeout(async () => {
-            if (typeof renderAllPages === 'function') {
-              await renderAllPages();
-            }
+            if (typeof renderAllPages === 'function') await renderAllPages();
           }, 500);
-
         } catch (e) {
-          console.error('Restoration Error: Failed to parse and render editState', e);
+          console.error('Restoration Error', e);
         }
       } else {
-        const fileUrl = `${backendUrl}${resolvedFilepath}`;
-        const blobRes = await axios.get(fileUrl, { responseType: 'blob' });
-        const downloadedFile = new File([blobRes.data], dbRes.data.FileName || 'document.pdf', { type: 'application/pdf' });
+        const blobRes = await axios.get(tempUrl, { responseType: 'blob' });
+        const downloadedFile = new File([blobRes.data], 'workspace_document.pdf', { type: 'application/pdf' });
 
         await resetCanvasWrapper();
         const images = await processPdfToImages(downloadedFile);
@@ -1486,7 +1513,7 @@ const handleRouteChange = async () => {
         }
       }
     } catch (error) {
-      console.error('Failed to load PDF from URL:', error);
+      console.error('Failed to load PDF into workspace:', error);
       alert('Could not load the requested PDF.');
     }
     return;
