@@ -65,21 +65,9 @@ const resetToOriginal = async (req, res) => {
         const absoluteOriginal = path.join(__dirname, '..', cleanSourcePath);
 
         if (!fs.existsSync(absoluteOriginal)) {
-            await prisma.pdfCache.update({
-                where: { OriginalFileId: id },
-                data: { OriginalFile: false }
-            });
             return res.status(404).json({
-                error: 'ไม่สามารถรีเซ็ตได้เนื่องจากไฟล์ต้นฉบับสูญหาย แต่งานที่คุณแก้ไขล่าสุดยังถูกรักษาไว้อย่างปลอดภัย'
+                error: 'ไม่สามารถรีเซ็ตได้เนื่องจากไฟล์ต้นฉบับสูญหายบนเซิร์ฟเวอร์'
             });
-        }
-
-        if (pdf.EditedFile && pdf.EditedFilePath) {
-            const cleanEditedPath = pdf.EditedFilePath.replace(/^\//, '');
-            const oldEditedPath = path.join(__dirname, '..', cleanEditedPath);
-            if (fs.existsSync(oldEditedPath)) {
-                fs.unlinkSync(oldEditedPath);
-            }
         }
 
         const tempDirPath = path.join(__dirname, '../uploads/temp');
@@ -91,7 +79,6 @@ const resetToOriginal = async (req, res) => {
         await prisma.pdfCache.update({
             where: { OriginalFileId: id },
             data: {
-                OriginalFile: true,
                 EditedFile: false,
                 EditedFilePath: null,
                 editState: null,
@@ -100,7 +87,7 @@ const resetToOriginal = async (req, res) => {
         });
 
         res.json({
-            message: 'รีเซ็ตข้อมูลสำเร็จ กลับสู่เวอร์ชันต้นฉบับแล้ว',
+            message: 'รีเซ็ตสำเร็จ ดึงไฟล์ต้นฉบับมาไว้ในพื้นที่ทำงานแล้ว',
             tempPath: `/uploads/temp/temp_${id}.pdf`
         });
 
@@ -112,7 +99,7 @@ const resetToOriginal = async (req, res) => {
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const dir = path.join(__dirname, '../uploads/cache');
+        const dir = path.join(__dirname, '../uploads/original/cache');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         cb(null, dir);
     },
@@ -162,7 +149,7 @@ const importPdfUrl = async (req, res) => {
                 if (urlName && urlName !== 'uc' && urlName !== 'download') exactName = urlName;
             }
 
-            const uploadDir = path.join(__dirname, '../uploads/cache');
+            const uploadDir = path.join(__dirname, '../uploads/original/cache');
             if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
             const destPath = path.join(uploadDir, exactName);
@@ -179,7 +166,7 @@ const importPdfUrl = async (req, res) => {
                 data: {
                     FileName: exactName,
                     OriginalUrlorPath: url,
-                    FilePath: `/uploads/cache/${exactName}`,
+                    FilePath: `/uploads/original/cache/${exactName}`,
                     OriginalFile: true,
                     EditedFile: false
                 }
@@ -213,7 +200,7 @@ const autoImportUniversal = async (req, res) => {
             if (urlName && urlName !== 'uc' && urlName !== 'download') exactName = urlName;
         }
 
-        const uploadDir = path.join(__dirname, '../uploads/cache');
+        const uploadDir = path.join(__dirname, '../uploads/original/cache');
         if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
         const destPath = path.join(uploadDir, exactName);
@@ -230,7 +217,7 @@ const autoImportUniversal = async (req, res) => {
             data: {
                 FileName: exactName,
                 OriginalUrlorPath: url,
-                FilePath: `/uploads/cache/${exactName}`,
+                FilePath: `/uploads/original/cache/${exactName}`,
                 OriginalFile: true,
                 EditedFile: false
             }
@@ -487,7 +474,7 @@ const generatePDF = asyncHandler(async (req, res) => {
 const uploadPdf = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-        const filepath = `/uploads/cache/${req.file.filename}`;
+        const filepath = `/uploads/original/cache/${req.file.filename}`;
 
         const savedPdf = await prisma.pdfCache.create({
             data: {
@@ -581,10 +568,12 @@ const savePdfState = async (req, res) => {
 
         if (!pdf.EditedFile || !newEditedPath) {
             const editedFileName = `edited_${Date.now()}_${pdf.FileName}`;
-            newEditedPath = `/uploads/cache/${editedFileName}`;
+            newEditedPath = `/uploads/edited/cache/${editedFileName}`;
         }
 
         const absoluteEditedPath = path.join(__dirname, '..', newEditedPath.replace(/^\//, ''));
+        const editedDir = path.dirname(absoluteEditedPath);
+        if (!fs.existsSync(editedDir)) fs.mkdirSync(editedDir, { recursive: true });
 
         if (req.file) {
             fs.copyFileSync(req.file.path, absoluteEditedPath);
@@ -639,7 +628,7 @@ const importLocalPath = async (req, res) => {
         }
 
         const fileName = `local_${Date.now()}_${path.basename(normalizedPath)}`;
-        const uploadDir = path.join(__dirname, '../uploads/cache');
+        const uploadDir = path.join(__dirname, '../uploads/original/cache');
         if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
         const newPhysicalPath = path.join(uploadDir, fileName);
@@ -649,7 +638,7 @@ const importLocalPath = async (req, res) => {
             data: {
                 OriginalUrlorPath: normalizedPath,
                 FileName: path.basename(normalizedPath),
-                FilePath: `/uploads/cache/${fileName}`,
+                FilePath: `/uploads/original/cache/${fileName}`,
                 OriginalFile: true,
                 EditedFile: false
             }
@@ -672,9 +661,13 @@ const saveGeneratedPdfState = async (req, res) => {
         if (!req.file) return res.status(400).json({ error: 'ไม่พบไฟล์ PDF ที่ส่งมา' });
         const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId } });
         if (!pdf) return res.status(404).json({ error: 'ไม่พบโปรเจกต์ในระบบ' });
-        const fs = require('fs');
-        const path = require('path');
-        const newEditedPath = `/uploads/cache/${req.file.filename}`;
+        const editedFileName = `edited_${req.file.filename}`;
+        const editedDir = path.join(__dirname, '../uploads/edited/cache');
+        if (!fs.existsSync(editedDir)) fs.mkdirSync(editedDir, { recursive: true });
+        const newEditedPath = `/uploads/edited/cache/${editedFileName}`;
+        const absoluteNewEdited = path.join(editedDir, editedFileName);
+        fs.copyFileSync(req.file.path, absoluteNewEdited);
+        fs.unlinkSync(req.file.path);
         if (pdf.EditedFile && pdf.EditedFilePath) {
             const oldPath = path.join(__dirname, '..', pdf.EditedFilePath);
             if (fs.existsSync(oldPath) && oldPath !== path.join(__dirname, '..', pdf.FilePath)) {
