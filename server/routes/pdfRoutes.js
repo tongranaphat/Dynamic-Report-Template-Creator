@@ -14,7 +14,8 @@ const {
     importLocalPath,
     saveGeneratedPdfState,
     prepareWorkspace,
-    resetToOriginal
+    resetToOriginal,
+    cleanupTempFile
 } = require('../controllers/pdfController');
 
 const { asyncHandler } = require('../utils/errorHandler');
@@ -33,4 +34,6 @@ router.get('/pdf/cache/:id', asyncHandler(getPdfById));
 router.delete('/pdf/cache/:id', asyncHandler(deletePdf));
 router.post('/pdf/import-local', asyncHandler(importLocalPath));
 router.post('/pdf/save-generated-state', upload.single('pdfFile'), saveGeneratedPdfState);
+router.post('/pdf/cleanup-temp/:id', asyncHandler(cleanupTempFile));
+router.delete('/pdf/cleanup-temp/:id', asyncHandler(cleanupTempFile));
 module.exports = router;

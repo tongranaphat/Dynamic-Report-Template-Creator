@@ -38,6 +38,11 @@ const prepareWorkspace = async (req, res) => {
 
         fs.copyFileSync(absoluteSource, absoluteTemp);
 
+        await prisma.pdfCache.update({
+            where: { OriginalFileId: id },
+            data: { TempFilePath: tempFilePath }
+        });
+
         res.json({
             message: 'เตรียม Workspace สำเร็จ',
             tempPath: tempFilePath,
@@ -48,12 +53,26 @@ const prepareWorkspace = async (req, res) => {
         res.status(500).json({ error: 'ไม่สามารถเตรียมไฟล์ใน Temp ได้', details: error.message });
     }
 };
+
 const resetToOriginal = async (req, res) => {
     try {
         const { id } = req.params;
         const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
 
-        if (!pdf) return res.status(404).json({ error: 'ไม่พบไฟล์ในระบบ' });
+        if (!pdf) return res.status(404).json({ error: 'ไม่พบโปรเจกต์ในระบบ' });
+
+        const cleanSourcePath = pdf.FilePath.replace(/^\//, '');
+        const absoluteOriginal = path.join(__dirname, '..', cleanSourcePath);
+
+        if (!fs.existsSync(absoluteOriginal)) {
+            await prisma.pdfCache.update({
+                where: { OriginalFileId: id },
+                data: { OriginalFile: false }
+            });
+            return res.status(404).json({
+                error: 'ไม่สามารถรีเซ็ตได้เนื่องจากไฟล์ต้นฉบับสูญหาย แต่งานที่คุณแก้ไขล่าสุดยังถูกรักษาไว้อย่างปลอดภัย'
+            });
+        }
 
         if (pdf.EditedFile && pdf.EditedFilePath) {
             const cleanEditedPath = pdf.EditedFilePath.replace(/^\//, '');
@@ -63,26 +82,22 @@ const resetToOriginal = async (req, res) => {
             }
         }
 
-        await prisma.pdfCache.update({
-            where: { OriginalFileId: id },
-            data: {
-                EditedFile: false,
-                EditedFilePath: null,
-                editState: null
-            }
-        });
-
-        const cleanSourcePath = pdf.FilePath.replace(/^\//, '');
-        const absoluteOriginal = path.join(__dirname, '..', cleanSourcePath);
-
         const tempDirPath = path.join(__dirname, '../uploads/temp');
         if (!fs.existsSync(tempDirPath)) fs.mkdirSync(tempDirPath, { recursive: true });
 
         const absoluteTemp = path.join(__dirname, '..', `uploads/temp/temp_${id}.pdf`);
+        fs.copyFileSync(absoluteOriginal, absoluteTemp);
 
-        if (fs.existsSync(absoluteOriginal)) {
-            fs.copyFileSync(absoluteOriginal, absoluteTemp);
-        }
+        await prisma.pdfCache.update({
+            where: { OriginalFileId: id },
+            data: {
+                OriginalFile: true,
+                EditedFile: false,
+                EditedFilePath: null,
+                editState: null,
+                TempFilePath: `/uploads/temp/temp_${id}.pdf`
+            }
+        });
 
         res.json({
             message: 'รีเซ็ตข้อมูลสำเร็จ กลับสู่เวอร์ชันต้นฉบับแล้ว',
@@ -91,7 +106,7 @@ const resetToOriginal = async (req, res) => {
 
     } catch (error) {
         console.error('[resetToOriginal] Error:', error);
-        res.status(500).json({ error: 'การรีเซ็ตข้อมูลล้มเหลว' });
+        res.status(500).json({ error: 'การรีเซ็ตข้อมูลล้มเหลว: ' + error.message });
     }
 };
 
@@ -532,6 +547,16 @@ const deletePdf = async (req, res) => {
             }
         }
 
+        if (record.TempFilePath) {
+            const cleanTempPath = record.TempFilePath.replace(/^\//, '');
+            const tempAbsPath = path.join(__dirname, '..', cleanTempPath);
+            try {
+                if (fs.existsSync(tempAbsPath)) fs.unlinkSync(tempAbsPath);
+            } catch (e) {
+                console.warn(`[deletePdf] ลบไฟล์ Temp ไม่สำเร็จ ${tempAbsPath}:`, e.message);
+            }
+        }
+
         await prisma.pdfCache.delete({ where: { OriginalFileId: id } });
 
         res.json({ message: 'PDF and physical files deleted successfully', id });
@@ -603,21 +628,27 @@ const importLocalPath = async (req, res) => {
 
         localPath = localPath.replace(/^["']|["']$/g, '');
 
-        if (!fs.existsSync(localPath)) {
-            return res.status(404).json({ error: 'File not found: ' + localPath });
+        if (!localPath.toLowerCase().endsWith('.pdf')) {
+            return res.status(400).json({ error: 'Security Policy: อนุญาตให้อิมพอร์ตเฉพาะไฟล์ .pdf เท่านั้น' });
         }
 
-        const fileName = `local_${Date.now()}_${path.basename(localPath)}`;
+        const normalizedPath = path.resolve(localPath);
+
+        if (!fs.existsSync(normalizedPath)) {
+            return res.status(404).json({ error: 'File not found: ' + normalizedPath });
+        }
+
+        const fileName = `local_${Date.now()}_${path.basename(normalizedPath)}`;
         const uploadDir = path.join(__dirname, '../uploads/cache');
         if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
         const newPhysicalPath = path.join(uploadDir, fileName);
-        fs.copyFileSync(localPath, newPhysicalPath);
+        fs.copyFileSync(normalizedPath, newPhysicalPath);
 
         const cachedPdf = await prisma.pdfCache.create({
             data: {
-                OriginalUrlorPath: localPath,
-                FileName: path.basename(localPath),
+                OriginalUrlorPath: normalizedPath,
+                FileName: path.basename(normalizedPath),
                 FilePath: `/uploads/cache/${fileName}`,
                 OriginalFile: true,
                 EditedFile: false
@@ -665,6 +696,33 @@ const saveGeneratedPdfState = async (req, res) => {
     }
 };
 
+const cleanupTempFile = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pdf = await prisma.pdfCache.findUnique({ where: { OriginalFileId: id } });
+
+        if (pdf && pdf.TempFilePath) {
+            const cleanTempPath = pdf.TempFilePath.replace(/^\//, '');
+            const absoluteTemp = path.join(__dirname, '..', cleanTempPath);
+
+            if (fs.existsSync(absoluteTemp)) {
+                fs.unlinkSync(absoluteTemp);
+                console.log(`[cleanupTempFile] ลบไฟล์ Temp ทิ้งเรียบร้อย: ${absoluteTemp}`);
+            }
+
+            await prisma.pdfCache.update({
+                where: { OriginalFileId: id },
+                data: { TempFilePath: null }
+            });
+        }
+
+        res.json({ message: 'ลบไฟล์ Temp ออกจากระบบสำเร็จ' });
+    } catch (error) {
+        console.error('[cleanupTempFile] Error:', error);
+        res.status(500).json({ error: 'ไม่สามารถลบไฟล์ Temp ได้' });
+    }
+};
+
 module.exports = {
     upload,
     checkPdfType,
@@ -678,5 +736,6 @@ module.exports = {
     importLocalPath,
     saveGeneratedPdfState,
     prepareWorkspace,
-    resetToOriginal
+    resetToOriginal,
+    cleanupTempFile
 };

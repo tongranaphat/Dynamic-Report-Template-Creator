@@ -132,6 +132,11 @@ export const apiService = {
   async resetToOriginal(id) {
     const response = await api.post(`/pdf/reset/${id}`);
     return response.data;
+  },
+
+  async cleanupTemp(id) {
+    const response = await api.post(`/pdf/cleanup-temp/${id}`);
+    return response.data;
   }
 };
 

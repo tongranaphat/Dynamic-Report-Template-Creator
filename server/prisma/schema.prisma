@@ -88,6 +88,7 @@ model PdfCache {
   OriginalUrlorPath String
   FilePath          String
   EditedFile        Boolean  @default(false)
+  TempFilePath      String?
   editState         Json?
   EditedFilePath    String?
   createdAt         DateTime @default(now())

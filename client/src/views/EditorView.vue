@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch, nextTick, onUnmounted } from 'vue';
+import { onMounted, ref, watch, nextTick, onUnmounted, computed } from 'vue';
 import { fabric } from 'fabric';
 import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -111,7 +111,11 @@ import { showNotification } from '../utils/notifications';
 import apiService from '../services/apiService';
 import { useLayers } from '../composables/useLayers';
 
-const currentPdfId = window.location.pathname.split('/').pop();
+
+const currentPdfId = computed(() => {
+  const parts = window.location.pathname.split('/');
+  return parts[parts.length - 1];
+});
 const pdfUrlToRender = ref('');
 
 const PAGE_WIDTH_CONST = CANVAS_CONSTANTS.PAGE_WIDTH;
@@ -134,6 +138,25 @@ let isRendering = false;
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value;
+};
+
+let activePdfId = null;
+
+const triggerTempCleanup = () => {
+  const idToClean = activePdfId || (currentPdfId.value !== 'pdf' ? currentPdfId.value : null);
+
+  if (idToClean && idToClean !== 'pdf') {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const url = `${apiUrl}/pdf/cleanup-temp/${idToClean}`;
+
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url);
+    } else {
+      fetch(url, { method: 'POST', keepalive: true }).catch(() => { });
+    }
+
+    activePdfId = null;
+  }
 };
 
 const fetchReports = async () => {
@@ -371,11 +394,13 @@ const handleReset = async () => {
     try {
       showNotification('กำลังรีเซ็ตข้อมูล...', 'info');
       await apiService.resetToOriginal(fileIdToReset);
+      alert("รีเซ็ตสำเร็จ! ระบบกำลังโหลดไฟล์ต้นฉบับใหม่...");
       window.location.reload();
-
     } catch (error) {
       console.error("Reset failed:", error);
-      showNotification('เกิดข้อผิดพลาดในการรีเซ็ตข้อมูล', 'error');
+      const errorMsg = error.response?.data?.error || 'เกิดข้อผิดพลาดในการรีเซ็ตข้อมูล';
+      alert(`${errorMsg}`);
+      showNotification('รีเซ็ตไม่สำเร็จ', 'error');
     }
   }
 };
@@ -796,6 +821,8 @@ const resetCanvasWrapper = async () => {
 };
 
 const goHome = () => {
+  triggerTempCleanup();
+
   if (typeof window !== 'undefined' && window.history) {
     window.history.pushState({}, '', '/');
   }
@@ -1472,6 +1499,9 @@ const handleRouteChange = async () => {
   const pdfMatch = currentPath.match(/^\/pdf\/([a-zA-Z0-9-]+)/i);
   if (pdfMatch && pdfMatch[1]) {
     const fileId = pdfMatch[1];
+
+    activePdfId = fileId;
+
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       const backendUrl = apiUrl.replace('/api', '');
@@ -1711,11 +1741,14 @@ onMounted(async () => {
       }
     }
   });
-
+  window.addEventListener('beforeunload', triggerTempCleanup);
+  window.addEventListener('popstate', () => { triggerTempCleanup(); });
 });
 
 onUnmounted(() => {
   window.removeEventListener('popstate', handleRouteChange);
+  window.removeEventListener('beforeunload', triggerTempCleanup);
+  triggerTempCleanup();
 });
 </script>
 
