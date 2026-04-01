@@ -626,6 +626,13 @@ export function useCanvas() {
 
   const setHistoryLock = (status) => { isHistoryLocked.value = status; };
 
+  const updateCanvasDimensions = () => {
+    if (canvas.value) {
+      canvas.value.calcOffset();
+      canvas.value.requestRenderAll();
+    }
+  };
+
   return {
     canvas,
     zoomLevel,

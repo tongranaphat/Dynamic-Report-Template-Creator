@@ -164,7 +164,8 @@
             <h4 class="label-small">บล็อกลายเซ็น:</h4>
             <div class="var-list">
               <button v-for="sig in signatories" :key="sig.id" draggable="true"
-                @dragstart="onSignatureDragStart($event, sig)" class="var-btn" :disabled="isPreviewMode">
+                @dragstart="onSignatureDragStart($event, sig)" @click="$emit('add-signature-block', sig)"
+                class="var-btn" :disabled="isPreviewMode">
                 <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
                 <span class="var-btn-text">{{ sig.fullName }}</span>
               </button>

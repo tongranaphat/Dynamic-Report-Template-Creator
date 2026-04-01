@@ -277,7 +277,6 @@ const {
   addSignatureBlockToCanvas,
   setHistoryContext,
   isRemoteUpdating,
-  addSignatureBlockToCanvas,
   updateCanvasDimensions
 } = useCanvas();
 
