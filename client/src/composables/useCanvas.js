@@ -643,7 +643,6 @@ export function useCanvas() {
 
     initCanvas,
     addVariableToCanvas,
-    addSignatureBlockToCanvas,
     removeSelectedObject,
     addImageToCanvas,
     onDragStart,
@@ -669,6 +668,9 @@ export function useCanvas() {
 
     saveCurrentPageStateAtomic,
 
-    render
+    render,
+
+    addSignatureBlockToCanvas,
+    updateCanvasDimensions
   };
 }

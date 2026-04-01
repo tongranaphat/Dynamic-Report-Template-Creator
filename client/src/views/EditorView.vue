@@ -64,7 +64,7 @@
       @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
       @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" :layers="layers"
       @select-layer="handleSelectLayer" @import-url="handleUrlImport" @reset-project="handleReset"
-      @add-signature-block="handleAddSignatureBlock" />
+      @add-signature-block="handleAddSignatureBlock" @add-custom-variable="addCustomVariable" />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
       <div class="scroll-center-helper">
@@ -276,7 +276,9 @@ const {
   addVariableToCanvas,
   addSignatureBlockToCanvas,
   setHistoryContext,
-  isRemoteUpdating
+  isRemoteUpdating,
+  addSignatureBlockToCanvas,
+  updateCanvasDimensions
 } = useCanvas();
 
 const canvasHelpers = { resetHistory, saveHistory, setHistoryLock };
@@ -1417,15 +1419,35 @@ const onDrop = (e) => {
   }
 };
 
+// const handleAddSignatureBlock = (sigData) => {
+//   if (!canvas.value) return;
+
+//   const center = canvas.value.getCenter();
+
+//   if (typeof addSignatureBlockToCanvas !== 'undefined') {
+//     addSignatureBlockToCanvas(sigData, center.left, center.top);
+//   } else if (window.addSignatureBlockToCanvas) {
+//     window.addSignatureBlockToCanvas(sigData, center.left, center.top);
+//   }
+// };
+
 const handleAddSignatureBlock = (sigData) => {
+  console.log("ผู้ใช้คลิกบล็อกลายเซ็น ข้อมูลที่ได้คือ:", sigData);
+
   if (!canvas.value) return;
 
+  if (!sigData || !sigData.fullName) {
+    console.warn("ไม่มีข้อมูลคนเซ็น กรุณาคลิกที่รายชื่อด้านล่าง");
+    return;
+  }
+
   const center = canvas.value.getCenter();
+  console.log("จุดกึ่งกลางหน้าจอ:", center);
 
   if (typeof addSignatureBlockToCanvas !== 'undefined') {
     addSignatureBlockToCanvas(sigData, center.left, center.top);
-  } else if (window.addSignatureBlockToCanvas) {
-    window.addSignatureBlockToCanvas(sigData, center.left, center.top);
+  } else {
+    console.error("หาฟังก์ชัน addSignatureBlockToCanvas ไม่เจอ (ลืมทำจุด 1 หรือ 2 หรือเปล่า?)");
   }
 };
 
