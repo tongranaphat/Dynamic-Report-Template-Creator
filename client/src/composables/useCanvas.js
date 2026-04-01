@@ -130,6 +130,89 @@ export function useCanvas() {
     saveHistory();
   };
 
+  const addSignatureBlockToCanvas = (fullName, signatoryId, signatureImage, x = 100, y = 100) => {
+    if (!canvas.value) return;
+
+    const lineObj = new fabric.Line([-70, 0, 70, 0], {
+      stroke: '#000',
+      strokeWidth: 1,
+      strokeDashArray: [3, 3],
+      originX: 'center',
+      originY: 'bottom',
+      top: 30,
+      left: 0
+    });
+
+    const prefixText = new fabric.Text('ลงชื่อ', {
+      fontSize: 16,
+      fontFamily: 'Sarabun',
+      originX: 'right',
+      originY: 'bottom',
+      top: 30,
+      left: -80
+    });
+
+    const nameText = new fabric.Text(`( ${fullName} )`, {
+      fontSize: 16,
+      fontFamily: 'Sarabun',
+      originX: 'center',
+      originY: 'top',
+      top: 35,
+      left: 0
+    });
+
+    const renderGroup = (imgObj = null) => {
+      const objects = [lineObj, prefixText, nameText];
+
+      if (imgObj) objects.push(imgObj);
+
+      const sigGroup = new fabric.Group(objects, {
+        left: x,
+        top: y,
+        isSignatureBlock: true,
+        signatoryId: signatoryId,
+        nameText: fullName,
+        signatureImage: signatureImage
+      });
+
+      canvas.value.add(sigGroup);
+      canvas.value.setActiveObject(sigGroup);
+      canvas.value.renderAll();
+    };
+
+    if (signatureImage) {
+      let imageUrl = signatureImage;
+
+      if (imageUrl.startsWith('/uploads')) {
+        const backendPort = 4010;
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        imageUrl = `${protocol}//${hostname}:${backendPort}${imageUrl}`;
+      }
+
+      console.log("กำลังพยายามโหลดรูปลายเซ็นจาก:", imageUrl);
+
+      fabric.Image.fromURL(imageUrl, (img, isError) => {
+        if (isError) {
+          console.error("โหลดรูปไม่สำเร็จ! ตรวจสอบพาทรูปอีกครั้ง");
+          renderGroup();
+          return;
+        }
+
+        if (img) {
+          img.scaleToHeight(45);
+          img.set({
+            originX: 'center',
+            originY: 'bottom',
+            top: 25,
+            left: 0
+          });
+          renderGroup(img);
+        }
+      }, { crossOrigin: 'anonymous' });
+    }
+  };
+
   const addImageToCanvas = async (url, x = 100, y = 100) => {
     if (!canvas.value) return;
     fabric.Image.fromURL(url, (img) => {
@@ -484,6 +567,7 @@ export function useCanvas() {
 
     initCanvas,
     addVariableToCanvas,
+    addSignatureBlockToCanvas,
     removeSelectedObject,
     addImageToCanvas,
     onDragStart,

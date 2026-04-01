@@ -273,6 +273,7 @@ const {
   redo,
   addImageToCanvas,
   addVariableToCanvas,
+  addSignatureBlockToCanvas,
   setHistoryContext,
   isRemoteUpdating
 } = useCanvas();
@@ -1406,6 +1407,17 @@ const onDrop = (e) => {
   const customText = e.dataTransfer.getData('customText');
   if (customText) {
     addCustomTextToCanvas(x, y);
+  }
+
+  const type = e.dataTransfer.getData('type');
+  if (type === 'SIGNATURE_BLOCK') {
+    const signatoryId = e.dataTransfer.getData('signatoryId');
+    const fullName = e.dataTransfer.getData('fullName');
+    const signatureImage = e.dataTransfer.getData('signatureImage');
+    
+    if (typeof addSignatureBlockToCanvas !== 'undefined') {
+      addSignatureBlockToCanvas(fullName, signatoryId, signatureImage, x, y);
+    }
   }
 };
 

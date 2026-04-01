@@ -20,6 +20,7 @@ const pdfRoutes = require('./routes/pdfRoutes');
 const reportInstanceRoutes = require('./routes/reportInstanceRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const assetRoutes = require('./routes/assetRoutes');
+const signatoryRoutes = require('./routes/signatoryRoutes');
 
 // ==========================================
 // 2. ตั้งค่า Server & อินสแตนซ์ต่างๆ
@@ -86,6 +87,7 @@ app.use('/api', templateRoutes);
 app.use('/api', pdfRoutes);
 app.use('/api', reportInstanceRoutes);
 app.use('/api/assets', assetRoutes);
+app.use('/api', signatoryRoutes);
 
 // ==========================================
 // 6. จัดการ Error (404 และ Error ทั่วไป)

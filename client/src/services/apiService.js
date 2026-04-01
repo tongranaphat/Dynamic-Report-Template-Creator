@@ -40,6 +40,11 @@ export const apiService = {
     return response.data;
   },
 
+  async getSignatories() {
+    const response = await api.get('/signatories');
+    return response.data;
+  },
+
   async getTemplates(userId = null) {
     const params = userId ? { userId } : {};
     const response = await api.get('/templates', { params });

@@ -159,6 +159,20 @@
             </button>
           </div>
 
+
+          <div class="data-section" v-if="signatories.length > 0">
+            <h4 class="label-small">บล็อกลายเซ็น:</h4>
+            <div class="var-list">
+              <button v-for="sig in signatories" :key="sig.id" draggable="true"
+                @dragstart="onSignatureDragStart($event, sig)" class="var-btn" :disabled="isPreviewMode">
+                <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
+                <span class="var-btn-text">{{ sig.fullName }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="divider-line" style="margin-top: 15px;"></div>
+
           <div class="data-section">
             <h4 class="label-small">เลือกชุดข้อมูล:</h4>
             <div class="var-list">
@@ -172,6 +186,7 @@
               </div>
             </div>
           </div>
+
 
         </div>
 
@@ -332,12 +347,23 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import apiService from '../services/apiService';
 
 const sanitizeTemplateName = (name) => {
   if (!name) return 'Untitled Template';
   return name.replace(/\.[^/.]+$/, "");
 };
+
+const signatories = ref([]);
+
+onMounted(async () => {
+  try {
+    signatories.value = await apiService.getSignatories();
+  } catch (error) {
+    console.error('Failed to load signatories:', error);
+  }
+});
 
 const workspaceInput = ref(null);
 const onWorkspaceFileChange = (e) => {
@@ -396,7 +422,7 @@ const props = defineProps({
   templateName: String,
   isPreviewMode: Boolean,
   currentTemplateId: String,
-  groupedVariables: Object,
+  // groupedVariables: Object,
   isGenerating: Boolean,
   pdfQuality: [String, Number],
   layers: {
@@ -409,6 +435,14 @@ const props = defineProps({
   },
   currentPageIndex: Number,
   pdfMode: String
+});
+
+const groupedVariables = ref({
+  "ข้อมูลเอกสาร": [
+    { key: "name", label: "ชื่อ" },
+    { key: "date", label: "วันที่" },
+    { key: "position", label: "ตำแหน่ง" }
+  ]
 });
 
 const emit = defineEmits([
@@ -491,10 +525,14 @@ const onDragStart = (e, key) => {
 const onContainerDragStart = (e, block) => {
   e.dataTransfer.setData('containerBlock', JSON.stringify(block));
   e.dataTransfer.effectAllowed = 'copy';
-  return (name || 'เทมเพลตไม่มีชื่อ')
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .substring(0, 50);
+};
+
+const onSignatureDragStart = (e, sig) => {
+  e.dataTransfer.setData('type', 'SIGNATURE_BLOCK');
+  e.dataTransfer.setData('signatoryId', sig.id);
+  e.dataTransfer.setData('fullName', sig.fullName);
+  e.dataTransfer.setData('signatureImage', sig.signatureImage || '');
+  e.dataTransfer.effectAllowed = 'copy';
 };
 
 const handleAddCustomText = () => {

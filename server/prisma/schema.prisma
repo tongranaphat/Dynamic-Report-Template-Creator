@@ -94,3 +94,11 @@ model PdfCache {
   createdAt         DateTime @default(now())
   lastEditAt        DateTime @updatedAt
 }
+
+model Signatory {
+  id             String   @id @default(uuid())
+  fullName       String
+  signatureImage String?
+  variableName   String   @unique
+  createdAt      DateTime @default(now())
+}
