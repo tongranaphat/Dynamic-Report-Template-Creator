@@ -194,15 +194,27 @@ export function useCanvas() {
     fabric.Object.prototype.__customExportPatched = true;
   }
 
+  // ==========================================
+  // 🌟 ฟังก์ชันแยกสำหรับ "ผูกวิญญาณ" (Event Linker)
+  // (อัปเกรดดักจับการแก้ Properties จากเมนูด้านขวาแบบ Real-time)
+  // ==========================================
   const linkSignatureBlocks = (canvasObj, prefixTextbox, sigGroup, GAP) => {
+    // ถ้าเคยผูกแล้วไม่ต้องผูกซ้ำ
     if (prefixTextbox.__isLinked) return;
     prefixTextbox.__isLinked = true;
     sigGroup.__isLinked = true;
 
+    // ✨ [หัวใจสำคัญ] ตัวแปรป้องกัน Infinite Loop 
+    // (กันไม่ให้มันเถียงกันว่า "ฉันขยับ เธอต้องขยับ" วนไปมาไม่รู้จบ)
+    let isSyncing = false;
+
     const syncPositions = (movedObj) => {
+      if (isSyncing) return; // ถ้ากำลังขยับคู่ของมันอยู่ ให้ข้ามไปเลย
+
       const activeObj = canvasObj.getActiveObject();
       if (activeObj && activeObj.type === 'activeSelection') return;
 
+      isSyncing = true; // ล็อคประตู!
       if (movedObj === prefixTextbox && sigGroup.canvas) {
         sigGroup.set({
           left: prefixTextbox.left,
@@ -216,16 +228,39 @@ export function useCanvas() {
         });
         prefixTextbox.setCoords();
       }
+      isSyncing = false; // ปลดล็อคประตู!
     };
 
-    prefixTextbox.on('moving', () => syncPositions(prefixTextbox));
-    sigGroup.on('moving', () => syncPositions(sigGroup));
+    // 🚀 [เวทมนตร์ใหม่!] แอบดักจับคำสั่ง .set() จาก PropertiesPanel
+    // ถ้าระบบเมนูด้านขวาสั่งเปลี่ยนฟอนต์/ขนาด มันจะวิ่งผ่านตรงนี้เสมอ!
+    const originalPrefixSet = prefixTextbox.set.bind(prefixTextbox);
+    prefixTextbox.set = function (...args) {
+      originalPrefixSet(...args); // ให้มันเปลี่ยนค่าฟอนต์ตามปกติ
+      syncPositions(prefixTextbox); // แล้วแอบสั่งให้อัปเดตบล็อกล่างทันที!
+      return this;
+    };
 
+    const originalGroupSet = sigGroup.set.bind(sigGroup);
+    sigGroup.set = function (...args) {
+      originalGroupSet(...args);
+      syncPositions(sigGroup);
+      return this;
+    };
+
+    // ✨ [ดักจับปกติ] ลาก, ดึงขอบ, ย่อขยาย
+    prefixTextbox.on('moving', () => syncPositions(prefixTextbox));
+    prefixTextbox.on('resizing', () => syncPositions(prefixTextbox));
+    prefixTextbox.on('scaling', () => syncPositions(prefixTextbox));
+    sigGroup.on('moving', () => syncPositions(sigGroup));
+    sigGroup.on('scaling', () => syncPositions(sigGroup));
+
+    // ✨ [ดักจับการพิมพ์]
     prefixTextbox.on('changed', () => {
       syncPositions(prefixTextbox);
       canvasObj.renderAll();
     });
 
+    // ✨ [ดักจับการลบทิ้ง]
     const handleDeletion = (deletedObj) => {
       if (deletedObj.isDeleting) return;
       deletedObj.isDeleting = true;
@@ -287,7 +322,7 @@ export function useCanvas() {
         fontSize: fontSize,
         fontFamily: fontFamily,
         textAlign: 'center',
-        width: maxTextWidth,
+        width: maxTextWidth + 20,
         originX: 'center',
         originY: 'top',
         id: `prefix_${sharedLinkedId}`,
