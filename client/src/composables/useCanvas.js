@@ -130,49 +130,50 @@ export function useCanvas() {
     saveHistory();
   };
 
-  const addSignatureBlockToCanvas = (fullName, signatoryId, signatureImage, x = 100, y = 100) => {
+  const addSignatureBlockToCanvas = (sigData, x = 100, y = 100) => {
     if (!canvas.value) return;
 
-    const lineObj = new fabric.Line([-70, 0, 70, 0], {
-      stroke: '#000',
-      strokeWidth: 1,
-      strokeDashArray: [3, 3],
-      originX: 'center',
+    const prefixText = new fabric.Text('ลงชื่อ', {
+      fontSize: 16,
+      fontFamily: 'Sarabun',
+      originX: 'left',
       originY: 'bottom',
       top: 30,
       left: 0
     });
 
-    const prefixText = new fabric.Text('ลงชื่อ', {
-      fontSize: 16,
-      fontFamily: 'Sarabun',
-      originX: 'right',
+    const lineObj = new fabric.Line([0, 0, 150, 0], {
+      stroke: '#000',
+      strokeWidth: 1,
+      strokeDashArray: [3, 3],
+      originX: 'left',
       originY: 'bottom',
       top: 30,
-      left: -80
+      left: 45
     });
 
-    const nameText = new fabric.Text(`( ${fullName} )`, {
+    const centerX = 45 + 75;
+
+    const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
       fontSize: 16,
       fontFamily: 'Sarabun',
       originX: 'center',
       originY: 'top',
       top: 35,
-      left: 0
+      left: centerX
     });
 
     const renderGroup = (imgObj = null) => {
-      const objects = [lineObj, prefixText, nameText];
-
+      const objects = [prefixText, lineObj, nameText];
       if (imgObj) objects.push(imgObj);
 
       const sigGroup = new fabric.Group(objects, {
         left: x,
         top: y,
         isSignatureBlock: true,
-        signatoryId: signatoryId,
-        nameText: fullName,
-        signatureImage: signatureImage
+        signatoryId: sigData.signatoryId,
+        nameText: sigData.fullName,
+        signatureImage: sigData.signatureImage
       });
 
       canvas.value.add(sigGroup);
@@ -180,36 +181,41 @@ export function useCanvas() {
       canvas.value.renderAll();
     };
 
-    if (signatureImage) {
-      let imageUrl = signatureImage;
+    if (sigData.signatureImage) {
+      let imageUrl = sigData.signatureImage;
 
-      if (imageUrl.startsWith('/uploads')) {
+      if (imageUrl.includes('uploads/')) {
         const backendPort = 4010;
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
+
+        if (!imageUrl.startsWith('/')) {
+          imageUrl = '/' + imageUrl;
+        }
         imageUrl = `${protocol}//${hostname}:${backendPort}${imageUrl}`;
       }
 
       console.log("กำลังพยายามโหลดรูปลายเซ็นจาก:", imageUrl);
 
       fabric.Image.fromURL(imageUrl, (img, isError) => {
-        if (isError) {
-          console.error("โหลดรูปไม่สำเร็จ! ตรวจสอบพาทรูปอีกครั้ง");
+        if (isError || !img) {
+          console.warn("โหลดรูปไม่สำเร็จ หรือพาทผิด! กำลังวาดเฉพาะเส้นประแทน");
           renderGroup();
           return;
         }
 
-        if (img) {
-          img.scaleToHeight(45);
-          img.set({
-            originX: 'center',
-            originY: 'bottom',
-            top: 25,
-            left: 0
-          });
-          renderGroup(img);
-        }
+        img.scaleToHeight(45);
+        img.set({
+          originX: 'center',
+          originY: 'bottom',
+          top: 25,
+          left: centerX
+        });
+        renderGroup(img);
       }, { crossOrigin: 'anonymous' });
+
+    } else {
+      renderGroup();
     }
   };
 

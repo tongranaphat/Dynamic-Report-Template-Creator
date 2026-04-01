@@ -1410,13 +1410,12 @@ const onDrop = (e) => {
   }
 
   const type = e.dataTransfer.getData('type');
-  if (type === 'SIGNATURE_BLOCK') {
-    const signatoryId = e.dataTransfer.getData('signatoryId');
-    const fullName = e.dataTransfer.getData('fullName');
-    const signatureImage = e.dataTransfer.getData('signatureImage');
-    
-    if (typeof addSignatureBlockToCanvas !== 'undefined') {
-      addSignatureBlockToCanvas(fullName, signatoryId, signatureImage, x, y);
+  if (dragType === 'SIGNATURE_BLOCK') {
+    const sigDataStr = e.dataTransfer.getData('sigData');
+
+    if (sigDataStr) {
+      const sigData = JSON.parse(sigDataStr);
+      addSignatureBlockToCanvas(sigData, dropX, dropY);
     }
   }
 };

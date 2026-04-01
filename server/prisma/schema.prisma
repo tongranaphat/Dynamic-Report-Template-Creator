@@ -97,8 +97,11 @@ model PdfCache {
 
 model Signatory {
   id             String   @id @default(uuid())
-  fullName       String
-  signatureImage String?
+  fullName       String   
+  signatureImage String?  
   variableName   String   @unique
+  prefixText     String?  
+  position       String?  
+  organizationId String?  
   createdAt      DateTime @default(now())
 }
