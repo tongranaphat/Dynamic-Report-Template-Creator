@@ -143,9 +143,7 @@ export function useCanvas() {
 
   const wrapThaiText = (text, maxWidth, fontSize, fontFamily) => {
     if (!text) return '';
-    if (!window.Intl || !Intl.Segmenter) {
-      return text;
-    }
+    if (!window.Intl || !Intl.Segmenter) return text;
 
     const tempCanvas = document.createElement('canvas');
     const ctx = tempCanvas.getContext('2d');
@@ -158,29 +156,26 @@ export function useCanvas() {
     let currentLine = '';
 
     for (let i = 0; i < words.length; i++) {
-      let word = words[i];
+      const word = words[i];
 
-      if (ctx.measureText(word).width > maxWidth) {
+      if (ctx.measureText(word).width <= maxWidth) {
+        const testLine = currentLine + word;
+        if (ctx.measureText(testLine).width > maxWidth && currentLine !== '') {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      } else {
         for (let char of word) {
           const testLineChar = currentLine + char;
-          if (ctx.measureText(testLineChar).width > maxWidth) {
-            if (currentLine !== '') lines.push(currentLine);
+          if (ctx.measureText(testLineChar).width > maxWidth && currentLine !== '') {
+            lines.push(currentLine);
             currentLine = char;
           } else {
             currentLine = testLineChar;
           }
         }
-        continue;
-      }
-
-      const testLine = currentLine + word;
-      const metrics = ctx.measureText(testLine);
-
-      if (metrics.width > maxWidth && currentLine !== '') {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
       }
     }
 
@@ -189,10 +184,6 @@ export function useCanvas() {
     return lines.join('\n');
   };
 
-  // ==========================================
-  // 🌟 แฮก Fabric.js ให้เซฟค่า Custom Properties ลง Database เสมอ
-  // (วางโค้ดนี้ไว้บนๆ ของไฟล์ หรือก่อนฟังก์ชัน addSignatureBlockToCanvas)
-  // ==========================================
   if (!fabric.Object.prototype.__customExportPatched) {
     const originalToObject = fabric.Object.prototype.toObject;
     fabric.Object.prototype.toObject = function (additionalProperties) {
@@ -203,12 +194,7 @@ export function useCanvas() {
     fabric.Object.prototype.__customExportPatched = true;
   }
 
-  // ==========================================
-  // 🌟 ฟังก์ชันแยกสำหรับ "ผูกวิญญาณ" (Event Linker)
-  // เอาไว้ใช้ตอนสร้างใหม่ และใช้ตอนโหลดกลับมา
-  // ==========================================
   const linkSignatureBlocks = (canvasObj, prefixTextbox, sigGroup, GAP) => {
-    // ถ้าเคยผูกแล้วไม่ต้องผูกซ้ำ
     if (prefixTextbox.__isLinked) return;
     prefixTextbox.__isLinked = true;
     sigGroup.__isLinked = true;
@@ -257,15 +243,11 @@ export function useCanvas() {
     sigGroup.on('removed', () => handleDeletion(sigGroup));
   };
 
-  // ==========================================
-  // 🌟 ฟังก์ชันปลุกเสกใหม่ (เอาไว้รันตอนโหลด Canvas เสร็จ)
-  // ==========================================
   const relinkSignatures = () => {
     if (!canvas.value) return;
     const objects = canvas.value.getObjects();
     const pairs = {};
 
-    // 1. สแกนหาบล็อกทั้งหมดที่มี linkedId ตรงกัน
     objects.forEach(obj => {
       if (obj.linkedId) {
         if (!pairs[obj.linkedId]) pairs[obj.linkedId] = {};
@@ -274,7 +256,6 @@ export function useCanvas() {
       }
     });
 
-    // 2. นำบล็อกที่คู่กันมาผูก Event ใหม่
     Object.values(pairs).forEach(pair => {
       if (pair.prefix && pair.group) {
         const GAP = pair.group.sigData?.signatureImage ? 10 : 30;
@@ -283,9 +264,6 @@ export function useCanvas() {
     });
   };
 
-  // ==========================================
-  // ฟังก์ชันหลักสำหรับวาดบล็อกลายเซ็น (ปรับให้มีการฝัง linkedId)
-  // ==========================================
   const addSignatureBlockToCanvas = (sigData, dropX = 100, dropY = 100) => {
     if (!canvas.value) return;
 
@@ -294,7 +272,6 @@ export function useCanvas() {
     const fontFamily = 'Sarabun';
     const GAP = sigData.signatureImage ? 10 : 30;
 
-    // ✨ สร้าง ID เดียวกันเพื่อเป็น "ด้ายแดง" ผูกทั้ง 2 บล็อกไว้ด้วยกัน
     const sharedLinkedId = `link_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
     let prefixTextbox = null;
@@ -315,8 +292,8 @@ export function useCanvas() {
         originY: 'top',
         id: `prefix_${sharedLinkedId}`,
         name: `ข้อความ: ${sigData.fullName}`,
-        isSignaturePrefix: true, // บอกให้ระบบรู้ว่าเป็นบล็อกบน
-        linkedId: sharedLinkedId // ฝังด้ายแดง
+        isSignaturePrefix: true,
+        linkedId: sharedLinkedId
       });
       canvas.value.add(prefixTextbox);
     }
@@ -387,8 +364,8 @@ export function useCanvas() {
         top: sigTopY,
         originX: 'center',
         originY: 'top',
-        isSignatureBlock: true, // บอกให้ระบบรู้ว่าเป็นบล็อกล่าง
-        linkedId: sharedLinkedId, // ฝังด้ายแดง
+        isSignatureBlock: true,
+        linkedId: sharedLinkedId,
         sigData: sigData,
         id: `signature_${sharedLinkedId}`,
         name: `ลายเซ็น: ${sigData.fullName}`
@@ -397,7 +374,6 @@ export function useCanvas() {
       canvas.value.add(sigGroup);
       canvas.value.setActiveObject(sigGroup);
 
-      // 🔗 เรียกฟังก์ชันผูกวิญญาณ
       if (prefixTextbox) {
         linkSignatureBlocks(canvas.value, prefixTextbox, sigGroup, GAP);
       }
@@ -405,7 +381,6 @@ export function useCanvas() {
       canvas.value.renderAll();
     };
 
-    // ... (ส่วนโหลดรูปภาพด้านล่างเหมือนเดิมเป๊ะๆ)
     if (sigData.signatureImage) {
       let imageUrl = sigData.signatureImage;
       if (imageUrl.includes('uploads/')) {
