@@ -81,6 +81,7 @@ export function useCanvas() {
       const previous = historyStack.value[historyStack.value.length - 1];
       canvas.value.loadFromJSON(JSON.parse(previous), () => {
         canvas.value.renderAll();
+        relinkSignatures();
         if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
         isHistoryLocked.value = false;
       });
@@ -94,6 +95,7 @@ export function useCanvas() {
       historyStack.value.push(next);
       canvas.value.loadFromJSON(JSON.parse(next), () => {
         canvas.value.renderAll();
+        relinkSignatures();
         if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
         isHistoryLocked.value = false;
       });
@@ -178,89 +180,223 @@ export function useCanvas() {
     return lines.join('\n');
   };
 
-  const addSignatureBlockToCanvas = (sigData, x = 100, y = 100) => {
-    if (!canvas.value) return;
+  // ==========================================
+  // 🌟 แฮก Fabric.js ให้เซฟค่า Custom Properties ลง Database เสมอ
+  // (วางโค้ดนี้ไว้บนๆ ของไฟล์ หรือก่อนฟังก์ชัน addSignatureBlockToCanvas)
+  // ==========================================
+  if (!fabric.Object.prototype.__customExportPatched) {
+    const originalToObject = fabric.Object.prototype.toObject;
+    fabric.Object.prototype.toObject = function (additionalProperties) {
+      return originalToObject.call(this, [
+        'id', 'name', 'isSignatureBlock', 'isSignaturePrefix', 'linkedId', 'sigData'
+      ].concat(additionalProperties || []));
+    };
+    fabric.Object.prototype.__customExportPatched = true;
+  }
 
-    const objects = [];
-    let currentY = 0;
+  // ==========================================
+  // 🌟 ฟังก์ชันแยกสำหรับ "ผูกวิญญาณ" (Event Linker)
+  // เอาไว้ใช้ตอนสร้างใหม่ และใช้ตอนโหลดกลับมา
+  // ==========================================
+  const linkSignatureBlocks = (canvasObj, prefixTextbox, sigGroup, GAP) => {
+    // ถ้าเคยผูกแล้วไม่ต้องผูกซ้ำ
+    if (prefixTextbox.__isLinked) return;
+    prefixTextbox.__isLinked = true;
+    sigGroup.__isLinked = true;
+
+    const syncPositions = (movedObj) => {
+      const activeObj = canvasObj.getActiveObject();
+      if (activeObj && activeObj.type === 'activeSelection') return;
+
+      if (movedObj === prefixTextbox && sigGroup.canvas) {
+        sigGroup.set({
+          left: prefixTextbox.left,
+          top: prefixTextbox.top + prefixTextbox.getScaledHeight() + GAP
+        });
+        sigGroup.setCoords();
+      } else if (movedObj === sigGroup && prefixTextbox.canvas) {
+        prefixTextbox.set({
+          left: sigGroup.left,
+          top: sigGroup.top - prefixTextbox.getScaledHeight() - GAP
+        });
+        prefixTextbox.setCoords();
+      }
+    };
+
+    prefixTextbox.on('moving', () => syncPositions(prefixTextbox));
+    sigGroup.on('moving', () => syncPositions(sigGroup));
+
+    prefixTextbox.on('changed', () => {
+      syncPositions(prefixTextbox);
+      canvasObj.renderAll();
+    });
+
+    const handleDeletion = (deletedObj) => {
+      if (deletedObj.isDeleting) return;
+      deletedObj.isDeleting = true;
+
+      if (deletedObj === prefixTextbox && sigGroup.canvas) {
+        sigGroup.isDeleting = true;
+        canvasObj.remove(sigGroup);
+      } else if (deletedObj === sigGroup && prefixTextbox.canvas) {
+        prefixTextbox.isDeleting = true;
+        canvasObj.remove(prefixTextbox);
+      }
+    };
+
+    prefixTextbox.on('removed', () => handleDeletion(prefixTextbox));
+    sigGroup.on('removed', () => handleDeletion(sigGroup));
+  };
+
+  // ==========================================
+  // 🌟 ฟังก์ชันปลุกเสกใหม่ (เอาไว้รันตอนโหลด Canvas เสร็จ)
+  // ==========================================
+  const relinkSignatures = () => {
+    if (!canvas.value) return;
+    const objects = canvas.value.getObjects();
+    const pairs = {};
+
+    // 1. สแกนหาบล็อกทั้งหมดที่มี linkedId ตรงกัน
+    objects.forEach(obj => {
+      if (obj.linkedId) {
+        if (!pairs[obj.linkedId]) pairs[obj.linkedId] = {};
+        if (obj.isSignaturePrefix) pairs[obj.linkedId].prefix = obj;
+        if (obj.isSignatureBlock) pairs[obj.linkedId].group = obj;
+      }
+    });
+
+    // 2. นำบล็อกที่คู่กันมาผูก Event ใหม่
+    Object.values(pairs).forEach(pair => {
+      if (pair.prefix && pair.group) {
+        const GAP = pair.group.sigData?.signatureImage ? 10 : 30;
+        linkSignatureBlocks(canvas.value, pair.prefix, pair.group, GAP);
+      }
+    });
+  };
+
+  // ==========================================
+  // ฟังก์ชันหลักสำหรับวาดบล็อกลายเซ็น (ปรับให้มีการฝัง linkedId)
+  // ==========================================
+  const addSignatureBlockToCanvas = (sigData, dropX = 100, dropY = 100) => {
+    if (!canvas.value) return;
 
     const maxTextWidth = 250;
     const fontSize = 16;
     const fontFamily = 'Sarabun';
-    if (sigData.prefixText) {
-      const wrappedPrefix = wrapThaiText(sigData.prefixText, maxTextWidth, fontSize, fontFamily);
+    const GAP = sigData.signatureImage ? 10 : 30;
 
-      const topText = new fabric.Text(wrappedPrefix, {
-        fontSize: fontSize,
-        fontFamily: fontFamily,
-        originX: 'center',
-        originY: 'top',
-        textAlign: 'center',
-        top: currentY,
-        left: 120
-      });
-      objects.push(topText);
+    // ✨ สร้าง ID เดียวกันเพื่อเป็น "ด้ายแดง" ผูกทั้ง 2 บล็อกไว้ด้วยกัน
+    const sharedLinkedId = `link_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-      currentY += topText.height + 60;
-    } else {
-      currentY += 50;
-    }
-
-    const signPrefix = new fabric.Text('ลงชื่อ', {
-      fontSize: fontSize, fontFamily: fontFamily,
-      originX: 'left', originY: 'bottom',
-      top: currentY, left: 0
-    });
-
-    const lineObj = new fabric.Line([0, 0, 160, 0], {
-      stroke: '#000', strokeWidth: 1, strokeDashArray: [3, 3],
-      originX: 'left', originY: 'bottom',
-      top: currentY, left: 45
-    });
-
-    const centerX = 45 + 80;
-
-    const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
-      fontSize: fontSize, fontFamily: fontFamily,
-      originX: 'center', originY: 'top',
-      top: currentY + 8, left: centerX
-    });
-
-    objects.push(signPrefix, lineObj, nameText);
-    currentY += 8 + nameText.height + 10;
-
-    if (sigData.position) {
-      const wrappedPosition = wrapThaiText(sigData.position, maxTextWidth, fontSize, fontFamily);
-
-      const bottomText = new fabric.Text(wrappedPosition, {
-        fontSize: fontSize,
-        fontFamily: fontFamily,
-        originX: 'center',
-        originY: 'top',
-        textAlign: 'center',
-        top: currentY,
-        left: centerX
-      });
-      objects.push(bottomText);
-    }
+    let prefixTextbox = null;
 
     if (sigData.prefixText) {
-      objects[0].set('left', centerX);
+      const wrappedPrefix = (typeof wrapThaiText === 'function')
+        ? wrapThaiText(sigData.prefixText, maxTextWidth, fontSize, fontFamily)
+        : sigData.prefixText;
+
+      prefixTextbox = new fabric.Textbox(wrappedPrefix, {
+        left: dropX,
+        top: dropY,
+        fontSize: fontSize,
+        fontFamily: fontFamily,
+        textAlign: 'center',
+        width: maxTextWidth,
+        originX: 'center',
+        originY: 'top',
+        id: `prefix_${sharedLinkedId}`,
+        name: `ข้อความ: ${sigData.fullName}`,
+        isSignaturePrefix: true, // บอกให้ระบบรู้ว่าเป็นบล็อกบน
+        linkedId: sharedLinkedId // ฝังด้ายแดง
+      });
+      canvas.value.add(prefixTextbox);
     }
-    const renderGroup = (imgObj = null) => {
-      if (imgObj) objects.push(imgObj);
+
+    const buildAndLinkSignatureGroup = (imgObj = null) => {
+      const objects = [];
+      let currentInternalY = 0;
+      const centerX = 0;
+
+      const balancer = new fabric.Rect({
+        left: centerX, top: currentInternalY,
+        width: 300, height: 1, fill: 'transparent',
+        originX: 'center', originY: 'top'
+      });
+      objects.push(balancer);
+
+      const lineObj = new fabric.Line([-80, 0, 80, 0], {
+        stroke: '#000', strokeWidth: 1, strokeDashArray: [3, 3],
+        originX: 'center', originY: 'top',
+        top: currentInternalY, left: centerX
+      });
+
+      const signPrefix = new fabric.Text('ลงชื่อ', {
+        fontSize: fontSize, fontFamily: fontFamily,
+        originX: 'right', originY: 'bottom',
+        top: currentInternalY, left: centerX - 85
+      });
+
+      const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
+        fontSize: fontSize, fontFamily: fontFamily,
+        originX: 'center', originY: 'top',
+        top: currentInternalY + 8, left: centerX
+      });
+
+      objects.push(lineObj, signPrefix, nameText);
+      currentInternalY += 8 + nameText.height + 8;
+
+      if (sigData.position) {
+        const wrappedPos = (typeof wrapThaiText === 'function')
+          ? wrapThaiText(sigData.position, maxTextWidth, fontSize, fontFamily)
+          : sigData.position;
+
+        const bottomText = new fabric.Text(wrappedPos, {
+          fontSize: fontSize, fontFamily: fontFamily,
+          originX: 'center', originY: 'top',
+          textAlign: 'center',
+          top: currentInternalY, left: centerX
+        });
+        objects.push(bottomText);
+      }
+
+      if (imgObj) {
+        imgObj.scaleToHeight(45);
+        imgObj.set({
+          originX: 'center', originY: 'bottom',
+          top: lineObj.top - 2, left: centerX
+        });
+        objects.push(imgObj);
+      }
+
+      let sigTopY = dropY;
+      if (prefixTextbox) {
+        sigTopY = prefixTextbox.top + prefixTextbox.getScaledHeight() + GAP;
+      }
+
       const sigGroup = new fabric.Group(objects, {
-        left: x, top: y,
-        id: `signature_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        name: `ลายเซ็น: ${sigData.fullName}`,
-        isSignatureBlock: true,
-        sigData: sigData
+        left: dropX,
+        top: sigTopY,
+        originX: 'center',
+        originY: 'top',
+        isSignatureBlock: true, // บอกให้ระบบรู้ว่าเป็นบล็อกล่าง
+        linkedId: sharedLinkedId, // ฝังด้ายแดง
+        sigData: sigData,
+        id: `signature_${sharedLinkedId}`,
+        name: `ลายเซ็น: ${sigData.fullName}`
       });
+
       canvas.value.add(sigGroup);
       canvas.value.setActiveObject(sigGroup);
+
+      // 🔗 เรียกฟังก์ชันผูกวิญญาณ
+      if (prefixTextbox) {
+        linkSignatureBlocks(canvas.value, prefixTextbox, sigGroup, GAP);
+      }
+
       canvas.value.renderAll();
     };
 
+    // ... (ส่วนโหลดรูปภาพด้านล่างเหมือนเดิมเป๊ะๆ)
     if (sigData.signatureImage) {
       let imageUrl = sigData.signatureImage;
       if (imageUrl.includes('uploads/')) {
@@ -272,20 +408,11 @@ export function useCanvas() {
       }
 
       fabric.Image.fromURL(imageUrl, (img, isError) => {
-        if (!isError && img) {
-          img.scaleToHeight(45);
-          img.set({
-            originX: 'center', originY: 'bottom',
-            top: lineObj.top - 2,
-            left: centerX
-          });
-          renderGroup(img);
-        } else {
-          renderGroup();
-        }
+        if (!isError && img) buildAndLinkSignatureGroup(img);
+        else buildAndLinkSignatureGroup();
       }, { crossOrigin: 'anonymous' });
     } else {
-      renderGroup();
+      buildAndLinkSignatureGroup();
     }
   };
 
@@ -511,6 +638,7 @@ export function useCanvas() {
 
     canvas.value.loadFromJSON(json, () => {
       canvas.value.renderAll();
+      relinkSignatures();
 
       document.fonts.ready.then(() => {
         if (canvas.value) canvas.value.requestRenderAll();
@@ -678,6 +806,7 @@ export function useCanvas() {
     render,
 
     addSignatureBlockToCanvas,
-    updateCanvasDimensions
+    updateCanvasDimensions,
+    relinkSignatures
   };
 }

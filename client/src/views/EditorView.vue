@@ -277,7 +277,8 @@ const {
   addSignatureBlockToCanvas,
   setHistoryContext,
   isRemoteUpdating,
-  updateCanvasDimensions
+  updateCanvasDimensions,
+  relinkSignatures
 } = useCanvas();
 
 const canvasHelpers = { resetHistory, saveHistory, setHistoryLock };
