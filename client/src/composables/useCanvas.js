@@ -12,6 +12,8 @@ const memoryStats = {
   eventListenersRemoved: 0
 };
 
+const CUSTOM_PROPS = ['id', 'selectable', 'name', 'data', 'textBaseline', 'angle', 'isSignatureBlock', 'isSignaturePrefix', 'linkedId', 'sigData'];
+
 export function useCanvas() {
   const canvas = shallowRef(null);
   const zoomLevel = ref(1);
@@ -60,6 +62,13 @@ export function useCanvas() {
         obj.setCoords();
       }
     });
+    let relinkTimeout = null;
+    canvas.value.on('object:added', () => {
+      if (relinkTimeout) clearTimeout(relinkTimeout);
+      relinkTimeout = setTimeout(() => {
+        relinkSignatures();
+      }, 300);
+    });
   };
 
   const render = async () => {
@@ -68,7 +77,7 @@ export function useCanvas() {
 
   const saveHistory = () => {
     if (!canvas.value || isHistoryLocked.value) return;
-    const json = canvas.value.toJSON(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
+    const json = canvas.value.toJSON(CUSTOM_PROPS);
     historyStack.value.push(JSON.stringify(json));
     redoStack.value = [];
   };
@@ -482,7 +491,7 @@ export function useCanvas() {
       pageIndex = Math.max(0, Math.min(pageIndex, pages.length - 1));
 
       try {
-        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
+        const serialized = obj.toObject(CUSTOM_PROPS);
         const pageTopY = pageIndex * STRIDE;
 
         serialized.left = Math.round(exportLeft * 100) / 100;
