@@ -529,10 +529,7 @@ const onContainerDragStart = (e, block) => {
 
 const onSignatureDragStart = (e, sig) => {
   e.dataTransfer.setData('type', 'SIGNATURE_BLOCK');
-  e.dataTransfer.setData('signatoryId', JSON.stringify(sig));
-  e.dataTransfer.effectAllowed = 'copy';
-  e.dataTransfer.setData('fullName', sig.fullName);
-  e.dataTransfer.setData('signatureImage', sig.signatureImage || '');
+  e.dataTransfer.setData('sigData', JSON.stringify(sig));
   e.dataTransfer.effectAllowed = 'copy';
 };
 

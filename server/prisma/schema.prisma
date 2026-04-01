@@ -102,6 +102,5 @@ model Signatory {
   variableName   String   @unique
   prefixText     String?  
   position       String?  
-  organizationId String?  
   createdAt      DateTime @default(now())
 }

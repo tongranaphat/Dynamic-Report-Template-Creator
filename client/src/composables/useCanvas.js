@@ -130,52 +130,132 @@ export function useCanvas() {
     saveHistory();
   };
 
+  const wrapThaiText = (text, maxWidth, fontSize, fontFamily) => {
+    if (!text) return '';
+    if (!window.Intl || !Intl.Segmenter) {
+      return text;
+    }
+
+    const tempCanvas = document.createElement('canvas');
+    const ctx = tempCanvas.getContext('2d');
+    ctx.font = `${fontSize}px ${fontFamily}`;
+
+    const segmenter = new Intl.Segmenter('th-TH', { granularity: 'word' });
+    const words = Array.from(segmenter.segment(text)).map(s => s.segment);
+
+    let lines = [];
+    let currentLine = '';
+
+    for (let i = 0; i < words.length; i++) {
+      let word = words[i];
+
+      if (ctx.measureText(word).width > maxWidth) {
+        for (let char of word) {
+          const testLineChar = currentLine + char;
+          if (ctx.measureText(testLineChar).width > maxWidth) {
+            if (currentLine !== '') lines.push(currentLine);
+            currentLine = char;
+          } else {
+            currentLine = testLineChar;
+          }
+        }
+        continue;
+      }
+
+      const testLine = currentLine + word;
+      const metrics = ctx.measureText(testLine);
+
+      if (metrics.width > maxWidth && currentLine !== '') {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (currentLine) lines.push(currentLine);
+
+    return lines.join('\n');
+  };
+
   const addSignatureBlockToCanvas = (sigData, x = 100, y = 100) => {
     if (!canvas.value) return;
 
-    const prefixText = new fabric.Text('ลงชื่อ', {
-      fontSize: 16,
-      fontFamily: 'Sarabun',
-      originX: 'left',
-      originY: 'bottom',
-      top: 30,
-      left: 0
+    const objects = [];
+    let currentY = 0;
+
+    const maxTextWidth = 250;
+    const fontSize = 16;
+    const fontFamily = 'Sarabun';
+    if (sigData.prefixText) {
+      const wrappedPrefix = wrapThaiText(sigData.prefixText, maxTextWidth, fontSize, fontFamily);
+
+      const topText = new fabric.Text(wrappedPrefix, {
+        fontSize: fontSize,
+        fontFamily: fontFamily,
+        originX: 'center',
+        originY: 'top',
+        textAlign: 'center',
+        top: currentY,
+        left: 120
+      });
+      objects.push(topText);
+
+      currentY += topText.height + 60;
+    } else {
+      currentY += 50;
+    }
+
+    const signPrefix = new fabric.Text('ลงชื่อ', {
+      fontSize: fontSize, fontFamily: fontFamily,
+      originX: 'left', originY: 'bottom',
+      top: currentY, left: 0
     });
 
-    const lineObj = new fabric.Line([0, 0, 150, 0], {
-      stroke: '#000',
-      strokeWidth: 1,
-      strokeDashArray: [3, 3],
-      originX: 'left',
-      originY: 'bottom',
-      top: 30,
-      left: 45
+    const lineObj = new fabric.Line([0, 0, 160, 0], {
+      stroke: '#000', strokeWidth: 1, strokeDashArray: [3, 3],
+      originX: 'left', originY: 'bottom',
+      top: currentY, left: 45
     });
 
-    const centerX = 45 + 75;
+    const centerX = 45 + 80;
 
     const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
-      fontSize: 16,
-      fontFamily: 'Sarabun',
-      originX: 'center',
-      originY: 'top',
-      top: 35,
-      left: centerX
+      fontSize: fontSize, fontFamily: fontFamily,
+      originX: 'center', originY: 'top',
+      top: currentY + 8, left: centerX
     });
 
-    const renderGroup = (imgObj = null) => {
-      const objects = [prefixText, lineObj, nameText];
-      if (imgObj) objects.push(imgObj);
+    objects.push(signPrefix, lineObj, nameText);
+    currentY += 8 + nameText.height + 10;
 
-      const sigGroup = new fabric.Group(objects, {
-        left: x,
-        top: y,
-        isSignatureBlock: true,
-        signatoryId: sigData.signatoryId,
-        nameText: sigData.fullName,
-        signatureImage: sigData.signatureImage
+    if (sigData.position) {
+      const wrappedPosition = wrapThaiText(sigData.position, maxTextWidth, fontSize, fontFamily);
+
+      const bottomText = new fabric.Text(wrappedPosition, {
+        fontSize: fontSize,
+        fontFamily: fontFamily,
+        originX: 'center',
+        originY: 'top',
+        textAlign: 'center',
+        top: currentY,
+        left: centerX
       });
+      objects.push(bottomText);
+    }
 
+    if (sigData.prefixText) {
+      objects[0].set('left', centerX);
+    }
+    const renderGroup = (imgObj = null) => {
+      if (imgObj) objects.push(imgObj);
+      const sigGroup = new fabric.Group(objects, {
+        left: x, top: y,
+        id: `signature_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        name: `ลายเซ็น: ${sigData.fullName}`,
+        isSignatureBlock: true,
+        sigData: sigData
+      });
       canvas.value.add(sigGroup);
       canvas.value.setActiveObject(sigGroup);
       canvas.value.renderAll();
@@ -183,37 +263,27 @@ export function useCanvas() {
 
     if (sigData.signatureImage) {
       let imageUrl = sigData.signatureImage;
-
       if (imageUrl.includes('uploads/')) {
         const backendPort = 4010;
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
-
-        if (!imageUrl.startsWith('/')) {
-          imageUrl = '/' + imageUrl;
-        }
+        if (!imageUrl.startsWith('/')) imageUrl = '/' + imageUrl;
         imageUrl = `${protocol}//${hostname}:${backendPort}${imageUrl}`;
       }
 
-      console.log("กำลังพยายามโหลดรูปลายเซ็นจาก:", imageUrl);
-
       fabric.Image.fromURL(imageUrl, (img, isError) => {
-        if (isError || !img) {
-          console.warn("โหลดรูปไม่สำเร็จ หรือพาทผิด! กำลังวาดเฉพาะเส้นประแทน");
+        if (!isError && img) {
+          img.scaleToHeight(45);
+          img.set({
+            originX: 'center', originY: 'bottom',
+            top: lineObj.top - 2,
+            left: centerX
+          });
+          renderGroup(img);
+        } else {
           renderGroup();
-          return;
         }
-
-        img.scaleToHeight(45);
-        img.set({
-          originX: 'center',
-          originY: 'bottom',
-          top: 25,
-          left: centerX
-        });
-        renderGroup(img);
       }, { crossOrigin: 'anonymous' });
-
     } else {
       renderGroup();
     }

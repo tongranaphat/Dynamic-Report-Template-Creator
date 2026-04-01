@@ -63,7 +63,8 @@
       @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject" @generate-pdf="handleExport"
       @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
       @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" :layers="layers"
-      @select-layer="handleSelectLayer" @import-url="handleUrlImport" @reset-project="handleReset" />
+      @select-layer="handleSelectLayer" @import-url="handleUrlImport" @reset-project="handleReset"
+      @add-signature-block="handleAddSignatureBlock" />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
       <div class="scroll-center-helper">
@@ -1367,56 +1368,64 @@ const handlePageDrop = async ({ sourceIndex, targetIndex, position }) => {
 const onDrop = (e) => {
   e.preventDefault();
 
-
   const variable = e.dataTransfer.getData('variable');
   const asset = e.dataTransfer.getData('asset');
 
-  let x = 0;
-  let y = 0;
+  let x = 0; let y = 0;
 
   if (canvas.value && typeof canvas.value.getPointer === 'function') {
     const pointer = canvas.value.getPointer(e);
     x = pointer.x;
     y = pointer.y;
-
   } else {
     const canvasContainer = document.querySelector('.canvas-container');
     const rect = canvasContainer ? canvasContainer.getBoundingClientRect() : (e.currentTarget ? e.currentTarget.getBoundingClientRect() : { left: 0, top: 0 });
     x = e.clientX - rect.left;
     y = e.clientY - rect.top;
-
     if (typeof zoomLevel !== 'undefined' && zoomLevel.value) {
       x = x / zoomLevel.value;
       y = y / zoomLevel.value;
     }
-
   }
 
-  if (variable) {
-    if (typeof addVariableToCanvas !== 'undefined') {
-      addVariableToCanvas(variable, x, y)
-    }
-  }
-
-  if (asset) {
-    if (typeof addImageToCanvas !== 'undefined') {
-      addImageToCanvas(asset, x, y);
-    }
-  }
-
+  if (variable && typeof addVariableToCanvas !== 'undefined') addVariableToCanvas(variable, x, y);
+  if (asset && typeof addImageToCanvas !== 'undefined') addImageToCanvas(asset, x, y);
   const customText = e.dataTransfer.getData('customText');
-  if (customText) {
-    addCustomTextToCanvas(x, y);
-  }
+  if (customText) addCustomTextToCanvas(x, y);
 
   const type = e.dataTransfer.getData('type');
-  if (dragType === 'SIGNATURE_BLOCK') {
+
+  if (type === 'SIGNATURE_BLOCK') {
     const sigDataStr = e.dataTransfer.getData('sigData');
+    console.log("[EditorView] ข้อมูลที่รับมาตอน Drop:", sigDataStr);
 
     if (sigDataStr) {
-      const sigData = JSON.parse(sigDataStr);
-      addSignatureBlockToCanvas(sigData, dropX, dropY);
+      try {
+        const sigData = JSON.parse(sigDataStr);
+
+        if (typeof addSignatureBlockToCanvas === 'function') {
+          addSignatureBlockToCanvas(sigData, x, y);
+        } else if (window.addSignatureBlockToCanvas) {
+          window.addSignatureBlockToCanvas(sigData, x, y);
+        } else {
+          console.error("หาฟังก์ชัน addSignatureBlockToCanvas ไม่เจอ! ลืม Return ออกมาจาก useCanvas.js หรือเปล่า?");
+        }
+      } catch (error) {
+        console.error("เกิดข้อผิดพลาดตอนประกอบข้อมูล:", error);
+      }
     }
+  }
+};
+
+const handleAddSignatureBlock = (sigData) => {
+  if (!canvas.value) return;
+
+  const center = canvas.value.getCenter();
+
+  if (typeof addSignatureBlockToCanvas !== 'undefined') {
+    addSignatureBlockToCanvas(sigData, center.left, center.top);
+  } else if (window.addSignatureBlockToCanvas) {
+    window.addSignatureBlockToCanvas(sigData, center.left, center.top);
   }
 };
 
