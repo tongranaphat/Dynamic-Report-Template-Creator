@@ -165,9 +165,14 @@
             <div class="var-list">
               <button v-for="sig in signatories" :key="sig.id" draggable="true"
                 @dragstart="onSignatureDragStart($event, sig)" @click="$emit('add-signature-block', sig)"
-                class="var-btn" :disabled="isPreviewMode">
+                class="var-btn" :disabled="isPreviewMode"
+                :title="sig.position ? `${sig.fullName} (${sig.position})` : sig.fullName">
+
                 <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
-                <span class="var-btn-text">{{ sig.fullName }}</span>
+                <span class="var-btn-text">
+                  {{ sig.position ? `${sig.fullName} (${sig.position})` : sig.fullName }}
+                </span>
+
               </button>
             </div>
           </div>
