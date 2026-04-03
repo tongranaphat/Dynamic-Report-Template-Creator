@@ -66,11 +66,24 @@
         </button>
       </div>
       <div class="divider"></div>
-      <div class="tool-group">
-        <button @click="cycleAlignment" class="icon-btn" :title="`การจัดวาง: ${activeObject.textAlign}`">
-          <span v-if="activeObject.textAlign === 'left'">จัดซ้าย</span>
-          <span v-else-if="activeObject.textAlign === 'center'">จัดกลาง</span>
-          <span v-else-if="activeObject.textAlign === 'right'">จัดขวา</span>
+      <div class="tool-group segmented-control">
+        <button @click="setAlignment('left')" :class="['icon-btn', { active: activeTextAlign === 'left' }]"
+          title="จัดซ้าย">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 4h18v2H3V4zm0 5h12v2H3V9zm0 5h18v2H3v-2zm0 5h12v2H3v-2z" />
+          </svg>
+        </button>
+        <button @click="setAlignment('center')" :class="['icon-btn', { active: activeTextAlign === 'center' }]"
+          title="จัดกลาง">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 4h18v2H3V4zm4 5h10v2H7V9zm-4 5h18v2H3v-2zm4 5h10v2H7v-2z" />
+          </svg>
+        </button>
+        <button @click="setAlignment('right')" :class="['icon-btn', { active: activeTextAlign === 'right' }]"
+          title="จัดขวา">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 4h18v2H3V4zm6 5h12v2H9V9zm-6 5h18v2H3v-2zm6 5h12v2H9v-2z" />
+          </svg>
         </button>
       </div>
     </template>
@@ -424,13 +437,9 @@ const toggleUnderline = () => {
   updateProp('underline', !isUnderline);
 };
 
-const cycleAlignment = () => {
+const setAlignment = (align) => {
   if (!activeObject.value) return;
-  const aligns = ['left', 'center', 'right'];
-  const target = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects()[0] : activeObject.value;
-  const current = target.textAlign || 'left';
-  const nextIndex = (aligns.indexOf(current) + 1) % aligns.length;
-  updateProp('textAlign', aligns[nextIndex]);
+  updateProp('textAlign', align);
 };
 
 const deleteObject = () => {
@@ -756,15 +765,35 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.size-input::-webkit-outer-spin-button,
+.size-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* สั่งซ่อนสำหรับ Firefox */
+.size-input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .size-input {
-  width: 70px;
-  border: 1px solid transparent;
-  background: #f5f5f5;
-  border-radius: 4px;
-  padding: 4px;
+  width: 45px;
+  /* 🌟 ปรับความกว้างตรงนี้ได้เลย (40px - 50px กำลังสวยครับ) */
   text-align: center;
+  /* จัดตัวเลขให้อยู่กึ่งกลาง */
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
   font-size: 14px;
-  color: #333 !important;
+  outline: none;
+  background-color: #fff;
+  transition: border-color 0.2s;
+}
+
+.size-input:focus {
+  border-color: #2196f3;
+  /* เปลี่ยนสีขอบตอนกดพิมพ์ */
 }
 
 .color-wrapper {
@@ -773,7 +802,7 @@ onUnmounted(() => {
   height: 24px;
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid #fff;
+  /* border: 2px solid #fff; */
   box-shadow: 0 0 0 1px #e0e0e0;
   cursor: pointer;
 }
@@ -889,5 +918,62 @@ onUnmounted(() => {
 .layer-popup {
   width: 160px;
   padding: 8px;
+}
+
+/* มัดรวมปุ่มจัดหน้าให้ติดกัน (แก้ปัญหาช่องโหว่สีขาว และกันปุ่มบี้) */
+.segmented-control {
+  display: flex !important;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0 !important;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  /* ตัดขอบมุมนอกให้โค้งเนียน */
+  padding: 0 !important;
+
+  /* 🌟 ป้องกันกล่องโดนบีบเวลาย่อหน้าจอ (เช่น ตอนเปิด F12) */
+  width: max-content;
+  flex-shrink: 0;
+}
+
+/* ล้างค่าปุ่มเดิมให้กลายเป็นกล่องเหลี่ยมๆ ไร้รอยต่อ */
+.segmented-control .icon-btn {
+  flex: 1 1 0px !important;
+  /* 🌟 บังคับหารแบ่ง 3 ช่องให้เท่ากันเป๊ะแบบ 100% */
+  min-width: 40px !important;
+  /* 🌟 ล็อคขนาดขั้นต่ำไว้ ห้ามเล็กกว่านี้ */
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  border: none !important;
+  /* ล้างเส้นขอบมั่วๆ เดิมทิ้ง */
+  border-right: 1px solid #ddd !important;
+  /* ขีดเส้นคั่นแค่ด้านขวา */
+
+  border-radius: 0 !important;
+  /* 💥 ตัวการช่องโหว่! ล้างความโค้งของปุ่มทิ้งให้หมด */
+  margin: 0 !important;
+  padding: 6px 12px !important;
+  background-color: transparent;
+}
+
+/* ลบเส้นคั่นของปุ่มขวาสุดออก */
+.segmented-control .icon-btn:last-child {
+  border-right: none !important;
+}
+
+/* ตอน Hover และตอนปุ่มถูกเลือก */
+.segmented-control .icon-btn:hover {
+  background-color: #f5f5f5 !important;
+  /* บังคับให้สีพื้นหลังเต็มพื้นที่กรอบเหลี่ยม */
+}
+
+.segmented-control .icon-btn.active {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
 }
 </style>
