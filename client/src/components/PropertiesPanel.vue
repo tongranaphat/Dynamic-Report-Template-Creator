@@ -53,24 +53,22 @@
       </div>
       <div class="divider"></div>
       <div class="tool-group row">
-        <button @click="toggleBold" :class="['icon-btn', { active: activeObject.fontWeight === 'bold' }]"
-          title="ตัวหนา">
+        <button @click="toggleBold" :class="['icon-btn', { active: activeFontWeight === 'bold' }]" title="ตัวหนา">
           <span style="font-weight: bold">B</span>
         </button>
-        <button @click="toggleItalic" :class="['icon-btn', { active: activeObject.fontStyle === 'italic' }]"
-          title="ตัวเอียง">
+        <button @click="toggleItalic" :class="['icon-btn', { active: activeFontStyle === 'italic' }]" title="ตัวเอียง">
           <span style="font-style: italic">I</span>
         </button>
-        <button @click="toggleUnderline" :class="['icon-btn', { active: activeObject.underline }]" title="ขีดเส้นใต้">
+        <button @click="toggleUnderline" :class="['icon-btn', { active: activeUnderline }]" title="ขีดเส้นใต้">
           <span style="text-decoration: underline">U</span>
         </button>
       </div>
       <div class="divider"></div>
       <div class="tool-group">
-        <button @click="cycleAlignment" class="icon-btn" :title="`การจัดวาง: ${activeObject.textAlign}`">
-          <span v-if="activeObject.textAlign === 'left'">จัดซ้าย</span>
-          <span v-else-if="activeObject.textAlign === 'center'">จัดกลาง</span>
-          <span v-else-if="activeObject.textAlign === 'right'">จัดขวา</span>
+        <button @click="cycleAlignment" class="icon-btn" :title="`การจัดวาง: ${activeTextAlign}`">
+          <span v-if="activeTextAlign === 'left'">จัดซ้าย</span>
+          <span v-else-if="activeTextAlign === 'center'">จัดกลาง</span>
+          <span v-else-if="activeTextAlign === 'right'">จัดขวา</span>
         </button>
       </div>
     </template>
@@ -371,6 +369,27 @@ const activeLineHeight = computed(() => {
   return target ? (target.lineHeight || 1.16) : 1.16;
 });
 
+const activeTextAlign = computed(() => {
+  const target = getTarget();
+  return target ? (target.textAlign || 'left') : 'left';
+});
+
+const activeFontWeight = computed(() => {
+  const target = getTarget();
+  return target ? target.fontWeight : 'normal';
+});
+
+const activeFontStyle = computed(() => {
+  const target = getTarget();
+  return target ? target.fontStyle : 'normal';
+});
+
+const activeUnderline = computed(() => {
+  const target = getTarget();
+  return target ? !!target.underline : false;
+});
+
+
 const getHexColor = (color) => {
   if (!color) return '#000000';
   try {
@@ -408,30 +427,25 @@ const updateProp = (key, value, saveHistory = true) => {
 
 const toggleBold = () => {
   if (!activeObject.value) return;
-  const target = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects()[0] : activeObject.value;
-  const isBold = target.fontWeight === 'bold';
+  const isBold = activeFontWeight.value === 'bold';
   updateProp('fontWeight', isBold ? 'normal' : 'bold');
 };
 
 const toggleItalic = () => {
   if (!activeObject.value) return;
-  const target = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects()[0] : activeObject.value;
-  const isItalic = target.fontStyle === 'italic';
+  const isItalic = activeFontStyle.value === 'italic';
   updateProp('fontStyle', isItalic ? 'normal' : 'italic');
 };
 
 const toggleUnderline = () => {
   if (!activeObject.value) return;
-  const target = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects()[0] : activeObject.value;
-  const isUnderline = !!target.underline;
-  updateProp('underline', !isUnderline);
+  updateProp('underline', !activeUnderline.value);
 };
 
 const cycleAlignment = () => {
   if (!activeObject.value) return;
   const aligns = ['left', 'center', 'right'];
-  const target = activeObject.value.type === 'activeSelection' ? activeObject.value.getObjects()[0] : activeObject.value;
-  const current = target.textAlign || 'left';
+  const current = activeTextAlign.value;
   const nextIndex = (aligns.indexOf(current) + 1) % aligns.length;
   updateProp('textAlign', aligns[nextIndex]);
 };

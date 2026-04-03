@@ -258,16 +258,14 @@ export function useCanvas() {
     sigGroup.on('removed', () => handleDeletion(sigGroup));
   };
 
-  // ==========================================
-  // ฟังก์ชันหลักสำหรับวาดบล็อกลายเซ็น (แบบคลุม 2 อันแต่แรก + ทะลวงกล่องแก้ข้อความได้)
-  // ==========================================
   const addSignatureBlockToCanvas = (sigData, dropX = 100, dropY = 100) => {
     if (!canvas.value) return;
 
     const maxTextWidth = 250;
     const fontSize = 16;
     const fontFamily = 'Sarabun';
-    const GAP = sigData.signatureImage ? 10 : 30;
+
+    const GAP = 30;
 
     const sharedLinkedId = `link_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
@@ -301,28 +299,28 @@ export function useCanvas() {
       const centerX = 0;
 
       const balancer = new fabric.Rect({
-        left: centerX, top: currentInternalY, width: 300, height: 1, fill: 'transparent',
-        originX: 'center', originY: 'top'
+        left: centerX, top: currentInternalY, width: 250, height: 1,
+        fill: 'transparent', originX: 'center', originY: 'top', selectable: false
       });
       objects.push(balancer);
 
-      const lineObj = new fabric.Line([-80, 0, 80, 0], {
-        stroke: '#000', strokeWidth: 1, strokeDashArray: [3, 3],
-        originX: 'center', originY: 'top', top: currentInternalY, left: centerX
-      });
+      if (imgObj) {
+        imgObj.scaleToHeight(45);
+        imgObj.set({ originX: 'center', originY: 'top', top: currentInternalY, left: centerX });
+        objects.push(imgObj);
 
-      const signPrefix = new fabric.Text('ลงชื่อ', {
-        fontSize: fontSize, fontFamily: fontFamily,
-        originX: 'right', originY: 'bottom', top: currentInternalY, left: centerX - 85
-      });
+        currentInternalY += imgObj.getScaledHeight() + 20;
+      } else {
+        currentInternalY += 60;
+      }
 
       const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
         fontSize: fontSize, fontFamily: fontFamily,
-        originX: 'center', originY: 'top', top: currentInternalY + 8, left: centerX
+        originX: 'center', originY: 'top', top: currentInternalY, left: centerX
       });
+      objects.push(nameText);
 
-      objects.push(lineObj, signPrefix, nameText);
-      currentInternalY += 8 + nameText.height + 8;
+      currentInternalY += nameText.height + 15;
 
       if (sigData.position) {
         const wrappedPos = (typeof wrapThaiText === 'function')
@@ -330,16 +328,11 @@ export function useCanvas() {
           : sigData.position;
 
         const bottomText = new fabric.Text(wrappedPos, {
-          fontSize: fontSize, fontFamily: fontFamily, originX: 'center', originY: 'top',
-          textAlign: 'center', top: currentInternalY, left: centerX
+          fontSize: fontSize, fontFamily: fontFamily,
+          originX: 'center', originY: 'top', textAlign: 'center',
+          top: currentInternalY, left: centerX
         });
         objects.push(bottomText);
-      }
-
-      if (imgObj) {
-        imgObj.scaleToHeight(45);
-        imgObj.set({ originX: 'center', originY: 'bottom', top: lineObj.top - 2, left: centerX });
-        objects.push(imgObj);
       }
 
       let sigTopY = dropY;
@@ -350,28 +343,22 @@ export function useCanvas() {
       const sigGroup = new fabric.Group(objects, {
         left: dropX, top: sigTopY, originX: 'center', originY: 'top',
         isSignatureBlock: true, linkedId: sharedLinkedId, sigData: sigData,
-        id: `signature_${sharedLinkedId}`, name: `ลายเซ็น: ${sigData.fullName}`
+        id: `signature_${sharedLinkedId}`, name: `กลุ่มชื่อ: ${sigData.fullName}`
       });
 
       canvas.value.add(sigGroup);
 
       if (prefixTextbox) {
         linkSignatureBlocks(canvas.value, prefixTextbox, sigGroup, GAP);
-
-        const sel = new fabric.ActiveSelection([prefixTextbox, sigGroup], {
-          canvas: canvas.value
-        });
+        const sel = new fabric.ActiveSelection([prefixTextbox, sigGroup], { canvas: canvas.value });
         canvas.value.setActiveObject(sel);
 
         if (!canvas.value.__hasSmartDblClick) {
           canvas.value.on('mouse:dblclick', (e) => {
             const activeObj = canvas.value.getActiveObject();
-
             if (activeObj && activeObj.type === 'activeSelection') {
               const pointer = canvas.value.getPointer(e.e);
-
               const objectsInSelection = [...activeObj.getObjects()];
-
               canvas.value.discardActiveObject();
 
               let innerTarget = null;
@@ -387,17 +374,14 @@ export function useCanvas() {
               if (innerTarget && innerTarget.isSignaturePrefix) {
                 canvas.value.setActiveObject(innerTarget);
                 canvas.value.requestRenderAll();
-
                 setTimeout(() => {
                   innerTarget.enterEditing();
                   innerTarget.selectAll();
                   canvas.value.requestRenderAll();
                 }, 50);
-
               } else if (innerTarget) {
                 canvas.value.setActiveObject(innerTarget);
                 canvas.value.requestRenderAll();
-
               } else {
                 const sel = new fabric.ActiveSelection(objectsInSelection, { canvas: canvas.value });
                 canvas.value.setActiveObject(sel);
@@ -407,12 +391,11 @@ export function useCanvas() {
           });
           canvas.value.__hasSmartDblClick = true;
         }
-
       } else {
         canvas.value.setActiveObject(sigGroup);
       }
 
-      canvas.value.renderAll();
+      canvas.value.requestRenderAll();
     };
 
     if (sigData.signatureImage) {
