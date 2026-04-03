@@ -101,16 +101,16 @@
 
     <div class="divider"></div>
     <div class="tool-group relative">
-      <button @click="showOpacity = !showOpacity; showSpacing = false;" :class="['icon-btn', { active: showOpacity }]"
-        title="ความโปร่งใส">
-        ความทึบ ▾
+      <button @click.stop="showOpacity = !showOpacity; showSpacing = false;"
+        :class="['icon-btn', { active: showOpacity }]" title="ความทึบ">
+        ความทึบ {{ Math.round(activeOpacity * 100) }}% ▾
       </button>
-      <div v-if="showOpacity" class="popup-menu opacity-popup">
-        <div class="popup-item">
-          <label>ความทึบ ({{ Math.round(activeOpacity * 100) }}%)</label>
-          <input type="range" :value="activeOpacity"
-            @input="updateProp('opacity', parseFloat($event.target.value), false)"
-            @change="updateProp('opacity', parseFloat($event.target.value), true)" min="0" max="1" step="0.01" />
+      <div v-if="showOpacity" class="popup-menu layer-popup opacity-popup" @click.stop>
+        <div v-for="val in [1, 0.9, 0.75, 0.5, 0.25]" :key="val" class="popup-item">
+          <button @click="setOpacity(val)"
+            :class="['layer-btn', { 'active-opacity': Math.abs(activeOpacity - val) < 0.01 }]">
+            {{ val * 100 }}%
+          </button>
         </div>
       </div>
     </div>
@@ -118,22 +118,22 @@
     <template v-if="isText">
       <div class="divider"></div>
       <div class="tool-group relative">
-        <button @click="showSpacing = !showSpacing; showOpacity = false;" :class="['icon-btn', { active: showSpacing }]"
-          title="ระยะห่างตัวอักษรและบรรทัด">
+        <button @click.stop="showSpacing = !showSpacing; showOpacity = false;"
+          :class="['icon-btn', { active: showSpacing }]" title="ระยะห่างตัวอักษรและบรรทัด">
           ระยะห่าง ▾
         </button>
-        <div v-if="showSpacing" class="popup-menu spacing-popup">
-          <div class="popup-item">
-            <label>ระยะระหว่างตัวอักษร ({{ Math.round(activeCharSpacing) }})</label>
-            <input type="range" :value="activeCharSpacing"
-              @input="updateProp('charSpacing', parseInt($event.target.value), false)"
-              @change="updateProp('charSpacing', parseInt($event.target.value), true)" min="-50" max="500" step="10" />
+        <div v-if="showSpacing" class="popup-menu spacing-popup" @click.stop>
+          <div class="spacing-row">
+            <label>ระยะระหว่างตัวอักษร</label>
+            <input type="number" class="size-input" :value="activeCharSpacing"
+              @input="updateProp('charSpacing', parseInt($event.target.value || 0), false)"
+              @change="updateProp('charSpacing', parseInt($event.target.value || 0), true)" step="10" />
           </div>
-          <div class="popup-item">
-            <label>ระยะระหว่างบรรทัด ({{ activeLineHeight.toFixed(1) }})</label>
-            <input type="range" :value="activeLineHeight"
-              @input="updateProp('lineHeight', parseFloat($event.target.value), false)"
-              @change="updateProp('lineHeight', parseFloat($event.target.value), true)" min="0.5" max="3" step="0.1" />
+          <div class="spacing-row">
+            <label>ระยะระหว่างบรรทัด</label>
+            <input type="number" class="size-input" :value="activeLineHeight"
+              @input="updateProp('lineHeight', parseFloat($event.target.value || 1), false)"
+              @change="updateProp('lineHeight', parseFloat($event.target.value || 1), true)" step="0.1" />
           </div>
         </div>
       </div>
@@ -442,6 +442,12 @@ const setAlignment = (align) => {
   updateProp('textAlign', align);
 };
 
+const setOpacity = (val) => {
+  if (!activeObject.value) return;
+  updateProp('opacity', val);
+  showOpacity.value = false;
+};
+
 const deleteObject = () => {
   if (!props.canvas) return;
   const active = props.canvas.getActiveObjects();
@@ -555,7 +561,7 @@ const handleClickOutside = (e) => {
     showSpacing.value = false;
   }
   const opacityPopup = document.querySelector('.opacity-popup');
-  const opacityBtn = document.querySelector('button[title="ความโปร่งใส"]');
+  const opacityBtn = document.querySelector('button[title="ความทึบ"]');
   if (showOpacity.value && opacityPopup && !opacityPopup.contains(e.target) && (!opacityBtn || !opacityBtn.contains(e.target))) {
     showOpacity.value = false;
   }
@@ -975,5 +981,40 @@ onUnmounted(() => {
 .segmented-control .icon-btn.active {
   background-color: #e3f2fd !important;
   color: #2196f3 !important;
+}
+
+/* ตกแต่งปุ่มตัวเลือกความทึบที่ถูกเลือกให้เป็นสีฟ้า */
+.layer-btn.active-opacity {
+  background: #e3f2fd;
+  color: #2196f3;
+  border-color: #bbdefb;
+  font-weight: 600;
+}
+
+/* จัดเลย์เอาต์ป๊อปอัปของระยะห่าง */
+.spacing-popup {
+  width: 250px;
+  padding: 16px;
+}
+
+.spacing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.spacing-row:last-child {
+  margin-bottom: 0;
+}
+
+.spacing-row label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.spacing-row .size-input {
+  width: 55px;
 }
 </style>
