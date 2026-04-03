@@ -194,77 +194,57 @@ export function useCanvas() {
     fabric.Object.prototype.__customExportPatched = true;
   }
 
-  // ==========================================
-  // 🌟 ฟังก์ชันแยกสำหรับ "ผูกวิญญาณ" (Event Linker)
-  // (อัปเกรดดักจับการแก้ Properties จากเมนูด้านขวาแบบ Real-time)
-  // ==========================================
   const linkSignatureBlocks = (canvasObj, prefixTextbox, sigGroup, GAP) => {
-    // ถ้าเคยผูกแล้วไม่ต้องผูกซ้ำ
     if (prefixTextbox.__isLinked) return;
     prefixTextbox.__isLinked = true;
     sigGroup.__isLinked = true;
 
-    // ✨ [หัวใจสำคัญ] ตัวแปรป้องกัน Infinite Loop 
-    // (กันไม่ให้มันเถียงกันว่า "ฉันขยับ เธอต้องขยับ" วนไปมาไม่รู้จบ)
     let isSyncing = false;
 
     const syncPositions = (movedObj) => {
-      if (isSyncing) return; // ถ้ากำลังขยับคู่ของมันอยู่ ให้ข้ามไปเลย
-
+      if (isSyncing || prefixTextbox.group || sigGroup.group) return;
       const activeObj = canvasObj.getActiveObject();
       if (activeObj && activeObj.type === 'activeSelection') return;
 
-      isSyncing = true; // ล็อคประตู!
+      isSyncing = true;
       if (movedObj === prefixTextbox && sigGroup.canvas) {
-        sigGroup.set({
-          left: prefixTextbox.left,
-          top: prefixTextbox.top + prefixTextbox.getScaledHeight() + GAP
-        });
+        sigGroup.set({ left: prefixTextbox.left, top: prefixTextbox.top + prefixTextbox.getScaledHeight() + GAP });
         sigGroup.setCoords();
       } else if (movedObj === sigGroup && prefixTextbox.canvas) {
-        prefixTextbox.set({
-          left: sigGroup.left,
-          top: sigGroup.top - prefixTextbox.getScaledHeight() - GAP
-        });
+        prefixTextbox.set({ left: sigGroup.left, top: sigGroup.top - prefixTextbox.getScaledHeight() - GAP });
         prefixTextbox.setCoords();
       }
-      isSyncing = false; // ปลดล็อคประตู!
+      isSyncing = false;
     };
 
-    // 🚀 [เวทมนตร์ใหม่!] แอบดักจับคำสั่ง .set() จาก PropertiesPanel
-    // ถ้าระบบเมนูด้านขวาสั่งเปลี่ยนฟอนต์/ขนาด มันจะวิ่งผ่านตรงนี้เสมอ!
     const originalPrefixSet = prefixTextbox.set.bind(prefixTextbox);
     prefixTextbox.set = function (...args) {
-      originalPrefixSet(...args); // ให้มันเปลี่ยนค่าฟอนต์ตามปกติ
-      syncPositions(prefixTextbox); // แล้วแอบสั่งให้อัปเดตบล็อกล่างทันที!
+      originalPrefixSet(...args);
+      if (!this.group) syncPositions(prefixTextbox);
       return this;
     };
 
     const originalGroupSet = sigGroup.set.bind(sigGroup);
     sigGroup.set = function (...args) {
       originalGroupSet(...args);
-      syncPositions(sigGroup);
+      if (!this.group) syncPositions(sigGroup);
       return this;
     };
 
-    // ✨ [ดักจับปกติ] ลาก, ดึงขอบ, ย่อขยาย
     prefixTextbox.on('moving', () => syncPositions(prefixTextbox));
     prefixTextbox.on('resizing', () => syncPositions(prefixTextbox));
     prefixTextbox.on('scaling', () => syncPositions(prefixTextbox));
     sigGroup.on('moving', () => syncPositions(sigGroup));
     sigGroup.on('scaling', () => syncPositions(sigGroup));
 
-    // ✨ [ดักจับการพิมพ์]
     prefixTextbox.on('changed', () => {
       syncPositions(prefixTextbox);
       canvasObj.renderAll();
     });
 
-    // ✨ [ดักจับการลบทิ้ง]
     const handleDeletion = (deletedObj) => {
       if (deletedObj.isDeleting) return;
       deletedObj.isDeleting = true;
-
       if (deletedObj === prefixTextbox && sigGroup.canvas) {
         sigGroup.isDeleting = true;
         canvasObj.remove(sigGroup);
@@ -278,27 +258,9 @@ export function useCanvas() {
     sigGroup.on('removed', () => handleDeletion(sigGroup));
   };
 
-  const relinkSignatures = () => {
-    if (!canvas.value) return;
-    const objects = canvas.value.getObjects();
-    const pairs = {};
-
-    objects.forEach(obj => {
-      if (obj.linkedId) {
-        if (!pairs[obj.linkedId]) pairs[obj.linkedId] = {};
-        if (obj.isSignaturePrefix) pairs[obj.linkedId].prefix = obj;
-        if (obj.isSignatureBlock) pairs[obj.linkedId].group = obj;
-      }
-    });
-
-    Object.values(pairs).forEach(pair => {
-      if (pair.prefix && pair.group) {
-        const GAP = pair.group.sigData?.signatureImage ? 10 : 30;
-        linkSignatureBlocks(canvas.value, pair.prefix, pair.group, GAP);
-      }
-    });
-  };
-
+  // ==========================================
+  // ฟังก์ชันหลักสำหรับวาดบล็อกลายเซ็น (แบบคลุม 2 อันแต่แรก + ทะลวงกล่องแก้ข้อความได้)
+  // ==========================================
   const addSignatureBlockToCanvas = (sigData, dropX = 100, dropY = 100) => {
     if (!canvas.value) return;
 
@@ -339,28 +301,24 @@ export function useCanvas() {
       const centerX = 0;
 
       const balancer = new fabric.Rect({
-        left: centerX, top: currentInternalY,
-        width: 300, height: 1, fill: 'transparent',
+        left: centerX, top: currentInternalY, width: 300, height: 1, fill: 'transparent',
         originX: 'center', originY: 'top'
       });
       objects.push(balancer);
 
       const lineObj = new fabric.Line([-80, 0, 80, 0], {
         stroke: '#000', strokeWidth: 1, strokeDashArray: [3, 3],
-        originX: 'center', originY: 'top',
-        top: currentInternalY, left: centerX
+        originX: 'center', originY: 'top', top: currentInternalY, left: centerX
       });
 
       const signPrefix = new fabric.Text('ลงชื่อ', {
         fontSize: fontSize, fontFamily: fontFamily,
-        originX: 'right', originY: 'bottom',
-        top: currentInternalY, left: centerX - 85
+        originX: 'right', originY: 'bottom', top: currentInternalY, left: centerX - 85
       });
 
       const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
         fontSize: fontSize, fontFamily: fontFamily,
-        originX: 'center', originY: 'top',
-        top: currentInternalY + 8, left: centerX
+        originX: 'center', originY: 'top', top: currentInternalY + 8, left: centerX
       });
 
       objects.push(lineObj, signPrefix, nameText);
@@ -372,20 +330,15 @@ export function useCanvas() {
           : sigData.position;
 
         const bottomText = new fabric.Text(wrappedPos, {
-          fontSize: fontSize, fontFamily: fontFamily,
-          originX: 'center', originY: 'top',
-          textAlign: 'center',
-          top: currentInternalY, left: centerX
+          fontSize: fontSize, fontFamily: fontFamily, originX: 'center', originY: 'top',
+          textAlign: 'center', top: currentInternalY, left: centerX
         });
         objects.push(bottomText);
       }
 
       if (imgObj) {
         imgObj.scaleToHeight(45);
-        imgObj.set({
-          originX: 'center', originY: 'bottom',
-          top: lineObj.top - 2, left: centerX
-        });
+        imgObj.set({ originX: 'center', originY: 'bottom', top: lineObj.top - 2, left: centerX });
         objects.push(imgObj);
       }
 
@@ -395,22 +348,68 @@ export function useCanvas() {
       }
 
       const sigGroup = new fabric.Group(objects, {
-        left: dropX,
-        top: sigTopY,
-        originX: 'center',
-        originY: 'top',
-        isSignatureBlock: true,
-        linkedId: sharedLinkedId,
-        sigData: sigData,
-        id: `signature_${sharedLinkedId}`,
-        name: `ลายเซ็น: ${sigData.fullName}`
+        left: dropX, top: sigTopY, originX: 'center', originY: 'top',
+        isSignatureBlock: true, linkedId: sharedLinkedId, sigData: sigData,
+        id: `signature_${sharedLinkedId}`, name: `ลายเซ็น: ${sigData.fullName}`
       });
 
       canvas.value.add(sigGroup);
-      canvas.value.setActiveObject(sigGroup);
 
       if (prefixTextbox) {
         linkSignatureBlocks(canvas.value, prefixTextbox, sigGroup, GAP);
+
+        const sel = new fabric.ActiveSelection([prefixTextbox, sigGroup], {
+          canvas: canvas.value
+        });
+        canvas.value.setActiveObject(sel);
+
+        if (!canvas.value.__hasSmartDblClick) {
+          canvas.value.on('mouse:dblclick', (e) => {
+            const activeObj = canvas.value.getActiveObject();
+
+            if (activeObj && activeObj.type === 'activeSelection') {
+              const pointer = canvas.value.getPointer(e.e);
+
+              const objectsInSelection = [...activeObj.getObjects()];
+
+              canvas.value.discardActiveObject();
+
+              let innerTarget = null;
+              for (let i = 0; i < objectsInSelection.length; i++) {
+                const obj = objectsInSelection[i];
+                obj.setCoords();
+                if (obj.containsPoint(pointer)) {
+                  innerTarget = obj;
+                  break;
+                }
+              }
+
+              if (innerTarget && innerTarget.isSignaturePrefix) {
+                canvas.value.setActiveObject(innerTarget);
+                canvas.value.requestRenderAll();
+
+                setTimeout(() => {
+                  innerTarget.enterEditing();
+                  innerTarget.selectAll();
+                  canvas.value.requestRenderAll();
+                }, 50);
+
+              } else if (innerTarget) {
+                canvas.value.setActiveObject(innerTarget);
+                canvas.value.requestRenderAll();
+
+              } else {
+                const sel = new fabric.ActiveSelection(objectsInSelection, { canvas: canvas.value });
+                canvas.value.setActiveObject(sel);
+                canvas.value.requestRenderAll();
+              }
+            }
+          });
+          canvas.value.__hasSmartDblClick = true;
+        }
+
+      } else {
+        canvas.value.setActiveObject(sigGroup);
       }
 
       canvas.value.renderAll();
@@ -433,6 +432,27 @@ export function useCanvas() {
     } else {
       buildAndLinkSignatureGroup();
     }
+  };
+
+  const relinkSignatures = () => {
+    if (!canvas.value) return;
+    const objects = canvas.value.getObjects();
+    const pairs = {};
+
+    objects.forEach(obj => {
+      if (obj.linkedId) {
+        if (!pairs[obj.linkedId]) pairs[obj.linkedId] = {};
+        if (obj.isSignaturePrefix) pairs[obj.linkedId].prefix = obj;
+        if (obj.isSignatureBlock) pairs[obj.linkedId].group = obj;
+      }
+    });
+
+    Object.values(pairs).forEach(pair => {
+      if (pair.prefix && pair.group) {
+        const GAP = pair.group.sigData?.signatureImage ? 10 : 30;
+        linkSignatureBlocks(canvas.value, pair.prefix, pair.group, GAP);
+      }
+    });
   };
 
   const addImageToCanvas = async (url, x = 100, y = 100) => {
