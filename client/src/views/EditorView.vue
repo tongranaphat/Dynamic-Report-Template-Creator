@@ -78,7 +78,9 @@
       </div>
     </main>
 
-    <PropertiesPanel v-if="canvas" :canvas="canvas" :is-preview-mode="isPreviewMode" />
+    <div v-if="canvas" class="floating-panel-anchor" :class="{ 'sidebar-closed': !isSidebarOpen }">
+      <PropertiesPanel :canvas="canvas" :is-preview-mode="isPreviewMode" />
+    </div>
 
     <HistoryModal v-if="showHistoryModal" :reportInstances="reportHistory" :currentInstanceId="currentReportId"
       @close="showHistoryModal = false" @edit="openReportFromHistory" @delete="handleDeleteReport" />
@@ -1806,6 +1808,26 @@ onUnmounted(() => {
 }
 
 .viewport.full-width {
+  left: 72px;
+}
+
+.floating-panel-anchor {
+  position: fixed;
+  top: 72px;
+  left: 392px;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 50;
+  pointer-events: none;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floating-panel-anchor > * {
+  pointer-events: auto;
+}
+
+.floating-panel-anchor.sidebar-closed {
   left: 72px;
 }
 
