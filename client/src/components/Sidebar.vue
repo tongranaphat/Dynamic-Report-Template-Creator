@@ -22,7 +22,7 @@
 
         <button @click="handleTabClick('layers')" @mouseenter="handleMouseEnter('layers')"
           :class="['rail-btn', { active: activeTab === 'layers' && isOpen, pinned: isPinned && activeTab === 'layers' }]">
-          <span class="rail-icon icon-project"></span>
+          <span class="rail-icon icon-layers"></span>
           <span class="rail-label">เลเยอร์</span>
         </button>
 
@@ -59,7 +59,7 @@
         </div>
 
         <div class="panel-header-title" v-if="activeTab === 'layers'">
-          <span class="panel-header-icon icon-project-header"></span>
+          <span class="panel-header-icon icon-layers-header"></span>
           <h3 class="panel-header-text">จัดการลำดับชั้นวัตถุ</h3>
         </div>
 
@@ -1621,6 +1621,10 @@ select {
   background-image: url('../assets/icons/project-active.png');
 }
 
+.icon-layers-header {
+  background-image: url('../assets/icons/layers-active.png');
+}
+
 .tab-pane-layers {
   display: flex;
   flex-direction: column;
@@ -1730,5 +1734,14 @@ select {
   text-align: center;
   margin: 0;
   line-height: 1.2;
+}
+
+.icon-layers {
+  background-image: url('../assets/icons/layers.png');
+}
+
+.rail-btn.active .icon-layers,
+.rail-btn:hover .icon-layers {
+  background-image: url('../assets/icons/layers-active.png');
 }
 </style>

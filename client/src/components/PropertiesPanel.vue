@@ -150,31 +150,20 @@
       </button>
 
       <div v-if="showLayers" class="dropdown-menu layer-popup" @click.stop>
-        <!-- <div class="dropdown-header">เลเยอร์</div> -->
         <button @click="bringForward" class="dropdown-item align-left">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="18 15 12 9 6 15"></polyline>
-          </svg>
+          <img src="../assets/icons/layer-up.png" alt="ย้ายขึ้นไปหนึ่งชั้น" class="layer-icon" />
           ย้ายขึ้นไปหนึ่งชั้น
         </button>
         <button @click="bringToFront" class="dropdown-item align-left">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 15l-6-6-6 6" />
-            <path d="M5 4h14" />
-          </svg>
+          <img src="../assets/icons/layer-top.png" alt="ย้ายขึ้นไปบนสุด" class="layer-icon" />
           ย้ายขึ้นไปบนสุด
         </button>
         <button @click="sendBackwards" class="dropdown-item align-left">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+          <img src="../assets/icons/layer-down.png" alt="ย้ายลงไปหนึ่งชั้น" class="layer-icon" />
           ย้ายลงไปหนึ่งชั้น
         </button>
         <button @click="sendToBack" class="dropdown-item align-left">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 9l6 6 6-6" />
-            <path d="M5 20h14" />
-          </svg>
+          <img src="../assets/icons/layer-bottom.png" alt="ย้ายลงไปล่างสุด" class="layer-icon" />
           ย้ายลงไปล่างสุด
         </button>
       </div>
@@ -221,12 +210,12 @@ const showLayers = ref(false);
 
 const executeLayerAction = (actionName) => {
   if (!props.canvas) return;
-  
+
   // 🌟 1. ถอด Proxy ออกจาก Canvas
   const canvas = toRaw(props.canvas);
   const rawActive = canvas.getActiveObject();
   if (!rawActive) return;
-  
+
   // 🌟 2. ถอด Proxy ออกจาก Active Object เสมอ ป้องกัน indexOf หาไม่เจอจนเกิด Duplicate
   const active = toRaw(rawActive);
 
@@ -967,5 +956,11 @@ onUnmounted(() => {
 .text-active {
   color: #333;
   transition: color 0.2s ease;
+}
+
+.layer-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
 }
 </style>
