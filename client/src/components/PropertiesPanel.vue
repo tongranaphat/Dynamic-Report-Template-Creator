@@ -39,22 +39,22 @@
       <div class="toolbar-group">
         <input type="number" :value="activeFontSize"
           @input="updateProp('fontSize', Math.round(parseFloat($event.target.value)), false)"
-          @change="updateProp('fontSize', Math.round(parseFloat($event.target.value)), true)" class="size-input"
-          min="1" step="1" />
+          @change="updateProp('fontSize', Math.round(parseFloat($event.target.value)), true)" class="size-input" min="1"
+          step="1" />
       </div>
 
       <div class="divider"></div>
 
-      <div class="toolbar-group segmented-control">
-        <button @click="toggleBold" :class="['icon-btn', { active: activeObject?.fontWeight === 'bold' }]"
+      <div class="toolbar-group style-buttons">
+        <button @click="toggleBold" :class="['icon-btn', { 'icon-btn-selected': activeObject?.fontWeight === 'bold' }]"
           title="ตัวหนา">
           <span style="font-weight: bold">B</span>
         </button>
-        <button @click="toggleItalic" :class="['icon-btn', { active: activeObject?.fontStyle === 'italic' }]"
-          title="ตัวเอียง">
+        <button @click="toggleItalic"
+          :class="['icon-btn', { 'icon-btn-selected': activeObject?.fontStyle === 'italic' }]" title="ตัวเอียง">
           <span style="font-style: italic">I</span>
         </button>
-        <button @click="toggleUnderline" :class="['icon-btn', { active: activeObject?.underline }]"
+        <button @click="toggleUnderline" :class="['icon-btn', { 'icon-btn-selected': activeObject?.underline }]"
           title="ขีดเส้นใต้">
           <span style="text-decoration: underline">U</span>
         </button>
@@ -85,7 +85,7 @@
     </template>
 
     <template v-if="isText || isShape">
-    <div class="divider" v-if="isText"></div>
+      <div class="divider" v-if="isText"></div>
 
       <div class="toolbar-group">
         <div class="color-wrapper" title="เลือกสี">
@@ -126,13 +126,13 @@
 
         <div v-if="showSpacing" class="dropdown-menu spacing-menu" @click.stop>
           <div class="spacing-row">
-            <span class="spacing-label">ตัวอักษร</span>
+            <span class="spacing-label">ระยะห่างระหว่างตัวอักษร</span>
             <input type="number" class="size-input" :value="activeCharSpacing"
               @input="updateProp('charSpacing', parseInt($event.target.value || 0), false)"
               @change="updateProp('charSpacing', parseInt($event.target.value || 0), true)" step="10" />
           </div>
           <div class="spacing-row">
-            <span class="spacing-label">บรรทัด</span>
+            <span class="spacing-label">ระยะห่างระหว่างบรรทัด</span>
             <input type="number" class="size-input" :value="activeLineHeight"
               @input="updateProp('lineHeight', parseFloat($event.target.value || 1), false)"
               @change="updateProp('lineHeight', parseFloat($event.target.value || 1), true)" step="0.1" />
@@ -145,10 +145,9 @@
 
     <div class="toolbar-group">
       <button @click="deleteObject" class="delete-btn" title="ลบวัตถุ">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <svg class="delete-icon" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor">
+          <path
+            d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z" />
         </svg>
         <span>ลบ</span>
       </button>
@@ -464,14 +463,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* =========================================
-   Floating Toolbar (Horizontal)
-   ========================================= */
 .floating-toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 24px; /* ปรับให้สัดส่วนของกล่องโค้งมนดูสวยงาม ไม่อึดอัด */
+  padding: 10px 24px;
   background: #FFFFFF 0% 0% no-repeat padding-box;
   box-shadow: 0px 3px 6px #DBDBDB;
   border-radius: 27px;
@@ -493,14 +489,11 @@ onUnmounted(() => {
   width: 1px;
   height: 24px;
   background-color: #E0E0E0;
-  margin: 0 10px;
+  margin: 0 6px;
   align-self: center;
   flex-shrink: 0;
 }
 
-/* =========================================
-   Font Picker Button
-   ========================================= */
 .font-btn {
   min-width: 130px;
   max-width: 180px;
@@ -512,9 +505,43 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* =========================================
-   Buttons & Segmented Controls
-   ========================================= */
+.style-buttons {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.icon-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 28px;
+  height: 34px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 24px;
+  color: #000000;
+  letter-spacing: 0px;
+  text-align: center;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: #f9f9f9;
+}
+
+.icon-btn.icon-btn-selected {
+  background: #FFDFE9 0% 0% no-repeat padding-box !important;
+  border: 1px solid #FFD5E3 !important;
+  color: #000000 !important;
+}
+
 .dropdown-btn {
   display: flex;
   align-items: center;
@@ -536,13 +563,10 @@ onUnmounted(() => {
   border-color: #aaa;
 }
 
-.dropdown-btn.active {
-  border-color: #2196f3;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.15);
-}
+
 
 .dropdown-btn .arrow {
-  font-size: 10px;
+  font-size: 14px;
   color: #888;
 }
 
@@ -552,49 +576,57 @@ onUnmounted(() => {
 
 .segmented-control {
   display: flex !important;
-  height: 32px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  overflow: hidden;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0 !important;
+  background: transparent !important;
+  border: none !important;
   padding: 0 !important;
-  box-sizing: border-box;
+  width: max-content;
+  flex-shrink: 0;
 }
 
 .segmented-control .icon-btn {
+  flex: 1 1 0px !important;
+  min-width: 36px !important;
+  height: 34px !important;
+  box-sizing: border-box;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 32px;
-  height: 100%;
-  border: none;
-  border-right: 1px solid #ddd;
-  border-radius: 0;
-  margin: 0;
-  padding: 0;
-  background-color: transparent;
   cursor: pointer;
-  color: #555;
-  transition: all 0.15s;
+
+  background: #FFFFFF 0% 0% no-repeat padding-box !important;
+  border: 1px solid #C5C5C5 !important;
+  opacity: 1 !important;
+  color: #555 !important;
+
+  border-radius: 0 !important;
+  margin: 0 0 0 -1px !important;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.segmented-control .icon-btn:first-child {
+  margin-left: 0 !important;
+  border-radius: 5px 0 0 5px !important;
 }
 
 .segmented-control .icon-btn:last-child {
-  border-right: none;
+  border-radius: 0 5px 5px 0 !important;
 }
 
 .segmented-control .icon-btn:hover {
-  background-color: #f5f5f5;
-  color: #000;
+  background-color: #f9f9f9 !important;
 }
 
 .segmented-control .icon-btn.active {
-  background-color: #e3f2fd;
-  color: #2196f3;
+  background: #FFFFFF 0% 0% no-repeat padding-box !important;
+  border: 1px solid #C5C5C5 !important;
+  color: #F65189 !important;
+  z-index: 1;
 }
 
-/* =========================================
-   Size input
-   ========================================= */
 .size-input {
   width: 50px;
   height: 32px;
@@ -625,13 +657,10 @@ onUnmounted(() => {
   appearance: textfield;
 }
 
-/* =========================================
-   Color Picker
-   ========================================= */
 .color-wrapper {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   overflow: hidden;
   border: 1px solid #ddd;
@@ -654,20 +683,23 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* =========================================
-   Dropdown Menus
-   ========================================= */
 .relative {
   position: relative;
 }
 
 .dropdown-header {
-  font-size: 12px;
-  color: #888;
-  padding: 0 4px 8px 4px;
-  margin-bottom: 8px;
-  font-weight: 600;
-  text-align: center;
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  box-sizing: border-box;
+  margin: 0;
 }
 
 .text-muted {
@@ -709,13 +741,13 @@ onUnmounted(() => {
 }
 
 .dropdown-item.active {
-  background-color: #e3f2fd;
-  color: #2196f3;
+  background-color: #FFDFE9;
+  color: #F65189;
   font-weight: 500;
 }
 
 .spacing-menu {
-  min-width: 200px;
+  min-width: 220px;
   padding: 12px;
 }
 
@@ -723,6 +755,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   margin-bottom: 8px;
 }
 
@@ -735,9 +768,6 @@ onUnmounted(() => {
   color: #555;
 }
 
-/* =========================================
-   Delete Button
-   ========================================= */
 .delete-btn {
   display: flex;
   align-items: center;
@@ -758,9 +788,6 @@ onUnmounted(() => {
   background: #ffebee;
 }
 
-/* =========================================
-   Font Picker Popup
-   ========================================= */
 .font-picker-wrapper {
   position: relative;
 }
@@ -819,8 +846,8 @@ onUnmounted(() => {
 }
 
 .font-option.active {
-  background: #e3f2fd;
-  color: #2196f3;
+  background: #FFDFE9;
+  color: #F65189;
 }
 
 .font-name {
@@ -833,6 +860,6 @@ onUnmounted(() => {
 }
 
 .font-option.active .font-preview-text {
-  color: #2196f3;
+  color: #F65189;
 }
 </style>
