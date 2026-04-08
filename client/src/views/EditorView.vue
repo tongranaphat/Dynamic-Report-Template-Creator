@@ -88,7 +88,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch, nextTick, onUnmounted, computed } from 'vue';
+import { onMounted, ref, watch, nextTick, onUnmounted, computed, toRaw } from 'vue';
 import { fabric } from 'fabric';
 import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -287,11 +287,29 @@ const canvasHelpers = { resetHistory, saveHistory, setHistoryLock };
 
 const { layers, updateLayers } = useLayers();
 
-const handleSelectLayer = (rawObject) => {
-  if (canvas.value && rawObject) {
-    canvas.value.setActiveObject(rawObject);
-    canvas.value.requestRenderAll();
-    updateLayers(canvas.value);
+const handleSelectLayer = (rawObj) => {
+  if (!canvas.value) return;
+  
+  // 🌟 ถอด Proxy ออกจาก Canvas ก่อน
+  const rawCanvas = toRaw(canvas.value);
+  const currentActive = rawCanvas.getActiveObject();
+
+  if (currentActive && currentActive.isEditing) {
+    currentActive.exitEditing();
+  }
+
+  // 🌟 ถอด Proxy ออกจาก Object ดั้งเดิมที่จะทำการ Select
+  const obj = toRaw(rawObj);
+
+  if (obj) {
+    if (toRaw(currentActive) === obj) return; // เปรียบเทียบ Raw === Raw
+
+    rawCanvas.discardActiveObject();
+    rawCanvas.setActiveObject(obj);
+    rawCanvas.requestRenderAll();
+    rawCanvas.fire('selection:created', { selected: [obj] });
+    
+    updateLayers(rawCanvas);
   }
 };
 

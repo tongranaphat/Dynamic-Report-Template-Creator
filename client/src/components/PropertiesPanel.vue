@@ -3,7 +3,7 @@
 
     <template v-if="isText">
       <div class="toolbar-group font-picker-wrapper" ref="pickerRef">
-        <button class="dropdown-btn font-btn" @click.stop="togglePicker"
+        <button class="dropdown-btn font-btn" title="ฟอนต์" @click.stop="togglePicker"
           :style="{ fontFamily: activeObject?.fontFamily || 'Sarabun' }">
           <span class="font-btn-label">{{ activeFontLabel }}</span>
           <span class="arrow">▾</span>
@@ -40,7 +40,7 @@
         <input type="number" :value="activeFontSize"
           @input="updateProp('fontSize', Math.round(parseFloat($event.target.value)), false)"
           @change="updateProp('fontSize', Math.round(parseFloat($event.target.value)), true)" class="size-input" min="1"
-          step="1" />
+          step="1" title="ขนาดตัวอักษร" />
       </div>
 
       <div class="divider"></div>
@@ -99,10 +99,10 @@
     <div class="divider" v-if="isText || isShape"></div>
 
     <div class="toolbar-group relative">
-      <button @click.stop="showOpacity = !showOpacity; showSpacing = false;"
-        :class="['dropdown-btn compact-dropdown', { active: showOpacity }]">
-        <span>{{ Math.round(activeOpacity * 100) }}%</span>
-        <span class="arrow">▾</span>
+      <button @click.stop="showOpacity = !showOpacity; showSpacing = false; showLayers = false; showFontPicker = false;"
+        class="dropdown-btn" title="ความทึบ">
+        <span :class="showOpacity ? 'text-active' : 'text-muted'">{{ Math.round(activeOpacity * 100) }}%</span> <span
+          class="arrow">▾</span>
       </button>
 
       <div v-if="showOpacity" class="dropdown-menu" @click.stop>
@@ -118,10 +118,10 @@
       <div class="divider"></div>
 
       <div class="toolbar-group relative">
-        <button @click.stop="showSpacing = !showSpacing; showOpacity = false;"
-          :class="['dropdown-btn compact-dropdown', { active: showSpacing }]">
-          <span class="text-muted">ระยะห่าง</span>
-          <span class="arrow">▾</span>
+        <button
+          @click.stop="showSpacing = !showSpacing; showOpacity = false; showLayers = false; showFontPicker = false;"
+          class="dropdown-btn" title="ระยะห่างตัวอักษรและบรรทัด">
+          <span :class="showSpacing ? 'text-active' : 'text-muted'">ระยะห่าง</span> <span class="arrow">▾</span>
         </button>
 
         <div v-if="showSpacing" class="dropdown-menu spacing-menu" @click.stop>
@@ -143,6 +143,45 @@
 
     <div class="divider"></div>
 
+    <div class="toolbar-group relative">
+      <button @click.stop="showLayers = !showLayers; showSpacing = false; showOpacity = false; showFontPicker = false;"
+        class="dropdown-btn" title="เลเยอร์">
+        <span :class="showLayers ? 'text-active' : 'text-muted'">เลเยอร์</span> <span class="arrow">▾</span>
+      </button>
+
+      <div v-if="showLayers" class="dropdown-menu layer-popup" @click.stop>
+        <!-- <div class="dropdown-header">เลเยอร์</div> -->
+        <button @click="bringForward" class="dropdown-item align-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+          ย้ายขึ้นไปหนึ่งชั้น
+        </button>
+        <button @click="bringToFront" class="dropdown-item align-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 15l-6-6-6 6" />
+            <path d="M5 4h14" />
+          </svg>
+          ย้ายขึ้นไปบนสุด
+        </button>
+        <button @click="sendBackwards" class="dropdown-item align-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+          ย้ายลงไปหนึ่งชั้น
+        </button>
+        <button @click="sendToBack" class="dropdown-item align-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6" />
+            <path d="M5 20h14" />
+          </svg>
+          ย้ายลงไปล่างสุด
+        </button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
     <div class="toolbar-group">
       <button @click="deleteObject" class="delete-btn" title="ลบวัตถุ">
         <svg class="delete-icon" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor">
@@ -157,7 +196,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, triggerRef, computed, watch } from 'vue';
+import { ref, shallowRef, onMounted, onUnmounted, triggerRef, computed, watch, toRaw } from 'vue';
 import { fabric } from 'fabric';
 
 const props = defineProps({
@@ -178,6 +217,42 @@ const fontListRef = ref(null);
 const showLayerControls = ref(false);
 const showOpacity = ref(false);
 const showSpacing = ref(false);
+const showLayers = ref(false);
+
+const executeLayerAction = (actionName) => {
+  if (!props.canvas) return;
+  
+  // 🌟 1. ถอด Proxy ออกจาก Canvas
+  const canvas = toRaw(props.canvas);
+  const rawActive = canvas.getActiveObject();
+  if (!rawActive) return;
+  
+  // 🌟 2. ถอด Proxy ออกจาก Active Object เสมอ ป้องกัน indexOf หาไม่เจอจนเกิด Duplicate
+  const active = toRaw(rawActive);
+
+  if (active.isEditing) {
+    active.exitEditing();
+  }
+
+  // สั่งย้าย Layer ด้วย Raw Object
+  if (actionName === 'forward') canvas.bringForward(active);
+  else if (actionName === 'front') canvas.bringToFront(active);
+  else if (actionName === 'backward') canvas.sendBackwards(active);
+  else if (actionName === 'back') canvas.sendToBack(active);
+
+  // ดักบังคับให้รูปภาพ/สีพื้นหลังกระดาษจมอยู่ล่างสุดเสมอ
+  const bgs = canvas.getObjects().filter(o => o.id === 'page-bg' || o.id === 'page-bg-image');
+  bgs.forEach(bg => canvas.sendToBack(toRaw(bg))); // ใช้ toRaw กับ bg ด้วย
+
+  canvas.requestRenderAll();
+  canvas.fire('object:modified', { target: active });
+  showLayers.value = false;
+};
+
+const bringForward = () => executeLayerAction('forward');
+const bringToFront = () => executeLayerAction('front');
+const sendBackwards = () => executeLayerAction('backward');
+const sendToBack = () => executeLayerAction('back');
 
 const thaiFonts = [
   { label: 'Sarabun', value: 'Sarabun' },
@@ -252,10 +327,12 @@ const loadGoogleFontsForPreview = () => {
 
 const togglePicker = () => {
   showFontPicker.value = !showFontPicker.value;
+  showOpacity.value = false;
+  showSpacing.value = false;
+  showLayers.value = false;
+
   if (showFontPicker.value) {
     showLayerControls.value = false;
-    showOpacity.value = false;
-    showSpacing.value = false;
     fontSearch.value = '';
     setTimeout(() => {
       const activeEl = fontListRef.value?.querySelector('.active');
@@ -274,6 +351,12 @@ const handleClickOutside = (e) => {
     showLayerControls.value = false;
     showOpacity.value = false;
     showSpacing.value = false;
+  }
+
+  const layerPopup = document.querySelector('.layer-popup');
+  const layerBtn = document.querySelector('button[title="เลเยอร์"]');
+  if (showLayers.value && layerPopup && !layerPopup.contains(e.target) && (!layerBtn || !layerBtn.contains(e.target))) {
+    showLayers.value = false;
   }
 };
 
@@ -416,6 +499,7 @@ const updateSelection = () => {
     showSpacing.value = false;
     showOpacity.value = false;
     showFontPicker.value = false;
+    showLayers.value = false;
   }
 
   activeObject.value = active;
@@ -861,5 +945,27 @@ onUnmounted(() => {
 
 .font-option.active .font-preview-text {
   color: #F65189;
+}
+
+.layer-popup {
+  width: 170px;
+}
+
+.dropdown-item.align-left {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
+.text-muted {
+  color: #888;
+  transition: color 0.2s ease;
+}
+
+.text-active {
+  color: #333;
+  transition: color 0.2s ease;
 }
 </style>
