@@ -1,5 +1,5 @@
 <template>
-  <div v-if="hasSelection" class="floating-toolbar" :key="renderKey">
+  <div v-if="hasSelection" class="floating-toolbar">
 
     <template v-if="isText">
       <div class="toolbar-group font-picker-wrapper" ref="pickerRef">
@@ -38,9 +38,11 @@
 
       <div class="toolbar-group">
         <input type="number" :value="activeFontSize"
-          @input="updateProp('fontSize', Math.round(parseFloat($event.target.value)), false)"
-          @change="updateProp('fontSize', Math.round(parseFloat($event.target.value)), true)" class="size-input" min="1"
-          step="1" title="ขนาดตัวอักษร" />
+          @input="handleNumberInput('fontSize', $event)"
+          @blur="handleNumberBlur('fontSize', $event, activeFontSize)"
+          @keydown.enter="$event.target.blur()"
+          @keydown="preventInvalidChars"
+          class="size-input" min="1" step="1" title="ขนาดตัวอักษร" />
       </div>
 
       <div class="divider"></div>
@@ -89,7 +91,7 @@
 
       <div class="toolbar-group">
         <div class="color-wrapper" title="เลือกสี">
-          <input type="color" :value="activeFillColor" @input="updateProp('fill', $event.target.value, false)"
+          <input type="color" :value="activeFillColor" @input="updateProp('fill', $event.target.value, true)"
             @change="updateProp('fill', $event.target.value, true)" class="color-input" />
           <span class="color-preview" :style="{ backgroundColor: activeFillColor }"></span>
         </div>
@@ -126,16 +128,18 @@
 
         <div v-if="showSpacing" class="dropdown-menu spacing-menu" @click.stop>
           <div class="spacing-row">
-            <span class="spacing-label">ระยะห่างระหว่างตัวอักษร</span>
-            <input type="number" class="size-input" :value="activeCharSpacing"
-              @input="updateProp('charSpacing', parseInt($event.target.value || 0), false)"
-              @change="updateProp('charSpacing', parseInt($event.target.value || 0), true)" step="10" />
+            <label>ระยะระหว่างตัวอักษร</label>
+            <input type="number" class="size-input" :value="Math.round(activeCharSpacing / 10)"
+              @input="handleNumberInput('charSpacing', $event, 10)"
+              @blur="handleNumberBlur('charSpacing', $event, activeCharSpacing, 10)"
+              @keydown.enter="$event.target.blur()" step="1" />
           </div>
           <div class="spacing-row">
-            <span class="spacing-label">ระยะห่างระหว่างบรรทัด</span>
+            <label>ระยะระหว่างบรรทัด</label>
             <input type="number" class="size-input" :value="activeLineHeight"
-              @input="updateProp('lineHeight', parseFloat($event.target.value || 1), false)"
-              @change="updateProp('lineHeight', parseFloat($event.target.value || 1), true)" step="0.1" />
+              @input="handleNumberInput('lineHeight', $event)"
+              @blur="handleNumberBlur('lineHeight', $event, activeLineHeight)"
+              @keydown.enter="$event.target.blur()" step="0.1" />
           </div>
         </div>
       </div>
@@ -210,28 +214,36 @@ const showLayers = ref(false);
 
 const executeLayerAction = (actionName) => {
   if (!props.canvas) return;
-
-  // 🌟 1. ถอด Proxy ออกจาก Canvas
   const canvas = toRaw(props.canvas);
   const rawActive = canvas.getActiveObject();
   if (!rawActive) return;
-
-  // 🌟 2. ถอด Proxy ออกจาก Active Object เสมอ ป้องกัน indexOf หาไม่เจอจนเกิด Duplicate
   const active = toRaw(rawActive);
 
   if (active.isEditing) {
     active.exitEditing();
   }
 
-  // สั่งย้าย Layer ด้วย Raw Object
-  if (actionName === 'forward') canvas.bringForward(active);
-  else if (actionName === 'front') canvas.bringToFront(active);
-  else if (actionName === 'backward') canvas.sendBackwards(active);
-  else if (actionName === 'back') canvas.sendToBack(active);
+  // 🌟 นับจำนวนเลเยอร์ที่เป็นพื้นหลังกระดาษ (PDF Pages)
+  const objects = canvas.getObjects();
+  const bgCount = objects.filter(o => o.id === 'page-bg' || o.id === 'page-bg-image').length;
+  const currentIndex = objects.indexOf(active);
 
-  // ดักบังคับให้รูปภาพ/สีพื้นหลังกระดาษจมอยู่ล่างสุดเสมอ
-  const bgs = canvas.getObjects().filter(o => o.id === 'page-bg' || o.id === 'page-bg-image');
-  bgs.forEach(bg => canvas.sendToBack(toRaw(bg))); // ใช้ toRaw กับ bg ด้วย
+  // สั่งย้าย Layer โดยมีตัวดักกันไม่ให้ลงไปต่ำกว่าชั้นพื้นหลัง
+  if (actionName === 'forward') {
+    canvas.bringForward(active);
+  } else if (actionName === 'front') {
+    canvas.bringToFront(active);
+  } else if (actionName === 'backward') {
+    // อนุญาตให้ลงได้ ถ้ายังไม่อยู่ติดกับพื้นหลัง
+    if (currentIndex > bgCount) {
+      canvas.sendBackwards(active);
+    }
+  } else if (actionName === 'back') {
+    // ถ้าย้ายลงล่างสุด ให้ไปหยุดอยู่ที่ดัชนีของ bgCount (เหนือพื้นหลังพอดี)
+    if (currentIndex > bgCount) {
+      canvas.moveTo(active, bgCount);
+    }
+  }
 
   canvas.requestRenderAll();
   canvas.fire('object:modified', { target: active });
@@ -429,10 +441,49 @@ const getHexColor = (color) => {
 
 const updateProp = (prop, value, triggerRender = true) => {
   if (!activeObject.value || !props.canvas) return;
-  activeObject.value.set(prop, value);
+
+  if (activeObject.value.type === 'activeSelection') {
+    activeObject.value.getObjects().forEach(obj => obj.set(prop, value));
+  } else {
+    activeObject.value.set(prop, value);
+  }
+
   if (triggerRender) {
     props.canvas.requestRenderAll();
-    renderKey.value++;
+    props.canvas.fire('object:modified', { target: activeObject.value });
+    triggerRef(activeObject);
+  }
+};
+
+// 🌟 ป้องกันไม่ให้พิมพ์ตัวอักษร e, E, +, - ลงในช่องตัวเลข
+const preventInvalidChars = (e) => {
+  if (['e', 'E', '+', '-'].includes(e.key)) {
+    e.preventDefault();
+  }
+};
+
+// 🌟 จัดการตอนกำลังพิมพ์: อนุญาตให้ลบจนว่างได้โดยไม่รีบเซฟลง Canvas
+const handleNumberInput = (key, event, multiplier = 1) => {
+  const val = event.target.value;
+  if (val === '') return; // ปล่อยช่องว่างไว้ ยังไม่ต้องทำอะไร
+  
+  let num = parseFloat(val);
+  if (!isNaN(num)) {
+    if (key === 'fontSize') num = Math.round(num);
+    updateProp(key, num * multiplier, true);
+  }
+};
+
+// 🌟 จัดการตอนพิมพ์เสร็จ/คลิกออก: ถ้าช่องว่าง ให้คืนค่าเดิมกลับมา
+const handleNumberBlur = (key, event, fallbackValue, divider = 1) => {
+  const val = event.target.value;
+  if (val === '' || isNaN(parseFloat(val))) {
+    // คืนค่าเดิมใส่กลับเข้าไปในช่อง Input
+    event.target.value = key === 'charSpacing' ? Math.round(fallbackValue / 10) : fallbackValue;
+  } else {
+    let num = parseFloat(val);
+    if (key === 'fontSize') num = Math.round(num);
+    updateProp(key, num * divider, true);
   }
 };
 
@@ -715,7 +766,7 @@ onUnmounted(() => {
 }
 
 .size-input:focus {
-  border-color: #2196f3;
+  border-color: #F65189;
 }
 
 .size-input::-webkit-outer-spin-button,
