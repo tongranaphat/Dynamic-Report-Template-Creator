@@ -1421,18 +1421,6 @@ const onDrop = (e) => {
   }
 };
 
-// const handleAddSignatureBlock = (sigData) => {
-//   if (!canvas.value) return;
-
-//   const center = canvas.value.getCenter();
-
-//   if (typeof addSignatureBlockToCanvas !== 'undefined') {
-//     addSignatureBlockToCanvas(sigData, center.left, center.top);
-//   } else if (window.addSignatureBlockToCanvas) {
-//     window.addSignatureBlockToCanvas(sigData, center.left, center.top);
-//   }
-// };
-
 const handleAddSignatureBlock = (sigData) => {
   console.log("ผู้ใช้คลิกบล็อกลายเซ็น ข้อมูลที่ได้คือ:", sigData);
 
@@ -1646,6 +1634,25 @@ const handleRouteChange = async () => {
   }
 };
 
+const selectAllObjects = () => {
+  if (!canvas.value) return;
+
+  const objects = canvas.value.getObjects().filter(
+    obj => obj.id !== 'page-bg' && obj.id !== 'page-bg-image' && obj.selectable !== false
+  );
+
+  if (objects.length === 0) return;
+
+  canvas.value.discardActiveObject();
+
+  const selection = new fabric.ActiveSelection(objects, {
+    canvas: canvas.value,
+  });
+
+  canvas.value.setActiveObject(selection);
+  canvas.value.requestRenderAll();
+};
+
 onMounted(async () => {
   await nextTick();
   initCanvas();
@@ -1733,8 +1740,34 @@ onMounted(async () => {
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+    const activeObj = canvas.value?.getActiveObject();
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      if (activeObj && activeObj.isEditing) return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (typeof redo === 'function') redo();
+      } else {
+        if (typeof undo === 'function') undo();
+      }
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      if (activeObj && activeObj.isEditing) return;
+      e.preventDefault();
+      if (typeof redo === 'function') redo();
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      if (activeObj && activeObj.isEditing) return;
+      e.preventDefault();
+      selectAllObjects();
+      return;
+    }
+
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-      const activeObj = canvas.value?.getActiveObject();
       if (activeObj && !activeObj.isEditing) {
         e.preventDefault();
         activeObj.clone((cloned) => { clipboard = cloned; });
@@ -1823,7 +1856,7 @@ onUnmounted(() => {
   transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.floating-panel-anchor > * {
+.floating-panel-anchor>* {
   pointer-events: auto;
 }
 

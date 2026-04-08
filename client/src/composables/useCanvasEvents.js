@@ -149,6 +149,20 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
       const deselected = e.deselected || [];
       restoreClipPathsAfterSelection(deselected);
     });
+
+    canvas.value.on('object:added', (e) => {
+      if (e.target && (e.target.id === 'page-bg' || e.target.id === 'page-bg-image')) return;
+      if (saveHistory) saveHistory();
+    });
+
+    canvas.value.on('object:removed', (e) => {
+      if (e.target && (e.target.id === 'page-bg' || e.target.id === 'page-bg-image')) return;
+      if (saveHistory) saveHistory();
+    });
+
+    canvas.value.on('text:editing:exited', (e) => {
+      if (saveHistory) saveHistory();
+    });
   };
 
   return { initCanvasEvents };

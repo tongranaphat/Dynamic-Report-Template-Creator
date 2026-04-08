@@ -120,15 +120,7 @@ const getVariables = asyncHandler(async (req, res) => {
 
 const getTemplates = asyncHandler(async (req, res) => {
     logger.info('Fetching templates');
-    const { userId } = req.query;
-
-    const whereCondition = {};
-    if (userId) {
-        whereCondition.OR = [{ ownerId: userId }, { ownerId: null }];
-    }
-
     const templates = await prisma.template.findMany({
-        where: whereCondition,
         orderBy: { updatedAt: 'desc' }
     });
 

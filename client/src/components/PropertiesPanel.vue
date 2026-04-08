@@ -207,8 +207,8 @@ const thaiFonts = [
   { label: 'Noto Sans Thai', value: 'Noto Sans Thai' },
   { label: 'Noto Serif Thai', value: 'Noto Serif Thai' },
   { label: 'Noto Sans Thai Looped', value: 'Noto Sans Thai Looped' },
-  { label: 'IBM Plex Thai', value: 'IBM Plex Thai' },
-  { label: 'IBM Plex Thai Looped', value: 'IBM Plex Thai Looped' },
+  { label: 'IBM Plex Sans Thai', value: 'IBM Plex Sans Thai' },
+  { label: 'IBM Plex Sans Thai Looped', value: 'IBM Plex Sans Thai Looped' },
   { label: 'Anuphan', value: 'Anuphan' },
 ];
 

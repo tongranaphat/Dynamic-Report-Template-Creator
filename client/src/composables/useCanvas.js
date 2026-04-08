@@ -75,11 +75,26 @@ export function useCanvas() {
     if (canvas.value) canvas.value.requestRenderAll();
   };
 
+  let saveHistoryTimeout = null;
+
   const saveHistory = () => {
     if (!canvas.value || isHistoryLocked.value) return;
-    const json = canvas.value.toJSON(CUSTOM_PROPS);
-    historyStack.value.push(JSON.stringify(json));
-    redoStack.value = [];
+
+    if (saveHistoryTimeout) clearTimeout(saveHistoryTimeout);
+
+    saveHistoryTimeout = setTimeout(() => {
+      if (!canvas.value || isHistoryLocked.value) return;
+
+      const json = canvas.value.toJSON(CUSTOM_PROPS);
+      const jsonString = JSON.stringify(json);
+
+      if (historyStack.value.length > 0 && historyStack.value[historyStack.value.length - 1] === jsonString) {
+        return;
+      }
+
+      historyStack.value.push(jsonString);
+      redoStack.value = [];
+    }, 100);
   };
 
   const undo = () => {
@@ -87,12 +102,14 @@ export function useCanvas() {
       isHistoryLocked.value = true;
       const current = historyStack.value.pop();
       redoStack.value.push(current);
+
       const previous = historyStack.value[historyStack.value.length - 1];
       canvas.value.loadFromJSON(JSON.parse(previous), () => {
         canvas.value.renderAll();
         relinkSignatures();
         if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
-        isHistoryLocked.value = false;
+
+        setTimeout(() => { isHistoryLocked.value = false; }, 100);
       });
     }
   };
@@ -102,11 +119,13 @@ export function useCanvas() {
       isHistoryLocked.value = true;
       const next = redoStack.value.pop();
       historyStack.value.push(next);
+
       canvas.value.loadFromJSON(JSON.parse(next), () => {
         canvas.value.renderAll();
         relinkSignatures();
         if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
-        isHistoryLocked.value = false;
+
+        setTimeout(() => { isHistoryLocked.value = false; }, 100);
       });
     }
   };
