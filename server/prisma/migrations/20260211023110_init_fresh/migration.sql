@@ -1,4 +1,3 @@
--- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "username" TEXT NOT NULL,
@@ -7,7 +6,6 @@ CREATE TABLE "User" (
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "Template" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -23,7 +21,6 @@ CREATE TABLE "Template" (
     CONSTRAINT "Template_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "ReportInstance" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -38,7 +35,6 @@ CREATE TABLE "ReportInstance" (
     CONSTRAINT "ReportInstance_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "Variable" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -49,17 +45,12 @@ CREATE TABLE "Variable" (
     CONSTRAINT "Variable_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 
--- AddForeignKey
 ALTER TABLE "Template" ADD CONSTRAINT "Template_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "Template" ADD CONSTRAINT "Template_originTemplateId_fkey" FOREIGN KEY ("originTemplateId") REFERENCES "Template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "ReportInstance" ADD CONSTRAINT "ReportInstance_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "Template"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "Variable" ADD CONSTRAINT "Variable_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

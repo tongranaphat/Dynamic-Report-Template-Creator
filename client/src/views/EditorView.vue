@@ -289,8 +289,7 @@ const { layers, updateLayers } = useLayers();
 
 const handleSelectLayer = (rawObj) => {
   if (!canvas.value) return;
-  
-  // 🌟 ถอด Proxy ออกจาก Canvas ก่อน
+
   const rawCanvas = toRaw(canvas.value);
   const currentActive = rawCanvas.getActiveObject();
 
@@ -298,7 +297,6 @@ const handleSelectLayer = (rawObj) => {
     currentActive.exitEditing();
   }
 
-  // 🌟 ถอด Proxy ออกจาก Object ดั้งเดิมที่จะทำการ Select
   const obj = toRaw(rawObj);
 
   if (obj) {
@@ -308,7 +306,7 @@ const handleSelectLayer = (rawObj) => {
     rawCanvas.setActiveObject(obj);
     rawCanvas.requestRenderAll();
     rawCanvas.fire('selection:created', { selected: [obj] });
-    
+
     updateLayers(rawCanvas);
   }
 };

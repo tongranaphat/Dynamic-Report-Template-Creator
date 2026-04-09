@@ -428,7 +428,6 @@ const props = defineProps({
   templateName: String,
   isPreviewMode: Boolean,
   currentTemplateId: String,
-  // groupedVariables: Object,
   isGenerating: Boolean,
   pdfQuality: [String, Number],
   layers: {
@@ -1673,7 +1672,6 @@ select {
   font-weight: bold;
 }
 
-/* --- Danger Zone UI --- */
 .danger-zone {
   margin-top: 32px;
   padding-top: 16px;

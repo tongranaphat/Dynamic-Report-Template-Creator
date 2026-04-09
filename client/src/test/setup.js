@@ -1,6 +1,5 @@
 import { vi, beforeEach, afterEach } from 'vitest';
 
-// Mock fabric.js
 vi.mock('fabric', () => {
   const ITextMock = vi.fn().mockImplementation(function (text, options) {
     return {
@@ -53,18 +52,15 @@ vi.mock('fabric', () => {
   };
 });
 
-// Mock document.fonts.ready for undo/redo operations
 if (typeof globalThis.document !== 'undefined') {
   globalThis.document.fonts = globalThis.document.fonts || { ready: Promise.resolve() };
 }
 
-// Mock window functions
 Object.defineProperty(window, 'saveCurrentPageState', {
   value: vi.fn(),
   writable: true
 });
 
-// Suppress console output during tests
 beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => { });
   vi.spyOn(console, 'error').mockImplementation(() => { });

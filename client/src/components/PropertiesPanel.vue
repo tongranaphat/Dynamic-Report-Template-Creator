@@ -37,12 +37,9 @@
       <div class="divider"></div>
 
       <div class="toolbar-group">
-        <input type="number" :value="activeFontSize"
-          @input="handleNumberInput('fontSize', $event)"
-          @blur="handleNumberBlur('fontSize', $event, activeFontSize)"
-          @keydown.enter="$event.target.blur()"
-          @keydown="preventInvalidChars"
-          class="size-input" min="1" step="1" title="ขนาดตัวอักษร" />
+        <input type="number" :value="activeFontSize" @input="handleNumberInput('fontSize', $event)"
+          @blur="handleNumberBlur('fontSize', $event, activeFontSize)" @keydown.enter="$event.target.blur()"
+          @keydown="preventInvalidChars" class="size-input" min="1" step="1" title="ขนาดตัวอักษร" />
       </div>
 
       <div class="divider"></div>
@@ -138,8 +135,8 @@
             <label>ระยะระหว่างบรรทัด</label>
             <input type="number" class="size-input" :value="activeLineHeight"
               @input="handleNumberInput('lineHeight', $event)"
-              @blur="handleNumberBlur('lineHeight', $event, activeLineHeight)"
-              @keydown.enter="$event.target.blur()" step="0.1" />
+              @blur="handleNumberBlur('lineHeight', $event, activeLineHeight)" @keydown.enter="$event.target.blur()"
+              step="0.1" />
           </div>
         </div>
       </div>
@@ -223,23 +220,19 @@ const executeLayerAction = (actionName) => {
     active.exitEditing();
   }
 
-  // 🌟 นับจำนวนเลเยอร์ที่เป็นพื้นหลังกระดาษ (PDF Pages)
   const objects = canvas.getObjects();
   const bgCount = objects.filter(o => o.id === 'page-bg' || o.id === 'page-bg-image').length;
   const currentIndex = objects.indexOf(active);
 
-  // สั่งย้าย Layer โดยมีตัวดักกันไม่ให้ลงไปต่ำกว่าชั้นพื้นหลัง
   if (actionName === 'forward') {
     canvas.bringForward(active);
   } else if (actionName === 'front') {
     canvas.bringToFront(active);
   } else if (actionName === 'backward') {
-    // อนุญาตให้ลงได้ ถ้ายังไม่อยู่ติดกับพื้นหลัง
     if (currentIndex > bgCount) {
       canvas.sendBackwards(active);
     }
   } else if (actionName === 'back') {
-    // ถ้าย้ายลงล่างสุด ให้ไปหยุดอยู่ที่ดัชนีของ bgCount (เหนือพื้นหลังพอดี)
     if (currentIndex > bgCount) {
       canvas.moveTo(active, bgCount);
     }
@@ -315,7 +308,6 @@ const latinFonts = [
 const loadGoogleFontsForPreview = () => {
   const allFonts = [...thaiFonts, ...latinFonts];
   allFonts.forEach(font => {
-    // Skip Local/System fonts
     const isSystemFont = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'TH Sarabun New'].includes(font.value);
     if (!isSystemFont) {
       const link = document.createElement('link');
@@ -455,18 +447,16 @@ const updateProp = (prop, value, triggerRender = true) => {
   }
 };
 
-// 🌟 ป้องกันไม่ให้พิมพ์ตัวอักษร e, E, +, - ลงในช่องตัวเลข
 const preventInvalidChars = (e) => {
   if (['e', 'E', '+', '-'].includes(e.key)) {
     e.preventDefault();
   }
 };
 
-// 🌟 จัดการตอนกำลังพิมพ์: อนุญาตให้ลบจนว่างได้โดยไม่รีบเซฟลง Canvas
 const handleNumberInput = (key, event, multiplier = 1) => {
   const val = event.target.value;
-  if (val === '') return; // ปล่อยช่องว่างไว้ ยังไม่ต้องทำอะไร
-  
+  if (val === '') return;
+
   let num = parseFloat(val);
   if (!isNaN(num)) {
     if (key === 'fontSize') num = Math.round(num);
@@ -474,11 +464,9 @@ const handleNumberInput = (key, event, multiplier = 1) => {
   }
 };
 
-// 🌟 จัดการตอนพิมพ์เสร็จ/คลิกออก: ถ้าช่องว่าง ให้คืนค่าเดิมกลับมา
 const handleNumberBlur = (key, event, fallbackValue, divider = 1) => {
   const val = event.target.value;
   if (val === '' || isNaN(parseFloat(val))) {
-    // คืนค่าเดิมใส่กลับเข้าไปในช่อง Input
     event.target.value = key === 'charSpacing' ? Math.round(fallbackValue / 10) : fallbackValue;
   } else {
     let num = parseFloat(val);
