@@ -461,6 +461,7 @@ const emit = defineEmits([
   'import-workspace',
   'add-variable',
   'add-image',
+  'add-signature-block',
   'save-report',
   'generate-pdf',
   'open-history',

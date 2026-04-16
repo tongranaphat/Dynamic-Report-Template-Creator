@@ -69,6 +69,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       id: page.id,
       background: page.background,
       originalBackgroundType: page.originalBackgroundType,
+      width: page.width,
+      height: page.height,
       objects: page.objects.map((obj) => {
         const serialized = JSON.parse(JSON.stringify(obj));
         const clean = cleanFabricObject(serialized);
@@ -160,12 +162,17 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
+        const viewportForImage = page.getViewport({ scale: 2 });
+        const origViewport = page.getViewport({ scale: 1 });
         const cvs = document.createElement('canvas');
-        cvs.width = viewport.width;
-        cvs.height = viewport.height;
-        await page.render({ canvasContext: cvs.getContext('2d'), viewport }).promise;
-        images.push(cvs.toDataURL('image/jpeg', 0.8));
+        cvs.width = viewportForImage.width;
+        cvs.height = viewportForImage.height;
+        await page.render({ canvasContext: cvs.getContext('2d'), viewport: viewportForImage }).promise;
+        images.push({
+            dataUrl: cvs.toDataURL('image/jpeg', 0.8),
+            width: origViewport.width,
+            height: origViewport.height
+        });
       }
     } catch (e) {
       console.error(e);
@@ -188,6 +195,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       templateId: currentTemplateId.value,
       name: templateName.value || 'Untitled Project',
       pages: pagesData,
+      pageDimensions: pages.value.map(p => ({ width: p.width, height: p.height })),
       status: 'DRAFT'
     };
 
@@ -209,6 +217,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     const payload = {
       name: templateName.value || 'Untitled Template',
       pages: pagesData,
+      pageDimensions: pages.value.map(p => ({ width: p.width, height: p.height })),
       userId: getMachineId()
     };
 
@@ -256,6 +265,10 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       }
       currentPageIndex.value = 0;
       if (resetHistory) resetHistory();
+
+      if (typeof window !== 'undefined' && window.renderAllPages) {
+        window.renderAllPages();
+      }
 
       if (typeof window !== 'undefined' && window.history) {
         window.history.pushState({}, '', `/template/${currentTemplateId.value}`);
@@ -377,9 +390,11 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       try {
         const images = await processPdfToImages(file);
         if (images.length > 0) {
-          pages.value = images.map((img, idx) => ({
+          pages.value = images.map((imgObj, idx) => ({
             id: Date.now() + idx,
-            background: img,
+            background: imgObj.dataUrl,
+            width: imgObj.width,
+            height: imgObj.height,
             objects: [],
             originalBackgroundType: 'PDF'
           }));
@@ -414,9 +429,11 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
     if (file.type === 'application/pdf') {
       const images = await processPdfToImages(file);
-      newPages = images.map((img, idx) => ({
+      newPages = images.map((imgObj, idx) => ({
         id: Date.now() + Math.random() + idx,
-        background: img,
+        background: imgObj.dataUrl,
+        width: imgObj.width,
+        height: imgObj.height,
         objects: [],
         originalBackgroundType: 'PDF'
       }));

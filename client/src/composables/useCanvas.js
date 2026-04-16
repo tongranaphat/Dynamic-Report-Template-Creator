@@ -515,16 +515,33 @@ export function useCanvas() {
       if (obj.originY === 'center') exportTop = obj.top - (obj.height * obj.scaleY) / 2;
 
       const center = obj.getCenterPoint();
-      const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-      const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-      const STRIDE = P_H + GAP;
+      let accumulatedTop = 0;
+      let targetPageIndex = pages.length - 1;
+      let pageTopY = 0;
 
-      let pageIndex = Math.floor(center.y / STRIDE);
-      pageIndex = Math.max(0, Math.min(pageIndex, pages.length - 1));
+      for (let i = 0; i < pages.length; i++) {
+        const pageH = pages[i]?.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const pageBottom = accumulatedTop + pageH + CANVAS_CONSTANTS.PAGE_GAP;
+        if (center.y >= accumulatedTop && center.y < pageBottom) {
+          targetPageIndex = i;
+          pageTopY = accumulatedTop;
+          break;
+        }
+        accumulatedTop = pageBottom;
+      }
+      
+      const pageIndex = Math.max(0, Math.min(targetPageIndex, pages.length - 1));
+      if (pageTopY === 0 && pageIndex > 0) {
+          // If we fallback to last page due to bottom overflow, calculate real top
+          let tmpOffset = 0;
+          for(let i=0; i<pageIndex; i++) {
+              tmpOffset += (pages[i]?.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+          }
+          pageTopY = tmpOffset;
+      }
 
       try {
         const serialized = obj.toObject(CUSTOM_PROPS);
-        const pageTopY = pageIndex * STRIDE;
 
         serialized.left = Math.round(exportLeft * 100) / 100;
         serialized.top = Math.round((exportTop - pageTopY) * 100) / 100;

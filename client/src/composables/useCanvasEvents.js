@@ -7,25 +7,42 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
 
   const updateObjectClipPath = (obj) => {
     if (!obj) return;
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-    const P_W = CANVAS_CONSTANTS.PAGE_WIDTH;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
 
+    let accumulatedY = 0;
+    let targetPageIndex = 0;
+    let pageTop = 0;
     const center = obj.getCenterPoint();
-    let pageIndex = Math.floor(center.y / (P_H + GAP));
-    const totalPages = pages.value ? pages.value.length : 1;
 
-    if (pageIndex < 0) pageIndex = 0;
-    if (pageIndex >= totalPages) pageIndex = totalPages - 1;
+    for (let i = 0; i < (pages.value ? pages.value.length : 1); i++) {
+      const page = pages.value ? pages.value[i] : {};
+      const pHeight = page.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+      const pageBottom = accumulatedY + pHeight + GAP;
 
-    const pageTop = pageIndex * (P_H + GAP);
+      if (center.y >= accumulatedY && center.y < pageBottom) {
+        targetPageIndex = i;
+        pageTop = accumulatedY;
+        break;
+      }
+      // If we are at the last page and object is below it, snap to last page
+      if (i === (pages.value ? pages.value.length : 1) - 1 && center.y >= pageBottom) {
+        targetPageIndex = i;
+        pageTop = accumulatedY;
+      }
 
-    if (!obj.clipPath || obj.clipPath.top !== pageTop) {
+      accumulatedY += pHeight + GAP;
+    }
+
+    const targetPage = pages.value ? pages.value[targetPageIndex] : {};
+    const targetWidth = targetPage?.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+    const targetHeight = targetPage?.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+
+    if (!obj.clipPath || obj.clipPath.top !== pageTop || obj.clipPath.height !== targetHeight || obj.clipPath.width !== targetWidth) {
       obj.clipPath = new fabric.Rect({
         left: 0,
         top: pageTop,
-        width: P_W,
-        height: P_H,
+        width: targetWidth,
+        height: targetHeight,
         absolutePositioned: true
       });
       obj.dirty = true;
@@ -58,10 +75,24 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
   const handleDragTransition = (obj) => {
     if (!obj || !pages.value) return;
     const center = obj.getCenterPoint();
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
 
-    const calculatedPageIndex = Math.floor(center.y / (P_H + GAP));
+    let accumulatedY = 0;
+    let calculatedPageIndex = 0;
+
+    for (let i = 0; i < pages.value.length; i++) {
+        const pHeight = pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const pageBottom = accumulatedY + pHeight + GAP;
+
+        if (center.y >= accumulatedY && center.y < pageBottom) {
+            calculatedPageIndex = i;
+            break;
+        }
+        if (i === pages.value.length - 1 && center.y >= pageBottom) {
+            calculatedPageIndex = i;
+        }
+        accumulatedY += pHeight + GAP;
+    }
 
     if (calculatedPageIndex >= 0 && calculatedPageIndex < pages.value.length) {
       if (currentPageIndex.value !== calculatedPageIndex) {

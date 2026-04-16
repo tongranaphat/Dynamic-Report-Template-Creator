@@ -59,7 +59,7 @@
       @close="isSidebarOpen = false" @load-template="loadTemplateWrapper" @delete-template="deleteTemplate"
       @update:templateName="templateName = $event" @update:pdfQuality="pdfQuality = $event"
       @save-template="handleSaveTemplate" @reset-canvas="goHome" @toggle-preview="togglePreviewWrapper"
-      @import-workspace="handleImportWorkspaceWrapper" @add-variable="addVariableToCanvas"
+      @import-workspace="handleImportWorkspaceWrapper" @add-variable="handleAddVariable"
       @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject" @generate-pdf="handleExport"
       @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
       @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" :layers="layers"
@@ -369,7 +369,7 @@ const { initCanvasEvents } = useCanvasEvents(
   setHistoryLock
 );
 const { connect, emitUpdate } = useRealTime();
-const { generateHybridPdfBlob } = useEditablePdf();
+const { generateHybridPdfBlob, captureCanvasPageSafe } = useEditablePdf();
 
 const { getMockData } = usePreviewData();
 const editorStore = useEditorStore();
@@ -421,6 +421,26 @@ const handleReset = async () => {
       showNotification('รีเซ็ตไม่สำเร็จ', 'error');
     }
   }
+};
+
+const getPageTopOffset = (index) => {
+  let offset = 0;
+  for (let i = 0; i < index; i++) {
+    const p = pages.value[i] || {};
+    offset += (p.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+  }
+  return offset;
+};
+
+const getPageIndexFromTop = (y) => {
+  let offset = 0;
+  for (let i = 0; i < pages.value.length; i++) {
+    const p = pages.value[i] || {};
+    const h = p.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+    if (y >= offset && y < offset + h + CANVAS_CONSTANTS.PAGE_GAP) return i;
+    offset += h + CANVAS_CONSTANTS.PAGE_GAP;
+  }
+  return Math.max(0, pages.value.length - 1);
 };
 
 const handleSaveProject = async () => {
@@ -484,7 +504,7 @@ const handleSaveProject = async () => {
 
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
-          const objPageIndex = Math.floor(center.y / (P_H + GAP));
+          const objPageIndex = getPageIndexFromTop(center.y);
           const isWrongPage = objPageIndex !== i;
           const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
           const isOverlay = OVERLAY_TYPES.includes(obj.type) && !isBackground;
@@ -500,21 +520,26 @@ const handleSaveProject = async () => {
         });
 
         canvas.value.renderAll();
-        const topOffset = i * (P_H + GAP) * zoomLevel.value;
+        const topOffset = getPageTopOffset(i) * zoomLevel.value;
+        const pageData = pages.value[i] || {};
+        const pWidth = pageData.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const pHeight = pageData.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
 
-        try {
-          const canvasImage = canvas.value.toDataURL({
-            format: 'jpeg', quality: 0.92,
-            multiplier: qualityMultiplier / zoomLevel.value,
-            left: 0, top: topOffset,
-            width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
-            height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
-          });
-          if (canvasImage && canvasImage.length > 100) canvasImages.push(canvasImage);
-        } catch (canvasError) {
+        const imgDataUrl = await captureCanvasPageSafe(
+          canvas.value,
+          topOffset,
+          pWidth * zoomLevel.value,
+          pHeight * zoomLevel.value,
+          qualityMultiplier
+        );
+
+        if (imgDataUrl) {
+          canvasImages.push(imgDataUrl);
+        } else {
+          console.warn(`Fallback for bounding page ${i + 1}`);
           const fallbackCanvas = document.createElement('canvas');
-          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
-          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
+          fallbackCanvas.width = pWidth * qualityMultiplier;
+          fallbackCanvas.height = pHeight * qualityMultiplier;
           const fallbackCtx = fallbackCanvas.getContext('2d');
           fallbackCtx.fillStyle = '#ffffff';
           fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
@@ -535,7 +560,7 @@ const handleSaveProject = async () => {
             if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
               const liveObj = liveObjects.find(o => {
                 if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                const expectedTop = jsonObj.top + getPageTopOffset(pageIndex);
                 return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
               });
               if (liveObj) {
@@ -672,7 +697,7 @@ const handleExport = async () => {
 
         allObjects.forEach((obj) => {
           const center = obj.getCenterPoint();
-          const objPageIndex = Math.floor(center.y / (P_H + GAP));
+          const objPageIndex = getPageIndexFromTop(center.y);
           const isWrongPage = objPageIndex !== i;
 
           const isBackground = obj.id === 'page-bg-image' || obj.id === 'page-bg';
@@ -693,34 +718,30 @@ const handleExport = async () => {
 
         canvas.value.renderAll();
 
-        const topOffset = i * (P_H + GAP) * zoomLevel.value;
+        const topOffset = getPageTopOffset(i) * zoomLevel.value;
+        const pageData = pages.value[i] || {};
+        const pWidth = pageData.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const pHeight = pageData.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
 
-        try {
-          const canvasImage = canvas.value.toDataURL({
-            format: 'jpeg',
-            quality: 0.92,
-            multiplier: qualityMultiplier / zoomLevel.value,
-            left: 0,
-            top: topOffset,
-            width: CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel.value,
-            height: CANVAS_CONSTANTS.PAGE_HEIGHT * zoomLevel.value
-          });
+        const imgDataUrl = await captureCanvasPageSafe(
+          canvas.value,
+          topOffset,
+          pWidth * zoomLevel.value, // ส่งความกว้างจริง x zoom
+          pHeight * zoomLevel.value, // ส่งความสูงจริง x zoom
+          qualityMultiplier
+        );
 
-          if (canvasImage && canvasImage.length > 100) {
-            canvasImages.push(canvasImage);
-          }
-        } catch (canvasError) {
-          console.warn(`Canvas taint detected on page ${i + 1}, using fallback:`, canvasError);
+        if (imgDataUrl) {
+          canvasImages.push(imgDataUrl);
+        } else {
+          console.warn(`Canvas taint/capture failure on page ${i + 1}, pushing fallback.`);
           const fallbackCanvas = document.createElement('canvas');
-          fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
-          fallbackCanvas.height = CANVAS_CONSTANTS.PAGE_HEIGHT * qualityMultiplier;
+          fallbackCanvas.width = pWidth * qualityMultiplier;
+          fallbackCanvas.height = pHeight * qualityMultiplier;
           const fallbackCtx = fallbackCanvas.getContext('2d');
           fallbackCtx.fillStyle = '#ffffff';
           fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
-          const fallbackImage = fallbackCanvas.toDataURL('image/jpeg', 0.92);
-          if (fallbackImage.length > 100) {
-            canvasImages.push(fallbackImage);
-          }
+          canvasImages.push(fallbackCanvas.toDataURL('image/jpeg', 0.92));
         }
 
         hiddenForCapture.forEach((obj) => { obj.visible = true; });
@@ -738,7 +759,7 @@ const handleExport = async () => {
             if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
               const liveObj = liveObjects.find(o => {
                 if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
-                const expectedTop = jsonObj.top + (pageIndex * (P_H + GAP));
+                const expectedTop = jsonObj.top + getPageTopOffset(pageIndex);
                 return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
               });
 
@@ -870,8 +891,49 @@ const addBlankPageWrapper = async () => {
 };
 
 
+// ----------------------------------------------------
+// วางฟังก์ชันเวอร์ชันที่ใช้การคำนวณตำแหน่งแบบ Dynamic (accumulatedTop)
+// ----------------------------------------------------
 
+const handleAddSignatureBlock = (sigData) => {
+  if (!canvas.value) return;
+  let accumulatedTop = 0;
+  for (let i = 0; i < currentPageIndex.value; i++) {
+    accumulatedTop += (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+  }
+  const targetTop = accumulatedTop + 100;
+  const targetLeft = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
 
+  addSignatureBlockToCanvas(sigData, targetLeft, targetTop);
+};
+
+const handleAddVariable = (key) => {
+  if (!canvas.value) return;
+  let accumulatedTop = 0;
+  for (let i = 0; i < currentPageIndex.value; i++) {
+    accumulatedTop += (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+  }
+  const targetTop = accumulatedTop + 100;
+  const targetLeft = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
+
+  addVariableToCanvas(key, targetLeft - 100, targetTop);
+};
+
+// ฟังก์ชันห่อหุ้มการเพิ่มรูปภาพ พร้อมคำนวณตำแหน่งลงตรงกลางหน้าปัจจุบันแบบ Dynamic
+const addImageToCanvasWrapper = (url) => {
+  if (!url) return;
+  let accumulatedTop = 0;
+  for (let i = 0; i < currentPageIndex.value; i++) {
+    accumulatedTop += (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+  }
+  const targetTop = accumulatedTop + 100; // วางห่างจากขอบบนกระดาษ 100px
+  const targetLeft = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
+
+  // ส่งพิกัดเป้าหมายไปให้ useCanvas
+  addImageToCanvas(url, targetLeft - 100, targetTop);
+};
+
+// ----------------------------------------------------
 
 const cleanupCanvasObjects = () => {
   if (!canvas.value) return;
@@ -924,60 +986,67 @@ const renderAllPages = async () => {
     canvas.value.clear();
     canvas.value.setBackgroundColor(null, () => { });
 
-    const P_W = CANVAS_CONSTANTS.PAGE_WIDTH;
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-    const P_GAP = CANVAS_CONSTANTS.PAGE_GAP;
-    const totalHeight = currentPages.length * P_H + (currentPages.length - 1) * P_GAP;
-    const canvasHeight = currentPages.length === 1 ? P_H : totalHeight;
     const actualZoom = zoomLevel.value || 1;
 
-    canvasBaseDimensions.value = { width: P_W, height: totalHeight };
-    canvas.value.setDimensions({ width: P_W * actualZoom, height: canvasHeight * actualZoom });
-    canvas.value.setZoom(actualZoom);
+    let currentY = 0;
+    let maxWidth = 0;
 
-    canvas.value.clipPath = null;
+    // หาความกว้างกระดาษที่มากที่สุดเพื่อขยาย Canvas
+    for (let i = 0; i < currentPages.length; i++) {
+      const p = currentPages[i];
+      const w = p.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+      if (w > maxWidth) maxWidth = w;
+    }
+
+    // เคลียร์พื้นหลังเดิม
+    const objects = canvas.value.getObjects();
+    const oldBgs = objects.filter(o => o.id === 'page-bg' || o.id === 'page-bg-image' || o.id === 'page-divider');
+    oldBgs.forEach(bg => canvas.value.remove(bg));
 
     for (let i = 0; i < currentPages.length; i++) {
       const page = currentPages[i];
-      const offsetTop = i * (P_H + P_GAP);
+      const pWidth = page.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+      const pHeight = page.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+      const offsetTop = currentY;
 
-      const pagePaper = new fabric.Rect({
+      // 🌟 1. สร้างฉากหลังสีขาวให้พอดีพิกเซลจริง
+      const bgRect = new fabric.Rect({
         id: 'page-bg',
         left: 0,
         top: offsetTop,
-        width: P_W,
-        height: P_H,
+        width: pWidth,
+        height: pHeight,
         fill: '#ffffff',
         selectable: false,
         evented: false,
-        objectCaching: false,
-        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.3)', blur: 8, offsetY: 3 }),
-        data: { pageId: page.id }
+        excludeFromExport: true
       });
-      canvas.value.add(pagePaper);
+      canvas.value.add(bgRect);
+      canvas.value.sendToBack(bgRect);
 
-      if (page.background) {
+      // 🌟 2. ดึงภาพต้นฉบับมาแปะ โดยปรับสเกลให้ฟิตพอดีกับ pWidth / pHeight
+      if (page.dataUrl || page.background) {
+        const urlToLoad = page.dataUrl || page.background;
         await new Promise((resolve) => {
-          fabric.Image.fromURL(
-            page.background,
-            (img) => {
-              img.set({
-                id: 'page-bg-image',
-                left: 0,
-                top: offsetTop,
-                selectable: false,
-                evented: false,
-                objectCaching: false
-              });
-              img.scaleToWidth(P_W);
-              canvas.value.add(img);
-              canvas.value.requestRenderAll();
-              resolve();
-            },
-            { crossOrigin: 'anonymous' }
-          );
+          fabric.Image.fromURL(urlToLoad, (img) => {
+            img.set({
+              id: 'page-bg-image',
+              left: 0,
+              top: offsetTop,
+              scaleX: pWidth / img.width,
+              scaleY: pHeight / img.height,
+              selectable: false,
+              evented: false
+            });
+            canvas.value.add(img);
+            // ย้ายไปอยู่เหนือสีขาว 1 ชั้น (ชั้นที่ 1)
+            canvas.value.moveTo(img, 1);
+            resolve();
+          }, { crossOrigin: 'anonymous' });
         });
       }
+
+      currentY += pHeight + CANVAS_CONSTANTS.PAGE_GAP;
 
       if (page.objects && page.objects.length > 0) {
         await new Promise((resolve) => {
@@ -994,8 +1063,8 @@ const renderAllPages = async () => {
               obj.clipPath = new fabric.Rect({
                 left: 0,
                 top: offsetTop,
-                width: P_W,
-                height: P_H,
+                width: pWidth,
+                height: pHeight,
                 absolutePositioned: true
               });
 
@@ -1039,8 +1108,14 @@ const renderAllPages = async () => {
           });
         });
       }
+    } // End of outer for loop
 
-    }
+    // Set final canvas dimensions after calculating all pages height
+    canvas.value.setWidth(maxWidth * actualZoom);
+    canvas.value.setHeight(currentY * actualZoom);
+    canvasBaseDimensions.value = { width: maxWidth, height: currentY };
+    canvas.value.setZoom(actualZoom);
+
     canvas.value.requestRenderAll();
     document.fonts.ready.then(() => { if (canvas.value) canvas.value.requestRenderAll(); });
   } finally {
@@ -1055,7 +1130,7 @@ const scrollToPage = (index) => {
   if (!viewportRef.value) return;
   const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
   const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-  viewportRef.value.scrollTo({ top: index * (P_H + GAP) * zoomLevel.value, behavior: 'smooth' });
+  viewportRef.value.scrollTo({ top: getPageTopOffset(index) * zoomLevel.value, behavior: 'smooth' });
   currentPageIndex.value = index;
 };
 
@@ -1104,12 +1179,6 @@ const forceUnlockObject = (obj) => {
   obj.setCoords();
 };
 
-
-const addImageToCanvasWrapper = (url) => {
-  if (!url) return;
-  addImageToCanvas(url);
-};
-
 const addCustomTextToCanvas = (x = 50, y = 50) => {
   if (!canvas.value) return;
 
@@ -1153,10 +1222,20 @@ const saveCurrentPageState = () => {
     }
 
     const allObjects = canvas.value.getObjects();
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
     const GAP = CANVAS_CONSTANTS.PAGE_GAP;
 
     const pageObjectMap = pages.value.map(() => []);
+
+    const pageBounds = [];
+    let currentY = 0;
+    for (let i = 0; i < pages.value.length; i++) {
+      const pHeight = pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+      pageBounds.push({
+        top: currentY,
+        bottom: currentY + pHeight + GAP
+      });
+      currentY += pHeight + GAP;
+    }
 
     allObjects.forEach((obj) => {
       if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
@@ -1164,14 +1243,24 @@ const saveCurrentPageState = () => {
 
       const center = obj.getCenterPoint();
       const actualCenterY = center.y;
-      let pageIndex = Math.floor(actualCenterY / (P_H + GAP));
+
+      let pageIndex = 0;
+      for (let i = 0; i < pageBounds.length; i++) {
+        if (actualCenterY >= pageBounds[i].top && actualCenterY < pageBounds[i].bottom) {
+          pageIndex = i;
+          break;
+        }
+        if (i === pageBounds.length - 1 && actualCenterY >= pageBounds[i].bottom) {
+          pageIndex = i;
+        }
+      }
 
       if (pageIndex < 0) pageIndex = 0;
       if (pageIndex >= pages.value.length) pageIndex = pages.value.length - 1;
 
       try {
         const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
-        const pageTopY = pageIndex * (P_H + GAP);
+        const pageTopY = pageBounds[pageIndex].top;
 
         serialized.left = Math.round(obj.left * 100) / 100;
         serialized.top = Math.round((obj.top - pageTopY) * 100) / 100;
@@ -1337,7 +1426,7 @@ const syncPagesFromCanvas = () => {
     const bgRects = objs.filter(
       (o) =>
         o.id === 'page-bg' ||
-        (o.type === 'rect' && o.fill === '#ffffff' && !o.selectable && o.width === PAGE_WIDTH_CONST)
+        (o.type === 'rect' && o.fill === '#ffffff' && !o.selectable && o.width > 300)
     );
 
     bgRects.sort((a, b) => a.top - b.top);
@@ -1358,9 +1447,13 @@ const syncPagesFromCanvas = () => {
         recoveredId = Date.now() + index;
       }
 
+      const existingPage = pages.value[index] || {};
+
       return {
         id: recoveredId,
         background: bgImg ? bgImg.getSrc() : null,
+        width: rect.width || existingPage.width || CANVAS_CONSTANTS.PAGE_WIDTH,
+        height: rect.height || existingPage.height || CANVAS_CONSTANTS.PAGE_HEIGHT,
         objects: []
       };
     });
@@ -1435,27 +1528,7 @@ const onDrop = (e) => {
       }
     }
   }
-};
-
-const handleAddSignatureBlock = (sigData) => {
-  console.log("ผู้ใช้คลิกบล็อกลายเซ็น ข้อมูลที่ได้คือ:", sigData);
-
-  if (!canvas.value) return;
-
-  if (!sigData || !sigData.fullName) {
-    console.warn("ไม่มีข้อมูลคนเซ็น กรุณาคลิกที่รายชื่อด้านล่าง");
-    return;
-  }
-
-  const center = canvas.value.getCenter();
-  console.log("จุดกึ่งกลางหน้าจอ:", center);
-
-  if (typeof addSignatureBlockToCanvas !== 'undefined') {
-    addSignatureBlockToCanvas(sigData, center.left, center.top);
-  } else {
-    console.error("หาฟังก์ชัน addSignatureBlockToCanvas ไม่เจอ (ลืมทำจุด 1 หรือ 2 หรือเปล่า?)");
-  }
-};
+}
 
 const handleRouteChange = async () => {
   const fullHref = window.location.href;
@@ -1525,9 +1598,11 @@ const handleRouteChange = async () => {
 
       const images = await processPdfToImages(downloadedFile);
       if (images.length > 0) {
-        pages.value = images.map((img, idx) => ({
+        pages.value = images.map((imgObj, idx) => ({
           id: Date.now() + idx,
-          background: img,
+          background: imgObj.dataUrl,
+          width: imgObj.width,
+          height: imgObj.height,
           objects: [],
           originalBackgroundType: 'PDF'
         }));
@@ -1576,9 +1651,11 @@ const handleRouteChange = async () => {
         await resetCanvasWrapper();
         const images = await processPdfToImages(downloadedFile);
         if (images.length > 0) {
-          pages.value = images.map((img, idx) => ({
+          pages.value = images.map((imgObj, idx) => ({
             id: Date.now() + idx,
-            background: img,
+            background: imgObj.dataUrl,
+            width: imgObj.width,
+            height: imgObj.height,
             objects: [],
             originalBackgroundType: 'PDF'
           }));
@@ -1740,9 +1817,7 @@ onMounted(async () => {
   };
   const handleScroll = () => {
     if (!viewportRef.value) return;
-    const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-    const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-    const newIndex = Math.round(viewportRef.value.scrollTop / ((P_H + GAP) * zoomLevel.value));
+    const newIndex = getPageIndexFromTop(viewportRef.value.scrollTop / zoomLevel.value);
     if (newIndex !== currentPageIndex.value && newIndex >= 0 && newIndex < pages.value.length)
       currentPageIndex.value = newIndex;
   };
@@ -1758,6 +1833,23 @@ onMounted(async () => {
 
     const activeObj = canvas.value?.getActiveObject();
 
+    // 🌟 Select All (Ctrl+A)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      if (activeObj && activeObj.isEditing) return;
+      e.preventDefault();
+      const objects = canvas.value.getObjects().filter(
+        obj => obj.id !== 'page-bg' && obj.id !== 'page-bg-image' && obj.selectable !== false
+      );
+      if (objects.length > 0) {
+        canvas.value.discardActiveObject();
+        const selection = new fabric.ActiveSelection(objects, { canvas: canvas.value });
+        canvas.value.setActiveObject(selection);
+        canvas.value.requestRenderAll();
+      }
+      return;
+    }
+
+    // 🌟 Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (activeObj && activeObj.isEditing) return;
       e.preventDefault();
@@ -1769,17 +1861,11 @@ onMounted(async () => {
       return;
     }
 
+    // 🌟 Redo (Ctrl+Y)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
       if (activeObj && activeObj.isEditing) return;
       e.preventDefault();
       if (typeof redo === 'function') redo();
-      return;
-    }
-
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-      if (activeObj && activeObj.isEditing) return;
-      e.preventDefault();
-      selectAllObjects();
       return;
     }
 

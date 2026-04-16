@@ -278,7 +278,11 @@ export function useEditablePdf() {
             const numPages = Math.max(canvasImages.length, pages.length);
 
             for (let pi = 0; pi < numPages; pi++) {
-                const pdfPage = pdfDoc.addPage([PDF_W, PDF_H]);
+                const pageData = pages[pi] || {};
+                const pWidth = pageData.width || CVS_W;
+                const pHeight = pageData.height || 1123;
+
+                const pdfPage = pdfDoc.addPage([pWidth, pHeight]);
 
                 if (canvasImages[pi]) {
                     const imgBytes = dataUrlToBytes(canvasImages[pi]);
@@ -289,14 +293,13 @@ export function useEditablePdf() {
                             const img = isJpeg
                                 ? await pdfDoc.embedJpg(imgBytes)
                                 : await pdfDoc.embedPng(imgBytes);
-                            pdfPage.drawImage(img, { x: 0, y: 0, width: PDF_W, height: PDF_H });
+                            pdfPage.drawImage(img, { x: 0, y: 0, width: pWidth, height: pHeight });
                         } catch (imgErr) {
                             console.warn(`Page ${pi + 1} image failed:`, imgErr);
                         }
                     }
                 }
 
-                const pageData = pages[pi];
                 if (!pageData?.objects) continue;
 
                 for (const [objIndex, obj] of pageData.objects.entries()) {
@@ -323,11 +326,11 @@ export function useEditablePdf() {
                         if (obj.originX === 'center') localX -= w / 2;
                         if (obj.originY === 'center') localY -= h / 2;
 
-                        const pdfX = localX * SCALE;
-                        const pdfY = PDF_H - (localY + h) * SCALE;
-                        const pdfW = w * SCALE;
-                        const pdfH = h * SCALE;
-                        const fontSize = Math.max(1, (obj.fontSize || 12) * sy * SCALE);
+                        const pdfX = localX;
+                        const pdfY = pHeight - (localY + h);
+                        const pdfW = w;
+                        const pdfH = h;
+                        const fontSize = Math.max(1, (obj.fontSize || 12) * sy);
 
                         let font;
                         const weight = obj.fontWeight || 'normal';
@@ -357,7 +360,7 @@ export function useEditablePdf() {
 
                         const lineHeight = fontSize * (obj.lineHeight || 1.16);
                         const textLines = textContent.split('\n');
-                        let currentY = pdfY + (h * SCALE) - fontSize * 0.85;
+                        let currentY = pdfY + h - fontSize * 0.85;
 
                         for (const line of textLines) {
                             if (!line) { currentY -= lineHeight; continue; }
@@ -449,10 +452,10 @@ export function useEditablePdf() {
                             cx += (dx * Math.cos(angleRadFab) - dy * Math.sin(angleRadFab));
                             cy += (dx * Math.sin(angleRadFab) + dy * Math.cos(angleRadFab));
 
-                            const pdfCx = cx * SCALE;
-                            const pdfCy = PDF_H - (cy * SCALE);
-                            const pdfW = w * SCALE;
-                            const pdfH = h * SCALE;
+                            const pdfCx = cx;
+                            const pdfCy = pHeight - cy;
+                            const pdfW = w;
+                            const pdfH = h;
 
                             const angleDeg = -(obj.angle || 0);
                             const angleRad = angleDeg * Math.PI / 180;
@@ -690,78 +693,39 @@ export function useEditablePdf() {
         return { loadFontSafe, cleanup: () => fontCache.clear() };
     };
 
-    const captureCanvasPageSafe = async (canvas, pageIndex, zoomLevel, qualityMultiplier = 2) => {
+    const captureCanvasPageSafe = async (canvas, topOffset, pWidth, pHeight, qualityMultiplier = 2) => {
         if (!canvas) return null;
-
-        const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
-        const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-        const TEXT_TYPES = ['textbox', 'text', 'i-text'];
-        const IMAGE_TYPES = ['image'];
-        const ALL_OVERLAY_TYPES = [...TEXT_TYPES, ...IMAGE_TYPES];
-
+        let dataUrl = null;
         try {
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-
-            const captureWidth = CANVAS_CONSTANTS.PAGE_WIDTH * zoomLevel;
-            const captureHeight = P_H * zoomLevel;
-            const topOffset = pageIndex * (P_H + GAP) * zoomLevel;
-
-            tempCanvas.width = captureWidth;
-            tempCanvas.height = captureHeight;
-
-            const allObjects = canvas.getObjects();
-            const objectsToRender = [];
+            const zoomLevel = canvas.getZoom();
             const hiddenForCapture = [];
-
-            allObjects.forEach(obj => {
-                const center = obj.getCenterPoint();
-                const objPageIndex = Math.floor(center.y / (P_H + GAP));
-                const isWrongPage = objPageIndex !== pageIndex;
-                const isOverlay = ALL_OVERLAY_TYPES.includes(obj.type) &&
-                    obj.id !== 'page-bg-image' &&
-                    obj.id !== 'page-bg';
-
-                if ((isWrongPage || isOverlay) && obj.visible) {
+            canvas.getObjects().forEach(obj => {
+                if (obj.id === 'clip-box' || obj.id === 'page-divider' || obj.id === 'hover-outline') {
                     hiddenForCapture.push(obj);
                     obj.visible = false;
-                } else if (!isWrongPage && obj.visible) {
-                    objectsToRender.push(obj);
                 }
             });
 
-            canvas.renderAll();
-
-            let dataUrl = null;
             try {
+                // 🌟 บังคับถ่ายภาพตามความกว้างและความสูงจริงของกระดาษหน้านั้นๆ
                 dataUrl = canvas.toDataURL({
                     format: 'jpeg',
                     quality: 0.92,
                     multiplier: qualityMultiplier / zoomLevel,
                     left: 0,
                     top: topOffset,
-                    width: captureWidth,
-                    height: captureHeight
+                    width: pWidth,
+                    height: pHeight
                 });
             } catch (canvasError) {
-                try {
-                    const fallbackCanvas = document.createElement('canvas');
-                    fallbackCanvas.width = CANVAS_CONSTANTS.PAGE_WIDTH * qualityMultiplier;
-                    fallbackCanvas.height = P_H * qualityMultiplier;
-                    const fallbackCtx = fallbackCanvas.getContext('2d');
-                    fallbackCtx.fillStyle = '#ffffff';
-                    fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
-                    dataUrl = fallbackCanvas.toDataURL('image/jpeg', 0.92);
-                } catch (fallbackError) {
-                    return null;
-                }
+                console.error("Capture Error:", canvasError);
+                return null;
             }
 
             hiddenForCapture.forEach(obj => { obj.visible = true; });
             canvas.renderAll();
 
             return dataUrl && dataUrl.length > 100 ? dataUrl : null;
-
         } catch (error) {
             return null;
         }
