@@ -693,11 +693,12 @@ export function useEditablePdf() {
         return { loadFontSafe, cleanup: () => fontCache.clear() };
     };
 
-    const captureCanvasPageSafe = async (canvas, topOffset, pWidth, pHeight, qualityMultiplier = 2) => {
+    const captureCanvasPageSafe = async (canvas, leftOffset, topOffset, pWidth, pHeight, qualityMultiplier = 2) => {
         if (!canvas) return null;
+        const originalViewportTransform = canvas.viewportTransform;
+        canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
         let dataUrl = null;
         try {
-            const zoomLevel = canvas.getZoom();
             const hiddenForCapture = [];
             canvas.getObjects().forEach(obj => {
                 if (obj.id === 'clip-box' || obj.id === 'page-divider' || obj.id === 'hover-outline') {
@@ -707,12 +708,11 @@ export function useEditablePdf() {
             });
 
             try {
-                // 🌟 บังคับถ่ายภาพตามความกว้างและความสูงจริงของกระดาษหน้านั้นๆ
                 dataUrl = canvas.toDataURL({
                     format: 'jpeg',
                     quality: 0.92,
-                    multiplier: qualityMultiplier / zoomLevel,
-                    left: 0,
+                    multiplier: qualityMultiplier,
+                    left: leftOffset,
                     top: topOffset,
                     width: pWidth,
                     height: pHeight
@@ -728,6 +728,8 @@ export function useEditablePdf() {
             return dataUrl && dataUrl.length > 100 ? dataUrl : null;
         } catch (error) {
             return null;
+        } finally {
+            if (canvas) canvas.setViewportTransform(originalViewportTransform);
         }
     };
 

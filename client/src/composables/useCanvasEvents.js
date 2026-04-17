@@ -24,7 +24,6 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
         pageTop = accumulatedY;
         break;
       }
-      // If we are at the last page and object is below it, snap to last page
       if (i === (pages.value ? pages.value.length : 1) - 1 && center.y >= pageBottom) {
         targetPageIndex = i;
         pageTop = accumulatedY;
@@ -37,9 +36,16 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
     const targetWidth = targetPage?.width || CANVAS_CONSTANTS.PAGE_WIDTH;
     const targetHeight = targetPage?.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
 
-    if (!obj.clipPath || obj.clipPath.top !== pageTop || obj.clipPath.height !== targetHeight || obj.clipPath.width !== targetWidth) {
+    let globalMaxWidth = 0;
+    (pages.value || []).forEach(p => {
+      const w = p.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+      if (w > globalMaxWidth) globalMaxWidth = w;
+    });
+    const offsetLeft = (globalMaxWidth - targetWidth) / 2;
+
+    if (!obj.clipPath || obj.clipPath.top !== pageTop || obj.clipPath.left !== offsetLeft || obj.clipPath.height !== targetHeight || obj.clipPath.width !== targetWidth) {
       obj.clipPath = new fabric.Rect({
-        left: 0,
+        left: offsetLeft,
         top: pageTop,
         width: targetWidth,
         height: targetHeight,
@@ -81,17 +87,17 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
     let calculatedPageIndex = 0;
 
     for (let i = 0; i < pages.value.length; i++) {
-        const pHeight = pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT;
-        const pageBottom = accumulatedY + pHeight + GAP;
+      const pHeight = pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+      const pageBottom = accumulatedY + pHeight + GAP;
 
-        if (center.y >= accumulatedY && center.y < pageBottom) {
-            calculatedPageIndex = i;
-            break;
-        }
-        if (i === pages.value.length - 1 && center.y >= pageBottom) {
-            calculatedPageIndex = i;
-        }
-        accumulatedY += pHeight + GAP;
+      if (center.y >= accumulatedY && center.y < pageBottom) {
+        calculatedPageIndex = i;
+        break;
+      }
+      if (i === pages.value.length - 1 && center.y >= pageBottom) {
+        calculatedPageIndex = i;
+      }
+      accumulatedY += pHeight + GAP;
     }
 
     if (calculatedPageIndex >= 0 && calculatedPageIndex < pages.value.length) {

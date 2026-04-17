@@ -300,7 +300,7 @@ const handleSelectLayer = (rawObj) => {
   const obj = toRaw(rawObj);
 
   if (obj) {
-    if (toRaw(currentActive) === obj) return; // เปรียบเทียบ Raw === Raw
+    if (toRaw(currentActive) === obj) return;
 
     rawCanvas.discardActiveObject();
     rawCanvas.setActiveObject(obj);
@@ -423,11 +423,24 @@ const handleReset = async () => {
   }
 };
 
+const getWorkspaceMaxWidth = () => {
+  let globalMaxWidth = 0;
+  (pages.value || []).forEach(p => {
+    const w = Number(p.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
+    if (w > globalMaxWidth) globalMaxWidth = w;
+  });
+  return globalMaxWidth;
+};
+
+const getPageLeftOffset = (pWidth) => {
+  return (getWorkspaceMaxWidth() - (Number(pWidth) || CANVAS_CONSTANTS.PAGE_WIDTH)) / 2;
+};
+
 const getPageTopOffset = (index) => {
   let offset = 0;
   for (let i = 0; i < index; i++) {
     const p = pages.value[i] || {};
-    offset += (p.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+    offset += (Number(p.height) || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
   }
   return offset;
 };
@@ -436,7 +449,7 @@ const getPageIndexFromTop = (y) => {
   let offset = 0;
   for (let i = 0; i < pages.value.length; i++) {
     const p = pages.value[i] || {};
-    const h = p.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+    const h = Number(p.height) || CANVAS_CONSTANTS.PAGE_HEIGHT;
     if (y >= offset && y < offset + h + CANVAS_CONSTANTS.PAGE_GAP) return i;
     offset += h + CANVAS_CONSTANTS.PAGE_GAP;
   }
@@ -520,16 +533,18 @@ const handleSaveProject = async () => {
         });
 
         canvas.value.renderAll();
-        const topOffset = getPageTopOffset(i) * zoomLevel.value;
+        const topOffset = getPageTopOffset(i);
         const pageData = pages.value[i] || {};
-        const pWidth = pageData.width || CANVAS_CONSTANTS.PAGE_WIDTH;
-        const pHeight = pageData.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const pWidth = Number(pageData.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const pHeight = Number(pageData.height) || CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const offsetLeftCanvas = getPageLeftOffset(pWidth);
 
         const imgDataUrl = await captureCanvasPageSafe(
           canvas.value,
+          offsetLeftCanvas,
           topOffset,
-          pWidth * zoomLevel.value,
-          pHeight * zoomLevel.value,
+          pWidth,
+          pHeight,
           qualityMultiplier
         );
 
@@ -718,16 +733,18 @@ const handleExport = async () => {
 
         canvas.value.renderAll();
 
-        const topOffset = getPageTopOffset(i) * zoomLevel.value;
+        const topOffset = getPageTopOffset(i);
         const pageData = pages.value[i] || {};
-        const pWidth = pageData.width || CANVAS_CONSTANTS.PAGE_WIDTH;
-        const pHeight = pageData.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const pWidth = Number(pageData.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const pHeight = Number(pageData.height) || CANVAS_CONSTANTS.PAGE_HEIGHT;
+        const offsetLeftCanvas = getPageLeftOffset(pWidth);
 
         const imgDataUrl = await captureCanvasPageSafe(
           canvas.value,
+          offsetLeftCanvas,
           topOffset,
-          pWidth * zoomLevel.value, // ส่งความกว้างจริง x zoom
-          pHeight * zoomLevel.value, // ส่งความสูงจริง x zoom
+          pWidth,
+          pHeight,
           qualityMultiplier
         );
 
@@ -890,50 +907,29 @@ const addBlankPageWrapper = async () => {
   saveHistory();
 };
 
-
-// ----------------------------------------------------
-// วางฟังก์ชันเวอร์ชันที่ใช้การคำนวณตำแหน่งแบบ Dynamic (accumulatedTop)
-// ----------------------------------------------------
-
 const handleAddSignatureBlock = (sigData) => {
   if (!canvas.value) return;
-  let accumulatedTop = 0;
-  for (let i = 0; i < currentPageIndex.value; i++) {
-    accumulatedTop += (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
-  }
-  const targetTop = accumulatedTop + 100;
-  const targetLeft = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
+  const targetTop = getPageTopOffset(currentPageIndex.value) + 100;
+  const targetLeft = getWorkspaceMaxWidth() / 2;
 
   addSignatureBlockToCanvas(sigData, targetLeft, targetTop);
 };
 
 const handleAddVariable = (key) => {
   if (!canvas.value) return;
-  let accumulatedTop = 0;
-  for (let i = 0; i < currentPageIndex.value; i++) {
-    accumulatedTop += (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
-  }
-  const targetTop = accumulatedTop + 100;
-  const targetLeft = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
+  const targetTop = getPageTopOffset(currentPageIndex.value) + 100;
+  const targetLeft = getWorkspaceMaxWidth() / 2;
 
   addVariableToCanvas(key, targetLeft - 100, targetTop);
 };
 
-// ฟังก์ชันห่อหุ้มการเพิ่มรูปภาพ พร้อมคำนวณตำแหน่งลงตรงกลางหน้าปัจจุบันแบบ Dynamic
 const addImageToCanvasWrapper = (url) => {
   if (!url) return;
-  let accumulatedTop = 0;
-  for (let i = 0; i < currentPageIndex.value; i++) {
-    accumulatedTop += (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
-  }
-  const targetTop = accumulatedTop + 100; // วางห่างจากขอบบนกระดาษ 100px
-  const targetLeft = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
+  const targetTop = getPageTopOffset(currentPageIndex.value) + 100;
+  const targetLeft = getWorkspaceMaxWidth() / 2;
 
-  // ส่งพิกัดเป้าหมายไปให้ useCanvas
   addImageToCanvas(url, targetLeft - 100, targetTop);
 };
-
-// ----------------------------------------------------
 
 const cleanupCanvasObjects = () => {
   if (!canvas.value) return;
@@ -991,28 +987,26 @@ const renderAllPages = async () => {
     let currentY = 0;
     let maxWidth = 0;
 
-    // หาความกว้างกระดาษที่มากที่สุดเพื่อขยาย Canvas
     for (let i = 0; i < currentPages.length; i++) {
       const p = currentPages[i];
-      const w = p.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+      const w = Number(p.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
       if (w > maxWidth) maxWidth = w;
     }
 
-    // เคลียร์พื้นหลังเดิม
     const objects = canvas.value.getObjects();
     const oldBgs = objects.filter(o => o.id === 'page-bg' || o.id === 'page-bg-image' || o.id === 'page-divider');
     oldBgs.forEach(bg => canvas.value.remove(bg));
 
     for (let i = 0; i < currentPages.length; i++) {
       const page = currentPages[i];
-      const pWidth = page.width || CANVAS_CONSTANTS.PAGE_WIDTH;
-      const pHeight = page.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+      const pWidth = Number(page.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
+      const pHeight = Number(page.height) || CANVAS_CONSTANTS.PAGE_HEIGHT;
       const offsetTop = currentY;
+      const offsetLeft = getPageLeftOffset(pWidth);
 
-      // 🌟 1. สร้างฉากหลังสีขาวให้พอดีพิกเซลจริง
       const bgRect = new fabric.Rect({
         id: 'page-bg',
-        left: 0,
+        left: offsetLeft,
         top: offsetTop,
         width: pWidth,
         height: pHeight,
@@ -1024,14 +1018,13 @@ const renderAllPages = async () => {
       canvas.value.add(bgRect);
       canvas.value.sendToBack(bgRect);
 
-      // 🌟 2. ดึงภาพต้นฉบับมาแปะ โดยปรับสเกลให้ฟิตพอดีกับ pWidth / pHeight
       if (page.dataUrl || page.background) {
         const urlToLoad = page.dataUrl || page.background;
         await new Promise((resolve) => {
           fabric.Image.fromURL(urlToLoad, (img) => {
             img.set({
               id: 'page-bg-image',
-              left: 0,
+              left: offsetLeft,
               top: offsetTop,
               scaleX: pWidth / img.width,
               scaleY: pHeight / img.height,
@@ -1039,7 +1032,6 @@ const renderAllPages = async () => {
               evented: false
             });
             canvas.value.add(img);
-            // ย้ายไปอยู่เหนือสีขาว 1 ชั้น (ชั้นที่ 1)
             canvas.value.moveTo(img, 1);
             resolve();
           }, { crossOrigin: 'anonymous' });
@@ -1058,10 +1050,10 @@ const renderAllPages = async () => {
 
             objs.forEach((obj) => {
               if (obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
-              obj.set({ top: obj.top + offsetTop, _pageIndex: i });
+              obj.set({ top: obj.top + offsetTop, left: obj.left + offsetLeft, _pageIndex: i });
 
               obj.clipPath = new fabric.Rect({
-                left: 0,
+                left: offsetLeft,
                 top: offsetTop,
                 width: pWidth,
                 height: pHeight,
@@ -1108,9 +1100,8 @@ const renderAllPages = async () => {
           });
         });
       }
-    } // End of outer for loop
+    }
 
-    // Set final canvas dimensions after calculating all pages height
     canvas.value.setWidth(maxWidth * actualZoom);
     canvas.value.setHeight(currentY * actualZoom);
     canvasBaseDimensions.value = { width: maxWidth, height: currentY };
@@ -1229,7 +1220,7 @@ const saveCurrentPageState = () => {
     const pageBounds = [];
     let currentY = 0;
     for (let i = 0; i < pages.value.length; i++) {
-      const pHeight = pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT;
+      const pHeight = Number(pages.value[i].height) || CANVAS_CONSTANTS.PAGE_HEIGHT;
       pageBounds.push({
         top: currentY,
         bottom: currentY + pHeight + GAP
@@ -1262,7 +1253,10 @@ const saveCurrentPageState = () => {
         const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
         const pageTopY = pageBounds[pageIndex].top;
 
-        serialized.left = Math.round(obj.left * 100) / 100;
+        const targetPageWidth = Number(pages.value[pageIndex]?.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const pageOffsetLeft = (getWorkspaceMaxWidth() - targetPageWidth) / 2;
+
+        serialized.left = Math.round((obj.left - pageOffsetLeft) * 100) / 100;
         serialized.top = Math.round((obj.top - pageTopY) * 100) / 100;
         serialized.width = Math.round((obj.width || 0) * 100) / 100;
         serialized.height = Math.round((obj.height || 0) * 100) / 100;
@@ -1833,7 +1827,6 @@ onMounted(async () => {
 
     const activeObj = canvas.value?.getActiveObject();
 
-    // 🌟 Select All (Ctrl+A)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
       if (activeObj && activeObj.isEditing) return;
       e.preventDefault();
@@ -1849,7 +1842,6 @@ onMounted(async () => {
       return;
     }
 
-    // 🌟 Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (activeObj && activeObj.isEditing) return;
       e.preventDefault();
@@ -1861,7 +1853,6 @@ onMounted(async () => {
       return;
     }
 
-    // 🌟 Redo (Ctrl+Y)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
       if (activeObj && activeObj.isEditing) return;
       e.preventDefault();

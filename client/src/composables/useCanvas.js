@@ -505,6 +505,12 @@ export function useCanvas() {
 
     const allObjects = canvas.getObjects();
 
+    let globalMaxWidth = 0;
+    pages.forEach(p => {
+      const w = p.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+      if (w > globalMaxWidth) globalMaxWidth = w;
+    });
+
     allObjects.forEach((obj) => {
       if (!obj || obj.id === 'page-bg' || obj.id === 'page-bg-image') return;
       if (typeof obj.top !== 'number' || isNaN(obj.top)) return;
@@ -543,7 +549,10 @@ export function useCanvas() {
       try {
         const serialized = obj.toObject(CUSTOM_PROPS);
 
-        serialized.left = Math.round(exportLeft * 100) / 100;
+        const targetPageWidth = pages[pageIndex]?.width || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const pageOffsetLeft = (globalMaxWidth - targetPageWidth) / 2;
+
+        serialized.left = Math.round((exportLeft - pageOffsetLeft) * 100) / 100;
         serialized.top = Math.round((exportTop - pageTopY) * 100) / 100;
         serialized.width = Math.round((obj.width || 0) * 100) / 100;
         serialized.height = Math.round((obj.height || 0) * 100) / 100;
