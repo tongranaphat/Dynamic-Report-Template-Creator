@@ -1,6 +1,5 @@
 import { ref, computed, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
-import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist';
 import { fabric } from 'fabric';
 import { useEditorStore } from '../stores/editorStore';
@@ -10,7 +9,17 @@ import { CANVAS_CONSTANTS } from '../constants/canvas';
 
 export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const { resetHistory, saveHistory, setHistoryLock } = canvasHelpers;
-  const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
+
+  // Callback injection — EditorView will set these after defining the functions
+  const _templateCallbacks = {
+    saveCurrentPageState: null,
+    renderAllPages: null
+  };
+
+  const setTemplateCallbacks = (cbs = {}) => {
+    if (cbs.saveCurrentPageState) _templateCallbacks.saveCurrentPageState = cbs.saveCurrentPageState;
+    if (cbs.renderAllPages) _templateCallbacks.renderAllPages = cbs.renderAllPages;
+  };
 
   const editorStore = useEditorStore();
   const {
@@ -104,13 +113,11 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     try {
       const formData = new FormData();
       formData.append('image', file);
-      const res = await axios.post(`${SERVER_URL}/check-pdf-type`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await apiService.checkPdfType(formData);
       return {
-        id: res.data.id,
-        type: res.data.type,
-        embeddedLayout: res.data.embeddedLayout
+        id: res.id,
+        type: res.type,
+        embeddedLayout: res.embeddedLayout
       };
     } catch (e) {
       console.warn('Server Check PDF skipped/failed. Trying Client-side...', e);
@@ -187,7 +194,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
   const saveReport = async (isSilent = false) => {
     if (!canvas.value) return;
-    if (typeof window !== 'undefined' && window.saveCurrentPageState) window.saveCurrentPageState();
+    if (typeof _templateCallbacks.saveCurrentPageState === 'function') _templateCallbacks.saveCurrentPageState();
 
     const pagesData = preparePagesForSave();
     const payload = {
@@ -200,8 +207,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     };
 
     try {
-      const res = await axios.post(`${SERVER_URL}/save-report`, payload);
-      currentReportId.value = res.data.id;
+      const res = await apiService.saveReport(payload);
+      currentReportId.value = res.id;
       if (!isSilent) alert('Project Saved Successfully');
     } catch (e) {
       alert('Save Project failed: ' + (e.response?.data?.error || e.message));
@@ -211,7 +218,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
   const saveTemplate = async (isSilent = false) => {
     if (!canvas.value) return;
-    if (typeof window !== 'undefined' && window.saveCurrentPageState) window.saveCurrentPageState();
+    if (typeof _templateCallbacks.saveCurrentPageState === 'function') _templateCallbacks.saveCurrentPageState();
 
     const pagesData = preparePagesForSave();
     const payload = {
@@ -266,8 +273,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       currentPageIndex.value = 0;
       if (resetHistory) resetHistory();
 
-      if (typeof window !== 'undefined' && window.renderAllPages) {
-        window.renderAllPages();
+      if (typeof _templateCallbacks.renderAllPages === 'function') {
+        _templateCallbacks.renderAllPages();
       }
 
       if (typeof window !== 'undefined' && window.history) {
@@ -280,9 +287,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
   const loadReportById = async (id) => {
     try {
-      const res = await axios.get(`${SERVER_URL}/reports/${id}?t=${Date.now()}`);
-      if (res.data) {
-        const r = res.data;
+      const r = await apiService.getReportById(id);
+      if (r) {
         currentReportId.value = r.id;
         currentTemplateId.value = r.templateId;
         templateName.value = r.name;
@@ -315,8 +321,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
 
   const addBlankPage = () => {
-    if (pages.value.length > 0 && typeof window !== 'undefined' && window.saveCurrentPageState) {
-      window.saveCurrentPageState();
+    if (pages.value.length > 0 && typeof _templateCallbacks.saveCurrentPageState === 'function') {
+      _templateCallbacks.saveCurrentPageState();
     }
     editorStore.addBlankPage();
   };
@@ -360,9 +366,9 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
         }
         if (!loaded) {
           try {
-            const tRes = await axios.get(`${SERVER_URL}/templates/${metadata.id}?t=${Date.now()}`);
-            if (tRes.data) {
-              await loadTemplate(tRes.data);
+            const tData = await apiService.getTemplateById(metadata.id);
+            if (tData) {
+              await loadTemplate(tData);
               loaded = true;
             }
           } catch (err) {
@@ -420,8 +426,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     if (!file) return;
     e.target.value = '';
 
-    if (pages.value.length > 0 && typeof window !== 'undefined' && window.saveCurrentPageState) {
-      window.saveCurrentPageState();
+    if (pages.value.length > 0 && typeof _templateCallbacks.saveCurrentPageState === 'function') {
+      _templateCallbacks.saveCurrentPageState();
     }
 
     const insertIndex = currentPageIndex.value + 1;
@@ -623,8 +629,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
         const formData = new FormData();
         formData.append('file', file);
         try {
-          const res = await axios.post(`${SERVER_URL}/pdf/upload`, formData);
-          const savedFileId = res.data.id;
+          const res = await apiService.uploadPdf(formData);
+          const savedFileId = res.id;
 
           window.history.pushState({}, '', `/pdf/${savedFileId}`);
           window.location.reload();
@@ -733,7 +739,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     handleUnifiedImport,
     ensureFileHandle,
     processPdfToImages,
-    saveFileWithFallback
+    saveFileWithFallback,
+    setTemplateCallbacks
 
   };
 }

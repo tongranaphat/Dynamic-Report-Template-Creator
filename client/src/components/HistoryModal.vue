@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import axios from 'axios';
+import apiService from '../services/apiService';
 
 const props = defineProps({
   reportInstances: {
@@ -105,17 +105,13 @@ const getStatusDisplay = (instance) => {
 const downloadReport = async (instance) => {
   if (instance.pdfUrl) {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-      const baseUrl = apiUrl.replace('/api', '');
-      const fileUrl = `${baseUrl}${instance.pdfUrl}`;
-
       const fileName =
         instance.template?.name && instance.template.name.trim() !== ''
           ? `${instance.template.name.trim().replace(/[^a-zA-Z0-9ก-๙\s\-_]/g, '_')}.pdf`
           : `report_${instance.id.slice(-8)}.pdf`;
 
-      const fileResponse = await axios.get(fileUrl, { responseType: 'blob' });
-      const blobUrl = window.URL.createObjectURL(new Blob([fileResponse.data]));
+      const blobData = await apiService.downloadBlob(instance.pdfUrl);
+      const blobUrl = window.URL.createObjectURL(new Blob([blobData]));
 
       const link = document.createElement('a');
       link.href = blobUrl;

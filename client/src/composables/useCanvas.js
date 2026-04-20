@@ -14,7 +14,21 @@ const memoryStats = {
 
 const CUSTOM_PROPS = ['id', 'selectable', 'name', 'data', 'textBaseline', 'angle', 'isSignatureBlock', 'isSignaturePrefix', 'linkedId', 'sigData'];
 
+const MAX_HISTORY_SIZE = 30;
+const HISTORY_DEBOUNCE_MS = 300;
+
 export function useCanvas() {
+  const _callbacks = {
+    saveCurrentPageState: null,
+    forceUnlockObject: null,
+    renderAllPages: null
+  };
+
+  const setCallbacks = (cbs = {}) => {
+    if (cbs.saveCurrentPageState) _callbacks.saveCurrentPageState = cbs.saveCurrentPageState;
+    if (cbs.forceUnlockObject) _callbacks.forceUnlockObject = cbs.forceUnlockObject;
+    if (cbs.renderAllPages) _callbacks.renderAllPages = cbs.renderAllPages;
+  };
   const canvas = shallowRef(null);
   const zoomLevel = ref(1);
   const viewportRef = ref(null);
@@ -93,8 +107,13 @@ export function useCanvas() {
       }
 
       historyStack.value.push(jsonString);
+
+      if (historyStack.value.length > MAX_HISTORY_SIZE) {
+        historyStack.value = historyStack.value.slice(-MAX_HISTORY_SIZE);
+      }
+
       redoStack.value = [];
-    }, 100);
+    }, HISTORY_DEBOUNCE_MS);
   };
 
   const undo = () => {
@@ -107,7 +126,7 @@ export function useCanvas() {
       canvas.value.loadFromJSON(JSON.parse(previous), () => {
         canvas.value.renderAll();
         relinkSignatures();
-        if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
+        if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
 
         setTimeout(() => { isHistoryLocked.value = false; }, 100);
       });
@@ -123,7 +142,7 @@ export function useCanvas() {
       canvas.value.loadFromJSON(JSON.parse(next), () => {
         canvas.value.renderAll();
         relinkSignatures();
-        if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
+        if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
 
         setTimeout(() => { isHistoryLocked.value = false; }, 100);
       });
@@ -148,15 +167,15 @@ export function useCanvas() {
       editable: true
     });
 
-    if (typeof window.forceUnlockObject === 'function') {
-      window.forceUnlockObject(textObj);
+    if (typeof _callbacks.forceUnlockObject === 'function') {
+      _callbacks.forceUnlockObject(textObj);
     } else {
       textObj.setControlsVisibility({ mt: true, mb: true, ml: true, mr: true });
     }
 
     canvas.value.add(textObj);
     canvas.value.setActiveObject(textObj);
-    if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
+    if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
     saveHistory();
   };
 
@@ -463,13 +482,13 @@ export function useCanvas() {
       img.set({ id: uuidv4(), left: x, top: y });
       img.scaleToWidth(200);
 
-      if (typeof window.forceUnlockObject === 'function') {
-        window.forceUnlockObject(img);
+      if (typeof _callbacks.forceUnlockObject === 'function') {
+        _callbacks.forceUnlockObject(img);
       }
 
       canvas.value.add(img);
       canvas.value.setActiveObject(img);
-      if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
+      if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
       saveHistory();
     }, { crossOrigin: 'anonymous' });
   };
@@ -479,7 +498,7 @@ export function useCanvas() {
     const active = canvas.value.getActiveObject();
     if (active) {
       canvas.value.remove(active);
-      if (typeof window.saveCurrentPageState === 'function') window.saveCurrentPageState();
+      if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
       saveHistory();
     }
   };
@@ -535,15 +554,15 @@ export function useCanvas() {
         }
         accumulatedTop = pageBottom;
       }
-      
+
       const pageIndex = Math.max(0, Math.min(targetPageIndex, pages.length - 1));
       if (pageTopY === 0 && pageIndex > 0) {
-          // If we fallback to last page due to bottom overflow, calculate real top
-          let tmpOffset = 0;
-          for(let i=0; i<pageIndex; i++) {
-              tmpOffset += (pages[i]?.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
-          }
-          pageTopY = tmpOffset;
+        // If we fallback to last page due to bottom overflow, calculate real top
+        let tmpOffset = 0;
+        for (let i = 0; i < pageIndex; i++) {
+          tmpOffset += (pages[i]?.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+        }
+        pageTopY = tmpOffset;
       }
 
       try {
@@ -815,6 +834,35 @@ export function useCanvas() {
     }
   };
 
+  /**
+   * Dispose canvas and clean up all timers / listeners.
+   * Call this from onUnmounted to prevent memory leaks.
+   */
+  const dispose = () => {
+    // Clear pending timers
+    if (saveHistoryTimeout) { clearTimeout(saveHistoryTimeout); saveHistoryTimeout = null; }
+
+    // Detach all Fabric events and destroy the canvas
+    if (canvas.value) {
+      try {
+        canvas.value.off();  // remove all event listeners
+        canvas.value.dispose();
+      } catch (e) {
+        console.warn('Canvas dispose error (non-critical):', e);
+      }
+      canvas.value = null;
+    }
+
+    // Flush history to free memory
+    historyStack.value = [];
+    redoStack.value = [];
+
+    // Clear callbacks
+    _callbacks.saveCurrentPageState = null;
+    _callbacks.forceUnlockObject = null;
+    _callbacks.renderAllPages = null;
+  };
+
   return {
     canvas,
     zoomLevel,
@@ -827,6 +875,7 @@ export function useCanvas() {
     saveHistory,
     setHistoryLock,
     setHistoryContext: () => { },
+    setCallbacks,
     canUndo: computed(() => historyStack.value.length > 1),
     canRedo: computed(() => redoStack.value.length > 0),
 
@@ -858,6 +907,7 @@ export function useCanvas() {
     saveCurrentPageStateAtomic,
 
     render,
+    dispose,
 
     addSignatureBlockToCanvas,
     updateCanvasDimensions,

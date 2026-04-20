@@ -31,7 +31,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import apiService from '../services/apiService';
 
 const props = defineProps({
   connectionStatus: String,
@@ -42,11 +42,9 @@ const assets = ref([]);
 const loading = ref(false);
 
 const fetchAssets = async () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
   loading.value = true;
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/assets`);
-    assets.value = res.data;
+    assets.value = await apiService.getAssets();
   } catch (err) {
     console.error('Failed to load assets', err);
   } finally {
@@ -63,15 +61,12 @@ const uploadAsset = async (event) => {
 
   loading.value = true;
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
-    const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/assets/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    const res = await apiService.uploadAsset(formData);
 
     const newAsset = {
-      url: res.data.url,
+      url: res.url,
       name: file.name,
-      id: res.data.id
+      id: res.id
     };
 
     assets.value.unshift(newAsset);
@@ -85,12 +80,11 @@ const uploadAsset = async (event) => {
 
 const deleteAsset = async (asset) => {
   if (!confirm('ยืนยันระบบกำจัดการลบรูปภาพนี้?')) return;
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
 
   const targetId = asset.id || asset.url.split('/').pop();
   if (targetId) {
     try {
-      await axios.delete(`${apiUrl}/assets/${targetId}`);
+      await apiService.deleteAsset(targetId);
       assets.value = assets.value.filter((a) => a.id !== targetId && !a.url.endsWith(targetId));
     } catch (err) {
       console.error('Failed to delete asset', err);

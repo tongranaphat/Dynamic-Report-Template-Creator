@@ -1,55 +1,16 @@
 <template>
   <div class="app-layout">
-    <header class="top-navbar">
-      <div class="navbar-left">
-        <h1 class="app-title" @click="goHome" style="cursor: pointer;" title="หน้าหลัก">สร้างเทมเพลตรายงาน</h1>
-      </div>
-
-      <div class="navbar-right">
-        <div class="undo-redo-group">
-          <button @click="undo" class="action-btn-text" title="ย้อนกลับ">
-          </button>
-          <button @click="redo" class="action-btn-text" title="ทำซ้ำ">
-          </button>
-        </div>
-        <div class="zoom-group">
-          <button @click="zoomOut" class="btn-zoom-out" title="ซูมออก">
-            <span class="zoom-out-icon"></span>
-          </button>
-
-          <div class="zoom-value-box">
-            <span class="zoom-value-text">{{ Math.round(zoomLevel * 100) }}%</span>
-          </div>
-
-          <button @click="zoomIn" class="btn-zoom-in" title="ซูมเข้า">
-            <span class="zoom-in-icon"></span>
-          </button>
-        </div>
-
-        <div class="undo-redo-group">
-          <button @click="undo" class="action-btn-text" title="ย้อนกลับ">
-            <span class="icon-undo"></span>
-            <span class="action-text">ย้อนกลับ</span>
-          </button>
-          <button @click="redo" class="action-btn-text" title="ทำซ้ำ">
-            <span class="icon-redo"></span>
-            <span class="action-text">ทำซ้ำ</span>
-          </button>
-        </div>
-
-        <div class="divider-v"></div>
-
-        <div class="mode-group">
-          <button @click="togglePreviewWrapper" class="preview-btn" :disabled="isGenerating">
-            <span :class="isPreviewMode ? 'icon-edit' : 'icon-eye'"></span>
-            <span class="preview-text">
-              {{ isGenerating ? 'สร้าง...' : (isPreviewMode ? 'แก้ไข' : 'ดูตัวอย่าง') }}
-            </span>
-          </button>
-        </div>
-
-      </div>
-    </header>
+    <TopNavbar
+      :zoom-level="zoomLevel"
+      :is-preview-mode="isPreviewMode"
+      :is-generating="isGenerating"
+      @go-home="goHome"
+      @undo="undo"
+      @redo="redo"
+      @zoom-in="zoomIn"
+      @zoom-out="zoomOut"
+      @toggle-preview="togglePreviewWrapper"
+    />
 
     <Sidebar :isOpen="isSidebarOpen" :is-history-open="showHistoryModal" :connectionStatus="connectionStatus"
       :templates="templates" :isCanvasReady="isCanvasReady" :templateName="templateName" :isPreviewMode="isPreviewMode"
@@ -84,19 +45,28 @@
 
     <HistoryModal v-if="showHistoryModal" :reportInstances="reportHistory" :currentInstanceId="currentReportId"
       @close="showHistoryModal = false" @edit="openReportFromHistory" @delete="handleDeleteReport" />
+
+    <ExportOverlay
+      :visible="exportOverlay.visible"
+      :title="exportOverlay.title"
+      :current="exportOverlay.current"
+      :total="exportOverlay.total"
+      :stage="exportOverlay.stage"
+    />
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref, watch, nextTick, onUnmounted, computed, toRaw } from 'vue';
 import { fabric } from 'fabric';
-import axios from 'axios';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+import TopNavbar from '../components/TopNavbar.vue';
 import PropertiesPanel from '../components/PropertiesPanel.vue';
 import Sidebar from '../components/Sidebar.vue';
 import HistoryModal from '../components/HistoryModal.vue';
+import ExportOverlay from '../components/ExportOverlay.vue';
 
 import { useCanvas } from '../composables/useCanvas';
 import { useTemplate } from '../composables/useTemplate';
@@ -107,6 +77,7 @@ import { usePreviewData } from '../composables/usePreviewData';
 import { useEditorStore } from '../stores/editorStore';
 import { CANVAS_CONSTANTS } from '../constants/canvas';
 import { showNotification } from '../utils/notifications';
+import { yieldToMain } from '../utils/yieldToMain';
 import apiService from '../services/apiService';
 import { useLayers } from '../composables/useLayers';
 
@@ -134,6 +105,30 @@ const pdfMode = ref('flatten');
 const pdfUrl = ref(null);
 let isRendering = false;
 
+// Export/Save progress overlay state
+const exportOverlay = ref({
+  visible: false,
+  title: '',
+  current: 0,
+  total: 1,
+  stage: ''
+});
+const showExportOverlay = (title, total = 1) => {
+  exportOverlay.value = { visible: true, title, current: 0, total, stage: '' };
+};
+const updateExportProgress = (current, stage = '') => {
+  exportOverlay.value.current = current;
+  if (stage) exportOverlay.value.stage = stage;
+};
+const hideExportOverlay = () => {
+  exportOverlay.value.visible = false;
+};
+
+// Stored handler references for proper cleanup in onUnmounted
+let _wheelHandler = null;
+let _scrollHandler = null;
+let _keydownHandler = null;
+
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value;
@@ -145,13 +140,12 @@ const triggerTempCleanup = () => {
   const idToClean = activePdfId || (currentPdfId.value !== 'pdf' ? currentPdfId.value : null);
 
   if (idToClean && idToClean !== 'pdf') {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-    const url = `${apiUrl}/pdf/cleanup-temp/${idToClean}`;
+    const cleanupUrl = `${apiService.getBackendBase()}/api/pdf/cleanup-temp/${idToClean}`;
 
     if (navigator.sendBeacon) {
-      navigator.sendBeacon(url);
+      navigator.sendBeacon(cleanupUrl);
     } else {
-      fetch(url, { method: 'POST', keepalive: true }).catch(() => { });
+      fetch(cleanupUrl, { method: 'POST', keepalive: true }).catch(() => { });
     }
 
     activePdfId = null;
@@ -160,10 +154,7 @@ const triggerTempCleanup = () => {
 
 const fetchReports = async () => {
   try {
-    const res = await axios.get(
-      `${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/reports`
-    );
-    reportHistory.value = res.data;
+    reportHistory.value = await apiService.getReports();
   } catch (e) {
     console.error('Failed to fetch reports', e);
   }
@@ -177,11 +168,9 @@ const openHistoryModal = async () => {
 const openReportFromHistory = async (instance) => {
   if (!confirm('การดำเนินการนี้จะแทนที่โปรเจกต์ปัจจุบัน คุณต้องการดำเนินการต่อหรือไม่?')) return;
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-    const res = await axios.get(`${apiUrl}/reports/${instance.id}`);
+    const r = await apiService.getReportById(instance.id);
 
-    if (res.data) {
-      const r = res.data;
+    if (r) {
       currentReportId.value = r.id;
       currentTemplateId.value = r.templateId;
       templateName.value = r.name;
@@ -208,8 +197,7 @@ const openReportFromHistory = async (instance) => {
 const handleDeleteReport = async (instance) => {
   if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายงาน "${instance.name}"?`)) return;
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-    await axios.delete(`${apiUrl}/reports/${instance.id}`);
+    await apiService.deleteReport(instance.id);
     await fetchReports();
   } catch (e) {
     alert('ลบรายงานล้มเหลว: ' + e.message);
@@ -220,8 +208,8 @@ const handleUrlImport = async (url) => {
   try {
     showNotification('กำลังดาวน์โหลดไฟล์จากลิงก์...', 'info');
 
-    const response = await apiService.importPdfFromUrl(url);
-    const newPdfId = response.data.OriginalFileId || response.data.id;
+    const data = await apiService.importPdfFromUrl(url);
+    const newPdfId = data.OriginalFileId || data.id;
 
     if (newPdfId) {
       window.history.pushState({}, '', `/pdf/${newPdfId}`);
@@ -229,16 +217,9 @@ const handleUrlImport = async (url) => {
       return;
     }
 
-    const filepath = response.data.FilePath || response.data.filepath;
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-    const backendUrl = apiUrl.replace('/api', '');
-
-    const fileResponse = await fetch(`${backendUrl}${filepath}`);
-    const blob = await fileResponse.blob();
-
+    const filepath = data.FilePath || data.filepath;
+    const blob = await apiService.downloadBlob(filepath);
     const fakeFile = new File([blob], 'imported_from_url.pdf', { type: 'application/pdf' });
-
     fakeFile.isFromUrl = true;
 
     const fakeEvent = { target: { files: [fakeFile] } };
@@ -280,7 +261,9 @@ const {
   setHistoryContext,
   isRemoteUpdating,
   updateCanvasDimensions,
-  relinkSignatures
+  relinkSignatures,
+  setCallbacks: setCanvasCallbacks,
+  dispose: disposeCanvas
 } = useCanvas();
 
 const canvasHelpers = { resetHistory, saveHistory, setHistoryLock };
@@ -357,10 +340,14 @@ const {
   handleUnifiedImport,
   ensureFileHandle,
   processPdfToImages,
-  saveFileWithFallback
+  saveFileWithFallback,
+  setTemplateCallbacks
 } = useTemplate(canvas, zoomLevel, canvasHelpers);
 
 if (setHistoryContext) setHistoryContext(pages, currentPageIndex);
+
+// Local ref to replace window.__originalTemplates
+const originalTemplateBackup = ref(null);
 
 const { initCanvasEvents } = useCanvasEvents(
   canvas,
@@ -468,7 +455,8 @@ const handleSaveProject = async () => {
   }
 
   try {
-    showNotification('กำลังประมวลผล PDF และบันทึกลงฐานข้อมูล...', 'info');
+    showExportOverlay('กำลังบันทึกโปรเจกต์...', pages.value.length + 2);
+    updateExportProgress(0, 'กำลังเตรียมข้อมูล...');
     saveCurrentPageState();
 
     const pagesData = preparePagesForSave();
@@ -561,6 +549,10 @@ const handleSaveProject = async () => {
           canvasImages.push(fallbackCanvas.toDataURL('image/jpeg', 0.92));
         }
         hiddenForCapture.forEach((obj) => { obj.visible = true; });
+
+        // Yield to main thread — prevents UI freeze between page captures
+        updateExportProgress(i + 1, `กำลังประมวลผลหน้า ${i + 1} / ${pages.value.length}`);
+        await yieldToMain();
       }
       canvas.value.requestRenderAll();
 
@@ -592,7 +584,13 @@ const handleSaveProject = async () => {
         }
       });
 
+      updateExportProgress(pages.value.length + 1, 'กำลังสร้าง PDF...');
+      await yieldToMain();
+
       const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
+
+      updateExportProgress(pages.value.length + 2, 'กำลังบันทึกไปยังเซิร์ฟเวอร์...');
+      await yieldToMain();
 
       const formData = new FormData();
       formData.append('OriginalFileId', fileIdToSave);
@@ -613,8 +611,7 @@ const handleSaveProject = async () => {
             pdfUrl: savedData.filepath || null,
             templateId: currentTemplateId.value || null
           };
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-          await axios.post(`${apiUrl}/reports`, historyPayload);
+          await apiService.createReport(historyPayload);
 
           if (typeof fetchReports === 'function') fetchReports();
         } catch (err) {
@@ -646,6 +643,8 @@ const handleSaveProject = async () => {
   } catch (e) {
     console.error('Save Project failed:', e);
     showNotification('เกิดข้อผิดพลาดในการบันทึกโปรเจกต์: ' + e.message, 'error');
+  } finally {
+    hideExportOverlay();
   }
 };
 
@@ -698,6 +697,8 @@ const handleExport = async () => {
     const originalPage = currentPageIndex.value;
 
     try {
+      showExportOverlay('กำลังส่งออก PDF...', pages.value.length + 2);
+      updateExportProgress(0, 'กำลังเตรียมข้อมูล...');
       canvas.value.requestRenderAll();
       if (!wasPreview) saveCurrentPageState();
       isPreviewMode.value = true;
@@ -762,6 +763,10 @@ const handleExport = async () => {
         }
 
         hiddenForCapture.forEach((obj) => { obj.visible = true; });
+
+        // Yield to main thread — prevents UI freeze between page captures
+        updateExportProgress(i + 1, `กำลังประมวลผลหน้า ${i + 1} / ${pages.value.length}`);
+        await yieldToMain();
       }
       canvas.value.requestRenderAll();
 
@@ -796,8 +801,13 @@ const handleExport = async () => {
         }
       });
 
+      updateExportProgress(pages.value.length + 1, 'กำลังสร้าง PDF...');
+      await yieldToMain();
 
       const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
+
+      updateExportProgress(pages.value.length + 2, 'กำลังบันทึกไฟล์...');
+      await yieldToMain();
 
       const defaultFileName = `${templateName.value || 'report'}.pdf`;
       const saveResult = await saveFileWithFallback(pdfBlob, defaultFileName);
@@ -825,11 +835,10 @@ const handleExport = async () => {
           templateId: currentTemplateId.value || null
         };
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-        const response = await axios.post(`${apiUrl}/reports`, historyPayload);
+        const result = await apiService.createReport(historyPayload);
 
-        if (response.data && response.data.id) {
-          currentReportId.value = response.data.id;
+        if (result && result.id) {
+          currentReportId.value = result.id;
         }
 
         showNotification('ส่งออก PDF และบันทึกประวัติสำเร็จ!', 'success');
@@ -863,6 +872,8 @@ const handleExport = async () => {
   } catch (e) {
     console.error('Export failed:', e);
     showNotification('Export failed: ' + e.message, 'error');
+  } finally {
+    hideExportOverlay();
   }
 };
 
@@ -1327,7 +1338,7 @@ const togglePreviewWrapper = async () => {
         ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text
       );
 
-      window.__originalTemplates = textObjects.map(obj => ({
+      originalTemplateBackup.value = textObjects.map(obj => ({
         id: obj.id || `${obj.type}_${obj.left}_${obj.top}`,
         text: obj.text,
         editable: obj.editable,
@@ -1355,12 +1366,12 @@ const togglePreviewWrapper = async () => {
       togglePreview();
       await nextTick();
 
-      if (canvas.value && window.__originalTemplates) {
+      if (canvas.value && originalTemplateBackup.value) {
         canvas.value.selection = true;
         canvas.value.getObjects().forEach(obj => {
           if (['textbox', 'text', 'i-text'].includes(obj.type)) {
             const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
-            const backup = window.__originalTemplates.find(t => t.id === objId);
+            const backup = originalTemplateBackup.value.find(t => t.id === objId);
 
             if (backup) {
               try {
@@ -1378,7 +1389,7 @@ const togglePreviewWrapper = async () => {
             }
           }
         });
-        window.__originalTemplates = null;
+        originalTemplateBackup.value = null;
       }
 
       if (canvas.value) canvas.value.selection = true;
@@ -1387,10 +1398,10 @@ const togglePreviewWrapper = async () => {
   } catch (error) {
     console.error('Preview toggle failed:', error);
     try {
-      if (!wasPreview && window.__originalTemplates) {
+      if (!wasPreview && originalTemplateBackup.value) {
         togglePreview();
         isPreviewMode.value = false;
-        window.__originalTemplates = null;
+        originalTemplateBackup.value = null;
       } else {
         isPreviewMode.value = true;
       }
@@ -1538,9 +1549,9 @@ const handleRouteChange = async () => {
     if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://')) externalUrl = externalUrl.replace('http:/', 'http://');
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/pdf/import-url`, { url: externalUrl });
+      const data = await apiService.importPdfFromUrl(externalUrl);
 
-      const newPdfId = response.data.OriginalFileId || response.data.id || response.data.fileId;
+      const newPdfId = data.OriginalFileId || data.id || data.fileId;
 
       if (newPdfId) {
         window.history.replaceState({}, '', `/pdf/${newPdfId}`);
@@ -1559,9 +1570,9 @@ const handleRouteChange = async () => {
   if (localPathMatch && localPathMatch[1]) {
     const localPath = localPathMatch[1];
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/pdf/import-local`, { localPath });
+      const data = await apiService.importPdfLocal(localPath);
 
-      const newPdfId = response.data.OriginalFileId || response.data.id;
+      const newPdfId = data.OriginalFileId || data.id;
       if (newPdfId) {
         window.history.replaceState({}, '', `/pdf/${newPdfId}`);
         window.location.reload();
@@ -1585,11 +1596,10 @@ const handleRouteChange = async () => {
     filepathParam = '/' + filepathParam.replace(/^\/+/, '');
 
     try {
-      const fileUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:4010/api').replace('/api', '')}${filepathParam}`;
-      const blobRes = await axios.get(fileUrl, { responseType: 'blob' });
+      const blobData = await apiService.downloadBlob(filepathParam);
 
       const filename = originalUrlParam || filepathParam.split('/').pop() || 'document.pdf';
-      const downloadedFile = new File([blobRes.data], filename, { type: 'application/pdf' });
+      const downloadedFile = new File([blobData], filename, { type: 'application/pdf' });
 
       if (typeof resetCanvasWrapper === 'function') await resetCanvasWrapper();
       else if (typeof resetCanvas === 'function') await resetCanvas();
@@ -1620,8 +1630,7 @@ const handleRouteChange = async () => {
     activePdfId = fileId;
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
-      const backendUrl = apiUrl.replace('/api', '');
+      const backendUrl = apiService.getBackendBase();
 
       const workspaceData = await apiService.prepareWorkspace(fileId);
       const tempUrl = `${backendUrl}${workspaceData.tempPath}`;
@@ -1643,8 +1652,8 @@ const handleRouteChange = async () => {
           console.error('Restoration Error', e);
         }
       } else {
-        const blobRes = await axios.get(tempUrl, { responseType: 'blob' });
-        const downloadedFile = new File([blobRes.data], 'workspace_document.pdf', { type: 'application/pdf' });
+        const blobData = await apiService.downloadBlob(workspaceData.tempPath);
+        const downloadedFile = new File([blobData], 'workspace_document.pdf', { type: 'application/pdf' });
 
         await resetCanvasWrapper();
         const images = await processPdfToImages(downloadedFile);
@@ -1672,9 +1681,9 @@ const handleRouteChange = async () => {
   if (templateMatch && templateMatch[1]) {
     const templateId = templateMatch[1];
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/templates/${templateId}`);
+      const templateData = await apiService.getTemplateById(templateId);
 
-      await loadTemplateWrapper(res.data);
+      await loadTemplateWrapper(templateData);
     } catch (error) {
       console.error('Failed to load template from URL:', error);
     }
@@ -1685,9 +1694,8 @@ const handleRouteChange = async () => {
   if (historyMatch && historyMatch[1]) {
     const instanceId = historyMatch[1];
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/reports/${instanceId}`);
-      if (res.data) {
-        const r = res.data;
+      const r = await apiService.getReportById(instanceId);
+      if (r) {
         currentReportId.value = r.id;
         currentTemplateId.value = r.templateId;
         templateName.value = r.name;
@@ -1774,21 +1782,15 @@ onMounted(async () => {
     canvas.value.on('history:restored', syncPagesFromCanvas);
   }
 
-  if (typeof window !== 'undefined') {
-    window.saveCurrentPageState = saveCurrentPageState;
-    window.loadPageToCanvas = loadPageToCanvas;
-    window.setCanvasBackground = setCanvasBackground;
-    window.addVariableToCanvas = addVariableToCanvas;
-    window.resetCanvas = resetCanvasWrapper;
-    window.applyPreviewDataToCanvas = applyPreviewDataToCanvas;
-    window.renderAllPages = renderAllPages;
-    window.forceUnlockObject = forceUnlockObject;
-    window.__editorState = {
-      get currentPageIndex() { return currentPageIndex.value; },
-      get pageCount() { return pages.value?.length ?? 1; },
-    };
-    window.addCustomTextToCanvas = addCustomTextToCanvas;
-  }
+  // Wire up callbacks to replace window.* globals
+  setCanvasCallbacks({
+    saveCurrentPageState,
+    forceUnlockObject
+  });
+  setTemplateCallbacks({
+    saveCurrentPageState,
+    renderAllPages
+  });
 
   if (!pages.value || pages.value.length === 0)
     pages.value = [{ id: 0, background: null, objects: [] }];
@@ -1796,13 +1798,13 @@ onMounted(async () => {
 
   connectionStatus.value = 'connected';
 
-  const handleWheel = (e) => {
+  _wheelHandler = (e) => {
     if (e.ctrlKey) {
       e.preventDefault();
       zoomLevel.value = Math.max(0.1, Math.min(3, zoomLevel.value + (e.deltaY > 0 ? -0.1 : 0.1)));
     }
   };
-  const handleScroll = () => {
+  _scrollHandler = () => {
     if (!viewportRef.value) return;
     const newIndex = getPageIndexFromTop(viewportRef.value.scrollTop / zoomLevel.value);
     if (newIndex !== currentPageIndex.value && newIndex >= 0 && newIndex < pages.value.length)
@@ -1810,12 +1812,12 @@ onMounted(async () => {
   };
 
   if (viewportRef.value) {
-    viewportRef.value.addEventListener('wheel', handleWheel, { passive: false });
-    viewportRef.value.addEventListener('scroll', handleScroll);
+    viewportRef.value.addEventListener('wheel', _wheelHandler, { passive: false });
+    viewportRef.value.addEventListener('scroll', _scrollHandler);
   }
 
   let clipboard = null;
-  window.addEventListener('keydown', (e) => {
+  _keydownHandler = (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
     const activeObj = canvas.value?.getActiveObject();
@@ -1899,15 +1901,29 @@ onMounted(async () => {
         if (typeof deletePage === 'function') deletePage(currentPageIndex.value);
       }
     }
-  });
+  };
+  window.addEventListener('keydown', _keydownHandler);
   window.addEventListener('beforeunload', triggerTempCleanup);
   window.addEventListener('popstate', () => { triggerTempCleanup(); });
 });
 
 onUnmounted(() => {
+  // Remove global event listeners
   window.removeEventListener('popstate', handleRouteChange);
   window.removeEventListener('beforeunload', triggerTempCleanup);
+  if (_keydownHandler) window.removeEventListener('keydown', _keydownHandler);
   triggerTempCleanup();
+
+  // Dispose canvas (detach all Fabric events, free memory)
+  if (typeof disposeCanvas === 'function') {
+    disposeCanvas();
+  }
+
+  // Remove viewport listeners
+  if (viewportRef.value) {
+    if (_wheelHandler) viewportRef.value.removeEventListener('wheel', _wheelHandler);
+    if (_scrollHandler) viewportRef.value.removeEventListener('scroll', _scrollHandler);
+  }
 });
 </script>
 
@@ -1983,221 +1999,4 @@ onUnmounted(() => {
   display: block;
 }
 
-.top-navbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 69px;
-  background: #FFFFFF;
-  border-top: 3.5px solid #2196F3;
-  border-bottom: 1px solid #E3E3E3;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 46px;
-  z-index: 1000;
-  box-sizing: border-box;
-
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.navbar-left {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-
-.app-title {
-  text-align: left;
-  font: normal normal bold 26px/34px "TH Sarabun New", "Sarabun", sans-serif;
-  letter-spacing: 0px;
-  color: #000000;
-  opacity: 1;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.navbar-right {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-
-.zoom-group {
-  display: flex;
-  align-items: center;
-}
-
-.btn-zoom-out,
-.btn-zoom-in {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.btn-zoom-out {
-  width: 23px;
-  height: 23px;
-  margin-right: 10px;
-}
-
-.zoom-out-icon {
-  width: 13px;
-  height: 1px;
-  background: #4D4D4D;
-}
-
-.zoom-value-box {
-  width: 72px;
-  height: 39px;
-  background: #FFFFFF;
-  border: 1px solid #E3E3E3;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.zoom-value-text {
-  width: 35px;
-  height: 26px;
-  text-align: center;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #000000;
-  margin-top: 1px;
-}
-
-.btn-zoom-in {
-  width: 23px;
-  height: 23px;
-  margin-left: 12px;
-}
-
-.zoom-in-icon {
-  position: relative;
-  width: 9px;
-  height: 9px;
-}
-
-.zoom-in-icon::before,
-.zoom-in-icon::after {
-  content: "";
-  position: absolute;
-  background: #4D4D4D;
-}
-
-.zoom-in-icon::before {
-  top: 4px;
-  left: 0;
-  width: 9px;
-  height: 1px;
-}
-
-.zoom-in-icon::after {
-  top: 0;
-  left: 4px;
-  width: 1px;
-  height: 9px;
-}
-
-.undo-redo-group {
-  display: flex;
-  align-items: center;
-  margin-left: 24px;
-  gap: 24px;
-}
-
-.action-btn-text {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-.icon-undo,
-.icon-redo {
-  width: 23px;
-  height: 23px;
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  background-position: 0% 0%;
-}
-
-.icon-undo {
-  background-image: url('../assets/icons/undo.png');
-}
-
-.icon-redo {
-  background-image: url('../assets/icons/redo.png');
-}
-
-.action-text {
-  height: 26px;
-  text-align: left;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #000000;
-  white-space: nowrap;
-}
-
-.divider-v {
-  width: 1px;
-  height: 49px;
-  background: #E3E3E3;
-  margin: 0 32px 0 46px;
-}
-
-.mode-group {
-  display: flex;
-  align-items: center;
-}
-
-.preview-btn {
-  width: 105px;
-  height: 39px;
-  background: #F65189;
-  border-radius: 6px;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  cursor: pointer;
-  padding: 0;
-}
-
-.preview-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.icon-eye {
-  width: 16px;
-  height: 16px;
-  background: transparent url('../assets/icons/eye.png') 0% 0% no-repeat padding-box;
-  background-size: contain;
-}
-
-.icon-edit {
-  width: 16px;
-  height: 16px;
-  background: transparent url('../assets/icons/edit.png') 0% 0% no-repeat padding-box;
-  background-size: contain;
-}
-
-.preview-text {
-  height: 26px;
-  text-align: left;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #FFFFFF;
-  white-space: nowrap;
-}
 </style>
