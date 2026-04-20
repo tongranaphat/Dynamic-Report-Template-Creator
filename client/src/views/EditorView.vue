@@ -12,20 +12,50 @@
       @toggle-preview="togglePreviewWrapper"
     />
 
-    <Sidebar :isOpen="isSidebarOpen" :is-history-open="showHistoryModal" :connectionStatus="connectionStatus"
-      :templates="templates" :isCanvasReady="isCanvasReady" :templateName="templateName" :isPreviewMode="isPreviewMode"
-      :currentTemplateId="currentTemplateId" :groupedVariables="groupedVariables" :isGenerating="isGenerating"
-      :pdfQuality="pdfQuality" :pdfMode="pdfMode" @update:pdfMode="pdfMode = $event" :pages="pages"
-      :currentPageIndex="currentPageIndex" @toggle="toggleSidebar" @open="isSidebarOpen = true"
-      @close="isSidebarOpen = false" @load-template="loadTemplateWrapper" @delete-template="deleteTemplate"
-      @update:templateName="templateName = $event" @update:pdfQuality="pdfQuality = $event"
-      @save-template="handleSaveTemplate" @reset-canvas="goHome" @toggle-preview="togglePreviewWrapper"
-      @import-workspace="handleImportWorkspaceWrapper" @add-variable="handleAddVariable"
-      @addImage="addImageToCanvasWrapper" @save-report="handleSaveProject" @generate-pdf="handleExport"
-      @open-history="openHistoryModal" @delete-page="deletePage" @add-page="addBlankPageWrapper"
-      @import-page="handleAppendPageWrapper" @page-click="scrollToPage" @page-drop="handlePageDrop" :layers="layers"
-      @select-layer="handleSelectLayer" @import-url="handleUrlImport" @reset-project="handleReset"
-      @add-signature-block="handleAddSignatureBlock" @add-custom-variable="addCustomVariable" />
+    <Sidebar
+      :isOpen="isSidebarOpen"
+      :is-history-open="showHistoryModal"
+      :connectionStatus="connectionStatus"
+      :templates="templates"
+      :isCanvasReady="isCanvasReady"
+      :templateName="templateName"
+      :isPreviewMode="isPreviewMode"
+      :currentTemplateId="currentTemplateId"
+      :groupedVariables="groupedVariables"
+      :isGenerating="isGenerating"
+      :pdfQuality="pdfQuality"
+      :pdfMode="pdfMode"
+      @update:pdfMode="pdfMode = $event"
+      :pages="pages"
+      :currentPageIndex="currentPageIndex"
+      @toggle="toggleSidebar"
+      @open="isSidebarOpen = true"
+      @close="isSidebarOpen = false"
+      @load-template="loadTemplateWrapper"
+      @delete-template="deleteTemplate"
+      @update:templateName="templateName = $event"
+      @update:pdfQuality="pdfQuality = $event"
+      @save-template="handleSaveTemplate"
+      @reset-canvas="goHome"
+      @toggle-preview="togglePreviewWrapper"
+      @import-workspace="handleImportWorkspaceWrapper"
+      @add-variable="handleAddVariable"
+      @addImage="addImageToCanvasWrapper"
+      @save-report="handleSaveProject"
+      @generate-pdf="handleExport"
+      @open-history="openHistoryModal"
+      @delete-page="deletePage"
+      @add-page="addBlankPageWrapper"
+      @import-page="handleAppendPageWrapper"
+      @page-click="scrollToPage"
+      @page-drop="handlePageDrop"
+      :layers="layers"
+      @select-layer="handleSelectLayer"
+      @import-url="handleUrlImport"
+      @reset-project="handleReset"
+      @add-signature-block="handleAddSignatureBlock"
+      @add-custom-variable="addCustomVariable"
+    />
 
     <main class="viewport" :class="{ 'full-width': !isSidebarOpen }" ref="viewportRef">
       <div class="scroll-center-helper">
@@ -43,8 +73,14 @@
       <PropertiesPanel :canvas="canvas" :is-preview-mode="isPreviewMode" />
     </div>
 
-    <HistoryModal v-if="showHistoryModal" :reportInstances="reportHistory" :currentInstanceId="currentReportId"
-      @close="showHistoryModal = false" @edit="openReportFromHistory" @delete="handleDeleteReport" />
+    <HistoryModal
+      v-if="showHistoryModal"
+      :reportInstances="reportHistory"
+      :currentInstanceId="currentReportId"
+      @close="showHistoryModal = false"
+      @edit="openReportFromHistory"
+      @delete="handleDeleteReport"
+    />
 
     <ExportOverlay
       :visible="exportOverlay.visible"
@@ -59,9 +95,6 @@
 <script setup>
 import { onMounted, ref, watch, nextTick, onUnmounted, computed, toRaw } from 'vue';
 import { fabric } from 'fabric';
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
 import TopNavbar from '../components/TopNavbar.vue';
 import PropertiesPanel from '../components/PropertiesPanel.vue';
 import Sidebar from '../components/Sidebar.vue';
@@ -81,7 +114,6 @@ import { yieldToMain } from '../utils/yieldToMain';
 import apiService from '../services/apiService';
 import { useLayers } from '../composables/useLayers';
 
-
 const currentPdfId = computed(() => {
   const parts = window.location.pathname.split('/');
   return parts[parts.length - 1];
@@ -90,8 +122,6 @@ const pdfUrlToRender = ref('');
 
 const PAGE_WIDTH_CONST = CANVAS_CONSTANTS.PAGE_WIDTH;
 const PAGE_HEIGHT_CONST = CANVAS_CONSTANTS.PAGE_HEIGHT;
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 let isCanvasReady = ref(false);
 const canvasBaseDimensions = ref({
@@ -105,7 +135,6 @@ const pdfMode = ref('flatten');
 const pdfUrl = ref(null);
 let isRendering = false;
 
-// Export/Save progress overlay state
 const exportOverlay = ref({
   visible: false,
   title: '',
@@ -124,11 +153,9 @@ const hideExportOverlay = () => {
   exportOverlay.value.visible = false;
 };
 
-// Stored handler references for proper cleanup in onUnmounted
 let _wheelHandler = null;
 let _scrollHandler = null;
 let _keydownHandler = null;
-
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value;
@@ -145,7 +172,7 @@ const triggerTempCleanup = () => {
     if (navigator.sendBeacon) {
       navigator.sendBeacon(cleanupUrl);
     } else {
-      fetch(cleanupUrl, { method: 'POST', keepalive: true }).catch(() => { });
+      fetch(cleanupUrl, { method: 'POST', keepalive: true }).catch(() => {});
     }
 
     activePdfId = null;
@@ -205,35 +232,57 @@ const handleDeleteReport = async (instance) => {
 };
 
 const handleUrlImport = async (url) => {
+  if (!url) return;
   try {
     showNotification('กำลังดาวน์โหลดไฟล์จากลิงก์...', 'info');
 
     const data = await apiService.importPdfFromUrl(url);
     const newPdfId = data.OriginalFileId || data.id;
 
-    if (newPdfId) {
-      window.history.pushState({}, '', `/pdf/${newPdfId}`);
-      window.location.reload();
-      return;
+    if (!newPdfId) {
+      throw new Error('ไม่ได้รับ File ID จาก Server');
     }
 
-    const filepath = data.FilePath || data.filepath;
-    const blob = await apiService.downloadBlob(filepath);
-    const fakeFile = new File([blob], 'imported_from_url.pdf', { type: 'application/pdf' });
-    fakeFile.isFromUrl = true;
+    const workspaceData = await apiService.prepareWorkspace(newPdfId);
+    await resetCanvas();
 
-    const fakeEvent = { target: { files: [fakeFile] } };
-
-    if (typeof handleImportWorkspace === 'function') {
-      await handleImportWorkspace(fakeEvent);
-      currentPageIndex.value = 0;
-      await renderAllPages();
+    if (workspaceData.editState) {
+      let parsedState = workspaceData.editState;
+      while (typeof parsedState === 'string') parsedState = JSON.parse(parsedState);
+      pages.value = parsedState;
+    } else {
+      const blobData = await apiService.downloadBlob(workspaceData.tempPath);
+      const downloadedFile = new File([blobData], 'imported_from_url.pdf', {
+        type: 'application/pdf'
+      });
+      const images = await processPdfToImages(downloadedFile);
+      if (images.length > 0) {
+        pages.value = images.map((imgObj, idx) => ({
+          id: Date.now() + idx,
+          background: imgObj.dataUrl,
+          width: imgObj.width,
+          height: imgObj.height,
+          objects: [],
+          originalBackgroundType: 'PDF'
+        }));
+      }
     }
 
+    currentPageIndex.value = 0;
+    templateName.value =
+      url
+        .split('/')
+        .pop()
+        ?.replace(/\.pdf$/i, '') || 'imported';
+
+    window.history.pushState({}, '', `/pdf/${newPdfId}`);
+
+    await nextTick();
+    await renderAllPages();
     showNotification('นำเข้าไฟล์สำเร็จ!', 'success');
   } catch (error) {
-    console.error('URL Import Failed:', error);
-    showNotification('ไม่สามารถนำเข้าจากลิงก์นี้ได้', 'error');
+    console.error('URL Import Error:', error);
+    alert('ไม่สามารถดาวน์โหลด PDF จาก URL นี้ได้: ' + error.message);
   }
 };
 
@@ -294,17 +343,21 @@ const handleSelectLayer = (rawObj) => {
   }
 };
 
-watch(canvas, (newCanvas) => {
-  if (newCanvas) {
-    const updateLayersCb = () => updateLayers(newCanvas);
-    newCanvas.on('object:added', updateLayersCb);
-    newCanvas.on('object:removed', updateLayersCb);
-    newCanvas.on('object:modified', updateLayersCb);
-    newCanvas.on('selection:created', updateLayersCb);
-    newCanvas.on('selection:cleared', updateLayersCb);
-    newCanvas.on('selection:updated', updateLayersCb);
-  }
-}, { immediate: true });
+watch(
+  canvas,
+  (newCanvas) => {
+    if (newCanvas) {
+      const updateLayersCb = () => updateLayers(newCanvas);
+      newCanvas.on('object:added', updateLayersCb);
+      newCanvas.on('object:removed', updateLayersCb);
+      newCanvas.on('object:modified', updateLayersCb);
+      newCanvas.on('selection:created', updateLayersCb);
+      newCanvas.on('selection:cleared', updateLayersCb);
+      newCanvas.on('selection:updated', updateLayersCb);
+    }
+  },
+  { immediate: true }
+);
 
 const {
   variables,
@@ -346,7 +399,6 @@ const {
 
 if (setHistoryContext) setHistoryContext(pages, currentPageIndex);
 
-// Local ref to replace window.__originalTemplates
 const originalTemplateBackup = ref(null);
 
 const { initCanvasEvents } = useCanvasEvents(
@@ -372,9 +424,6 @@ watch(zoomLevel, (newZoom) => {
   }
 });
 
-
-
-
 const handleSaveTemplate = async () => {
   try {
     await saveTemplate(false);
@@ -393,16 +442,16 @@ const handleReset = async () => {
     return;
   }
 
-  const confirmed = confirm("ข้อมูลทั้งหมดที่เคยแก้ไขจะหายไปทั้งหมด แน่ใจหรือไม่?");
+  const confirmed = confirm('ข้อมูลทั้งหมดที่เคยแก้ไขจะหายไปทั้งหมด แน่ใจหรือไม่?');
 
   if (confirmed) {
     try {
       showNotification('กำลังรีเซ็ตข้อมูล...', 'info');
       await apiService.resetToOriginal(fileIdToReset);
-      alert("รีเซ็ตสำเร็จ! ระบบกำลังโหลดไฟล์ต้นฉบับใหม่...");
+      alert('รีเซ็ตสำเร็จ! ระบบกำลังโหลดไฟล์ต้นฉบับใหม่...');
       window.location.reload();
     } catch (error) {
-      console.error("Reset failed:", error);
+      console.error('Reset failed:', error);
       const errorMsg = error.response?.data?.error || 'เกิดข้อผิดพลาดในการรีเซ็ตข้อมูล';
       alert(`${errorMsg}`);
       showNotification('รีเซ็ตไม่สำเร็จ', 'error');
@@ -412,7 +461,7 @@ const handleReset = async () => {
 
 const getWorkspaceMaxWidth = () => {
   let globalMaxWidth = 0;
-  (pages.value || []).forEach(p => {
+  (pages.value || []).forEach((p) => {
     const w = Number(p.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
     if (w > globalMaxWidth) globalMaxWidth = w;
   });
@@ -450,7 +499,7 @@ const handleSaveProject = async () => {
   const fileIdToSave = pathSegments[pathSegments.length - 1];
 
   if (!fileIdToSave || fileIdToSave === 'undefined' || fileIdToSave === 'pdf') {
-    showNotification("ไม่พบ ID ของไฟล์ในระบบ (Cannot find OriginalFileId)", "error");
+    showNotification('ไม่พบ ID ของไฟล์ในระบบ (Cannot find OriginalFileId)', 'error');
     return;
   }
 
@@ -472,11 +521,15 @@ const handleSaveProject = async () => {
     try {
       const realData = await apiService.getVariables();
       if (Array.isArray(realData)) {
-        realData.forEach(item => { if (item.key) variableMap[item.key] = item.value || ''; });
+        realData.forEach((item) => {
+          if (item.key) variableMap[item.key] = item.value || '';
+        });
       }
     } catch (error) {
       if (variables.value) {
-        variables.value.forEach((v) => { if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`; });
+        variables.value.forEach((v) => {
+          if (v.key) variableMap[v.key] = v.value || `{{${v.key}}}`;
+        });
       }
     }
 
@@ -548,9 +601,10 @@ const handleSaveProject = async () => {
           fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
           canvasImages.push(fallbackCanvas.toDataURL('image/jpeg', 0.92));
         }
-        hiddenForCapture.forEach((obj) => { obj.visible = true; });
+        hiddenForCapture.forEach((obj) => {
+          obj.visible = true;
+        });
 
-        // Yield to main thread — prevents UI freeze between page captures
         updateExportProgress(i + 1, `กำลังประมวลผลหน้า ${i + 1} / ${pages.value.length}`);
         await yieldToMain();
       }
@@ -563,16 +617,18 @@ const handleSaveProject = async () => {
 
       exportProjectData.pages.forEach((page, pageIndex) => {
         if (page.objects) {
-          page.objects.forEach(jsonObj => {
+          page.objects.forEach((jsonObj) => {
             if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
-              const liveObj = liveObjects.find(o => {
+              const liveObj = liveObjects.find((o) => {
                 if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
                 const expectedTop = jsonObj.top + getPageTopOffset(pageIndex);
                 return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
               });
               if (liveObj) {
                 if (liveObj.textLines && liveObj.textLines.length > 0) {
-                  const cleanLines = liveObj.textLines.map(line => (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd());
+                  const cleanLines = liveObj.textLines.map((line) =>
+                    (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd()
+                  );
                   jsonObj.text = cleanLines.join('\n');
                 } else if (liveObj.text) {
                   jsonObj.text = liveObj.text.replace(/\u200B/g, '');
@@ -587,7 +643,14 @@ const handleSaveProject = async () => {
       updateExportProgress(pages.value.length + 1, 'กำลังสร้าง PDF...');
       await yieldToMain();
 
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
+      const pdfBlob = await generateHybridPdfBlob(
+        canvasImages,
+        exportProjectData,
+        variableMap,
+        null,
+        'report',
+        pdfMode.value
+      );
 
       updateExportProgress(pages.value.length + 2, 'กำลังบันทึกไปยังเซิร์ฟเวอร์...');
       await yieldToMain();
@@ -601,7 +664,7 @@ const handleSaveProject = async () => {
 
       if (savedData) {
         showNotification('บันทึกโปรเจกต์ลง Database พร้อมฝัง PDF เรียบร้อย!', 'success');
-        console.log("Database state saved/updated successfully!");
+        console.log('Database state saved/updated successfully!');
 
         try {
           const historyPayload = {
@@ -648,7 +711,6 @@ const handleSaveProject = async () => {
   }
 };
 
-
 const handleExport = async () => {
   if (!canvas.value) return;
 
@@ -663,15 +725,13 @@ const handleExport = async () => {
       type: 'hybrid-project'
     };
 
-
-
     const variableMap = {};
 
     try {
       const realData = await apiService.getVariables();
 
       if (Array.isArray(realData)) {
-        realData.forEach(item => {
+        realData.forEach((item) => {
           if (item.key) {
             variableMap[item.key] = item.value || '';
           }
@@ -762,9 +822,10 @@ const handleExport = async () => {
           canvasImages.push(fallbackCanvas.toDataURL('image/jpeg', 0.92));
         }
 
-        hiddenForCapture.forEach((obj) => { obj.visible = true; });
+        hiddenForCapture.forEach((obj) => {
+          obj.visible = true;
+        });
 
-        // Yield to main thread — prevents UI freeze between page captures
         updateExportProgress(i + 1, `กำลังประมวลผลหน้า ${i + 1} / ${pages.value.length}`);
         await yieldToMain();
       }
@@ -777,9 +838,9 @@ const handleExport = async () => {
 
       exportProjectData.pages.forEach((page, pageIndex) => {
         if (page.objects) {
-          page.objects.forEach(jsonObj => {
+          page.objects.forEach((jsonObj) => {
             if (['textbox', 'text', 'i-text'].includes(jsonObj.type)) {
-              const liveObj = liveObjects.find(o => {
+              const liveObj = liveObjects.find((o) => {
                 if (o.id && jsonObj.id && o.id === jsonObj.id) return true;
                 const expectedTop = jsonObj.top + getPageTopOffset(pageIndex);
                 return Math.abs(o.left - jsonObj.left) < 5 && Math.abs(o.top - expectedTop) < 5;
@@ -787,7 +848,7 @@ const handleExport = async () => {
 
               if (liveObj) {
                 if (liveObj.textLines && liveObj.textLines.length > 0) {
-                  const cleanLines = liveObj.textLines.map(line => {
+                  const cleanLines = liveObj.textLines.map((line) => {
                     return (typeof line === 'string' ? line : '').replace(/\u200B/g, '').trimEnd();
                   });
                   jsonObj.text = cleanLines.join('\n');
@@ -804,7 +865,14 @@ const handleExport = async () => {
       updateExportProgress(pages.value.length + 1, 'กำลังสร้าง PDF...');
       await yieldToMain();
 
-      const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
+      const pdfBlob = await generateHybridPdfBlob(
+        canvasImages,
+        exportProjectData,
+        variableMap,
+        null,
+        'report',
+        pdfMode.value
+      );
 
       updateExportProgress(pages.value.length + 2, 'กำลังบันทึกไฟล์...');
       await yieldToMain();
@@ -900,7 +968,6 @@ const goHome = () => {
   resetCanvasWrapper();
 };
 
-
 const handleImportWorkspaceWrapper = async () => {
   await handleUnifiedImport();
   await nextTick();
@@ -952,7 +1019,7 @@ const cleanupCanvasObjects = () => {
   const objects = canvas.value.getObjects();
   let cleanedCount = 0;
 
-  objects.forEach(obj => {
+  objects.forEach((obj) => {
     try {
       if (obj.clipPath) {
         if (obj.clipPath.dispose && typeof obj.clipPath.dispose === 'function') {
@@ -995,7 +1062,7 @@ const renderAllPages = async () => {
 
     canvas.value.discardActiveObject();
     canvas.value.clear();
-    canvas.value.setBackgroundColor(null, () => { });
+    canvas.value.setBackgroundColor(null, () => {});
 
     const actualZoom = zoomLevel.value || 1;
 
@@ -1009,8 +1076,10 @@ const renderAllPages = async () => {
     }
 
     const objects = canvas.value.getObjects();
-    const oldBgs = objects.filter(o => o.id === 'page-bg' || o.id === 'page-bg-image' || o.id === 'page-divider');
-    oldBgs.forEach(bg => canvas.value.remove(bg));
+    const oldBgs = objects.filter(
+      (o) => o.id === 'page-bg' || o.id === 'page-bg-image' || o.id === 'page-divider'
+    );
+    oldBgs.forEach((bg) => canvas.value.remove(bg));
 
     for (let i = 0; i < currentPages.length; i++) {
       const page = currentPages[i];
@@ -1036,20 +1105,24 @@ const renderAllPages = async () => {
       if (page.dataUrl || page.background) {
         const urlToLoad = page.dataUrl || page.background;
         await new Promise((resolve) => {
-          fabric.Image.fromURL(urlToLoad, (img) => {
-            img.set({
-              id: 'page-bg-image',
-              left: offsetLeft,
-              top: offsetTop,
-              scaleX: pWidth / img.width,
-              scaleY: pHeight / img.height,
-              selectable: false,
-              evented: false
-            });
-            canvas.value.add(img);
-            canvas.value.moveTo(img, 1);
-            resolve();
-          }, { crossOrigin: 'anonymous' });
+          fabric.Image.fromURL(
+            urlToLoad,
+            (img) => {
+              img.set({
+                id: 'page-bg-image',
+                left: offsetLeft,
+                top: offsetTop,
+                scaleX: pWidth / img.width,
+                scaleY: pHeight / img.height,
+                selectable: false,
+                evented: false
+              });
+              canvas.value.add(img);
+              canvas.value.moveTo(img, 1);
+              resolve();
+            },
+            { crossOrigin: 'anonymous' }
+          );
         });
       }
 
@@ -1106,12 +1179,14 @@ const renderAllPages = async () => {
               }
             });
 
-            Promise.all(imageReloadPromises).catch((err) => {
-              console.error('Some images failed to load:', err);
-            }).then(() => {
-              if (canvas.value) canvas.value.requestRenderAll();
-              resolve();
-            });
+            Promise.all(imageReloadPromises)
+              .catch((err) => {
+                console.error('Some images failed to load:', err);
+              })
+              .then(() => {
+                if (canvas.value) canvas.value.requestRenderAll();
+                resolve();
+              });
           });
         });
       }
@@ -1123,7 +1198,9 @@ const renderAllPages = async () => {
     canvas.value.setZoom(actualZoom);
 
     canvas.value.requestRenderAll();
-    document.fonts.ready.then(() => { if (canvas.value) canvas.value.requestRenderAll(); });
+    document.fonts.ready.then(() => {
+      if (canvas.value) canvas.value.requestRenderAll();
+    });
   } finally {
     isRendering = false;
     setHistoryLock(false);
@@ -1131,12 +1208,14 @@ const renderAllPages = async () => {
   }
 };
 
-
 const scrollToPage = (index) => {
   if (!viewportRef.value) return;
   const P_H = CANVAS_CONSTANTS.PAGE_HEIGHT;
   const GAP = CANVAS_CONSTANTS.PAGE_GAP;
-  viewportRef.value.scrollTo({ top: getPageTopOffset(index) * zoomLevel.value, behavior: 'smooth' });
+  viewportRef.value.scrollTo({
+    top: getPageTopOffset(index) * zoomLevel.value,
+    behavior: 'smooth'
+  });
   currentPageIndex.value = index;
 };
 
@@ -1185,8 +1264,19 @@ const forceUnlockObject = (obj) => {
   obj.setCoords();
 };
 
-const addCustomTextToCanvas = (x = 50, y = 50) => {
+const addCustomTextToCanvas = (x, y) => {
   if (!canvas.value) return;
+
+  if (x === undefined || y === undefined) {
+    let accumulatedTop = 0;
+    for (let i = 0; i < currentPageIndex.value; i++) {
+      accumulatedTop +=
+        (pages.value[i].height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+    }
+    if (y === undefined) y = accumulatedTop + 100;
+    if (x === undefined)
+      x = (pages.value[currentPageIndex.value]?.width || CANVAS_CONSTANTS.PAGE_WIDTH) / 2;
+  }
 
   const text = new fabric.Textbox('พิมพ์ข้อความที่นี่...', {
     id: 'custom_text_' + Date.now(),
@@ -1216,6 +1306,8 @@ const addCustomTextToCanvas = (x = 50, y = 50) => {
   }
 };
 
+window.addCustomTextToCanvas = addCustomTextToCanvas;
+
 let isSavingState = false;
 
 const saveCurrentPageState = () => {
@@ -1223,7 +1315,11 @@ const saveCurrentPageState = () => {
 
   isSavingState = true;
   try {
-    if (canvas.value && canvas.value.getActiveObject() && canvas.value.getActiveObject().type === 'activeSelection') {
+    if (
+      canvas.value &&
+      canvas.value.getActiveObject() &&
+      canvas.value.getActiveObject().type === 'activeSelection'
+    ) {
       canvas.value.discardActiveObject();
     }
 
@@ -1265,10 +1361,18 @@ const saveCurrentPageState = () => {
       if (pageIndex >= pages.value.length) pageIndex = pages.value.length - 1;
 
       try {
-        const serialized = obj.toObject(['id', 'selectable', 'name', 'data', 'textBaseline', 'angle']);
+        const serialized = obj.toObject([
+          'id',
+          'selectable',
+          'name',
+          'data',
+          'textBaseline',
+          'angle'
+        ]);
         const pageTopY = pageBounds[pageIndex].top;
 
-        const targetPageWidth = Number(pages.value[pageIndex]?.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
+        const targetPageWidth =
+          Number(pages.value[pageIndex]?.width) || CANVAS_CONSTANTS.PAGE_WIDTH;
         const pageOffsetLeft = (getWorkspaceMaxWidth() - targetPageWidth) / 2;
 
         serialized.left = Math.round((obj.left - pageOffsetLeft) * 100) / 100;
@@ -1334,11 +1438,11 @@ const togglePreviewWrapper = async () => {
 
   try {
     if (!wasPreview) {
-      const textObjects = canvas.value.getObjects().filter(obj =>
-        ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text
-      );
+      const textObjects = canvas.value
+        .getObjects()
+        .filter((obj) => ['textbox', 'text', 'i-text'].includes(obj.type) && obj.text);
 
-      originalTemplateBackup.value = textObjects.map(obj => ({
+      originalTemplateBackup.value = textObjects.map((obj) => ({
         id: obj.id || `${obj.type}_${obj.left}_${obj.top}`,
         text: obj.text,
         editable: obj.editable,
@@ -1350,7 +1454,7 @@ const togglePreviewWrapper = async () => {
       try {
         const realData = await apiService.getVariables();
         if (Array.isArray(realData)) {
-          realData.forEach(item => {
+          realData.forEach((item) => {
             if (item.key) previewVariableMap[item.key] = item.value || '';
           });
         }
@@ -1361,17 +1465,16 @@ const togglePreviewWrapper = async () => {
       togglePreview();
       await nextTick();
       applyPreviewDataToCanvas(previewVariableMap);
-
     } else {
       togglePreview();
       await nextTick();
 
       if (canvas.value && originalTemplateBackup.value) {
         canvas.value.selection = true;
-        canvas.value.getObjects().forEach(obj => {
+        canvas.value.getObjects().forEach((obj) => {
           if (['textbox', 'text', 'i-text'].includes(obj.type)) {
             const objId = obj.id || `${obj.type}_${obj.left}_${obj.top}`;
-            const backup = originalTemplateBackup.value.find(t => t.id === objId);
+            const backup = originalTemplateBackup.value.find((t) => t.id === objId);
 
             if (backup) {
               try {
@@ -1493,7 +1596,8 @@ const onDrop = (e) => {
   const variable = e.dataTransfer.getData('variable');
   const asset = e.dataTransfer.getData('asset');
 
-  let x = 0; let y = 0;
+  let x = 0;
+  let y = 0;
 
   if (canvas.value && typeof canvas.value.getPointer === 'function') {
     const pointer = canvas.value.getPointer(e);
@@ -1501,7 +1605,11 @@ const onDrop = (e) => {
     y = pointer.y;
   } else {
     const canvasContainer = document.querySelector('.canvas-container');
-    const rect = canvasContainer ? canvasContainer.getBoundingClientRect() : (e.currentTarget ? e.currentTarget.getBoundingClientRect() : { left: 0, top: 0 });
+    const rect = canvasContainer
+      ? canvasContainer.getBoundingClientRect()
+      : e.currentTarget
+        ? e.currentTarget.getBoundingClientRect()
+        : { left: 0, top: 0 };
     x = e.clientX - rect.left;
     y = e.clientY - rect.top;
     if (typeof zoomLevel !== 'undefined' && zoomLevel.value) {
@@ -1519,7 +1627,7 @@ const onDrop = (e) => {
 
   if (type === 'SIGNATURE_BLOCK') {
     const sigDataStr = e.dataTransfer.getData('sigData');
-    console.log("[EditorView] ข้อมูลที่รับมาตอน Drop:", sigDataStr);
+    console.log('[EditorView] ข้อมูลที่รับมาตอน Drop:', sigDataStr);
 
     if (sigDataStr) {
       try {
@@ -1530,14 +1638,16 @@ const onDrop = (e) => {
         } else if (window.addSignatureBlockToCanvas) {
           window.addSignatureBlockToCanvas(sigData, x, y);
         } else {
-          console.error("หาฟังก์ชัน addSignatureBlockToCanvas ไม่เจอ! ลืม Return ออกมาจาก useCanvas.js หรือเปล่า?");
+          console.error(
+            'หาฟังก์ชัน addSignatureBlockToCanvas ไม่เจอ! ลืม Return ออกมาจาก useCanvas.js หรือเปล่า?'
+          );
         }
       } catch (error) {
-        console.error("เกิดข้อผิดพลาดตอนประกอบข้อมูล:", error);
+        console.error('เกิดข้อผิดพลาดตอนประกอบข้อมูล:', error);
       }
     }
   }
-}
+};
 
 const handleRouteChange = async () => {
   const fullHref = window.location.href;
@@ -1545,8 +1655,10 @@ const handleRouteChange = async () => {
 
   if (directUrlMatch && directUrlMatch[1]) {
     let externalUrl = directUrlMatch[1];
-    if (externalUrl.startsWith('https:/') && !externalUrl.startsWith('https://')) externalUrl = externalUrl.replace('https:/', 'https://');
-    if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://')) externalUrl = externalUrl.replace('http:/', 'http://');
+    if (externalUrl.startsWith('https:/') && !externalUrl.startsWith('https://'))
+      externalUrl = externalUrl.replace('https:/', 'https://');
+    if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://'))
+      externalUrl = externalUrl.replace('http:/', 'http://');
 
     try {
       const data = await apiService.importPdfFromUrl(externalUrl);
@@ -1559,8 +1671,8 @@ const handleRouteChange = async () => {
         return;
       }
     } catch (error) {
-      console.error("Direct URL Import Failed:", error);
-      alert("ไม่สามารถดึงไฟล์จากลิงก์ที่ระบุได้ (นำเข้าไม่สำเร็จ)");
+      console.error('Direct URL Import Failed:', error);
+      alert('ไม่สามารถดึงไฟล์จากลิงก์ที่ระบุได้ (นำเข้าไม่สำเร็จ)');
     }
   }
 
@@ -1579,8 +1691,8 @@ const handleRouteChange = async () => {
         return;
       }
     } catch (error) {
-      console.error("Local Import Failed:", error);
-      alert("ไม่สามารถดึงไฟล์จากเครื่องได้ (ตรวจสอบว่าไฟล์มีอยู่จริง)");
+      console.error('Local Import Failed:', error);
+      alert('ไม่สามารถดึงไฟล์จากเครื่องได้ (ตรวจสอบว่าไฟล์มีอยู่จริง)');
     }
   }
 
@@ -1653,7 +1765,9 @@ const handleRouteChange = async () => {
         }
       } else {
         const blobData = await apiService.downloadBlob(workspaceData.tempPath);
-        const downloadedFile = new File([blobData], 'workspace_document.pdf', { type: 'application/pdf' });
+        const downloadedFile = new File([blobData], 'workspace_document.pdf', {
+          type: 'application/pdf'
+        });
 
         await resetCanvasWrapper();
         const images = await processPdfToImages(downloadedFile);
@@ -1725,10 +1839,11 @@ const handleRouteChange = async () => {
       }
 
       if (typeof editorStore !== 'undefined') {
-        if (typeof editorStore.setActiveTemplate === 'function') editorStore.setActiveTemplate(null);
+        if (typeof editorStore.setActiveTemplate === 'function')
+          editorStore.setActiveTemplate(null);
       }
     } catch (error) {
-      console.error("Error resetting workspace on back navigation:", error);
+      console.error('Error resetting workspace on back navigation:', error);
     }
   }
 };
@@ -1736,16 +1851,18 @@ const handleRouteChange = async () => {
 const selectAllObjects = () => {
   if (!canvas.value) return;
 
-  const objects = canvas.value.getObjects().filter(
-    obj => obj.id !== 'page-bg' && obj.id !== 'page-bg-image' && obj.selectable !== false
-  );
+  const objects = canvas.value
+    .getObjects()
+    .filter(
+      (obj) => obj.id !== 'page-bg' && obj.id !== 'page-bg-image' && obj.selectable !== false
+    );
 
   if (objects.length === 0) return;
 
   canvas.value.discardActiveObject();
 
   const selection = new fabric.ActiveSelection(objects, {
-    canvas: canvas.value,
+    canvas: canvas.value
   });
 
   canvas.value.setActiveObject(selection);
@@ -1762,7 +1879,7 @@ onMounted(async () => {
     await fetchVariables();
     await fetchTemplates();
   } catch (error) {
-    console.error("Failed to initialize store data:", error);
+    console.error('Failed to initialize store data:', error);
   }
 
   await handleRouteChange();
@@ -1782,7 +1899,6 @@ onMounted(async () => {
     canvas.value.on('history:restored', syncPagesFromCanvas);
   }
 
-  // Wire up callbacks to replace window.* globals
   setCanvasCallbacks({
     saveCurrentPageState,
     forceUnlockObject
@@ -1825,9 +1941,11 @@ onMounted(async () => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
       if (activeObj && activeObj.isEditing) return;
       e.preventDefault();
-      const objects = canvas.value.getObjects().filter(
-        obj => obj.id !== 'page-bg' && obj.id !== 'page-bg-image' && obj.selectable !== false
-      );
+      const objects = canvas.value
+        .getObjects()
+        .filter(
+          (obj) => obj.id !== 'page-bg' && obj.id !== 'page-bg-image' && obj.selectable !== false
+        );
       if (objects.length > 0) {
         canvas.value.discardActiveObject();
         const selection = new fabric.ActiveSelection(objects, { canvas: canvas.value });
@@ -1858,7 +1976,9 @@ onMounted(async () => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
       if (activeObj && !activeObj.isEditing) {
         e.preventDefault();
-        activeObj.clone((cloned) => { clipboard = cloned; });
+        activeObj.clone((cloned) => {
+          clipboard = cloned;
+        });
       }
       return;
     }
@@ -1868,7 +1988,12 @@ onMounted(async () => {
         e.preventDefault();
         clipboard.clone((clonedObj) => {
           canvas.value.discardActiveObject();
-          clonedObj.set({ left: clonedObj.left + 20, top: clonedObj.top + 20, evented: true, selectable: true });
+          clonedObj.set({
+            left: clonedObj.left + 20,
+            top: clonedObj.top + 20,
+            evented: true,
+            selectable: true
+          });
 
           if (clonedObj.type === 'activeSelection') {
             clonedObj.canvas = canvas.value;
@@ -1904,22 +2029,21 @@ onMounted(async () => {
   };
   window.addEventListener('keydown', _keydownHandler);
   window.addEventListener('beforeunload', triggerTempCleanup);
-  window.addEventListener('popstate', () => { triggerTempCleanup(); });
+  window.addEventListener('popstate', () => {
+    triggerTempCleanup();
+  });
 });
 
 onUnmounted(() => {
-  // Remove global event listeners
   window.removeEventListener('popstate', handleRouteChange);
   window.removeEventListener('beforeunload', triggerTempCleanup);
   if (_keydownHandler) window.removeEventListener('keydown', _keydownHandler);
   triggerTempCleanup();
 
-  // Dispose canvas (detach all Fabric events, free memory)
   if (typeof disposeCanvas === 'function') {
     disposeCanvas();
   }
 
-  // Remove viewport listeners
   if (viewportRef.value) {
     if (_wheelHandler) viewportRef.value.removeEventListener('wheel', _wheelHandler);
     if (_scrollHandler) viewportRef.value.removeEventListener('scroll', _scrollHandler);
@@ -1958,7 +2082,7 @@ onUnmounted(() => {
   transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.floating-panel-anchor>* {
+.floating-panel-anchor > * {
   pointer-events: auto;
 }
 
@@ -1998,5 +2122,4 @@ onUnmounted(() => {
   border-radius: 8px;
   display: block;
 }
-
 </style>

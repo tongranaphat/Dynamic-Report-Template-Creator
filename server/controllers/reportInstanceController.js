@@ -6,9 +6,9 @@ const saveReport = asyncHandler(async (req, res) => {
 
     let report;
 
-    const finalName = name || (projectData?.name) || 'Untitled Report';
-    const finalPages = pages || (projectData?.pages) || [];
-    const finalTemplateId = templateId || (projectData?.templateId) || null;
+    const finalName = name || projectData?.name || 'Untitled Report';
+    const finalPages = pages || projectData?.pages || [];
+    const finalTemplateId = templateId || projectData?.templateId || null;
 
     if (id) {
         const existing = await prisma.reportInstance.findUnique({ where: { id } });

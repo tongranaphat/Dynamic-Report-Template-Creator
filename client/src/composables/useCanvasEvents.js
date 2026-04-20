@@ -1,7 +1,7 @@
 import { CANVAS_CONSTANTS } from '../constants/canvas';
 
 export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, setHistoryLock) {
-  if (!canvas || !pages) return { initCanvasEvents: () => { } };
+  if (!canvas || !pages) return { initCanvasEvents: () => {} };
 
   const savedClipPaths = new WeakMap();
 
@@ -37,13 +37,19 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
     const targetHeight = targetPage?.height || CANVAS_CONSTANTS.PAGE_HEIGHT;
 
     let globalMaxWidth = 0;
-    (pages.value || []).forEach(p => {
+    (pages.value || []).forEach((p) => {
       const w = p.width || CANVAS_CONSTANTS.PAGE_WIDTH;
       if (w > globalMaxWidth) globalMaxWidth = w;
     });
     const offsetLeft = (globalMaxWidth - targetWidth) / 2;
 
-    if (!obj.clipPath || obj.clipPath.top !== pageTop || obj.clipPath.left !== offsetLeft || obj.clipPath.height !== targetHeight || obj.clipPath.width !== targetWidth) {
+    if (
+      !obj.clipPath ||
+      obj.clipPath.top !== pageTop ||
+      obj.clipPath.left !== offsetLeft ||
+      obj.clipPath.height !== targetHeight ||
+      obj.clipPath.width !== targetWidth
+    ) {
       obj.clipPath = new fabric.Rect({
         left: offsetLeft,
         top: pageTop,
@@ -107,8 +113,7 @@ export function useCanvasEvents(canvas, pages, currentPageIndex, saveHistory, se
     }
   };
 
-  const handleDropSnap = (obj) => {
-  };
+  const handleDropSnap = (obj) => {};
 
   const handleTextScaling = (obj) => {
     if (!obj) return;

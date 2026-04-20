@@ -17,7 +17,7 @@ dist-ssr
 
 # Environment Variables (สำคัญมาก ห้ามลืม!)
 .env
-.env.*
+# .env.*
 !.env.example
 
 # Editor directories

@@ -21,11 +21,15 @@ vi.mock('fabric', () => {
       devicePixelRatio: 1,
       Canvas: vi.fn().mockImplementation(function (canvasId, options) {
         return {
-          setBackgroundColor: vi.fn((color, callback) => { if (callback) callback(); }),
+          setBackgroundColor: vi.fn((color, callback) => {
+            if (callback) callback();
+          }),
           renderAll: vi.fn(),
           requestRenderAll: vi.fn(),
           toJSON: vi.fn(() => ({ objects: [] })),
-          loadFromJSON: vi.fn((json, callback) => { if (callback) callback(); }),
+          loadFromJSON: vi.fn((json, callback) => {
+            if (callback) callback();
+          }),
           on: vi.fn(),
           off: vi.fn(),
           fire: vi.fn(),
@@ -62,9 +66,9 @@ Object.defineProperty(window, 'saveCurrentPageState', {
 });
 
 beforeEach(() => {
-  vi.spyOn(console, 'log').mockImplementation(() => { });
-  vi.spyOn(console, 'error').mockImplementation(() => { });
-  vi.spyOn(console, 'warn').mockImplementation(() => { });
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
 afterEach(() => {

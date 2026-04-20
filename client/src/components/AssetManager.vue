@@ -1,7 +1,13 @@
 <template>
   <div class="asset-manager">
     <div class="upload-section">
-      <input type="file" ref="fileInput" @change="uploadAsset" accept="image/jpeg, image/png" style="display: none" />
+      <input
+        type="file"
+        ref="fileInput"
+        @change="uploadAsset"
+        accept="image/jpeg, image/png"
+        style="display: none"
+      />
       <button class="btn-upload" @click="$refs.fileInput.click()" :disabled="isPreviewMode">
         <span class="btn-upload-text">อัปโหลดรูปภาพ</span>
       </button>
@@ -15,8 +21,14 @@
     <div v-if="loading" class="loading">กำลังโหลด...</div>
 
     <div class="asset-grid" v-else>
-      <div v-for="(asset, index) in assets" :key="index" :class="['asset-item', { disabled: isPreviewMode }]"
-        :draggable="!isPreviewMode" @dragstart="onDragStart($event, asset)" @click="selectAsset(asset)">
+      <div
+        v-for="(asset, index) in assets"
+        :key="index"
+        :class="['asset-item', { disabled: isPreviewMode }]"
+        :draggable="!isPreviewMode"
+        @dragstart="onDragStart($event, asset)"
+        @click="selectAsset(asset)"
+      >
         <img :src="asset.url" :alt="asset.name" />
 
         <button class="btn-del" @click.stop="deleteAsset(asset)" v-if="!isPreviewMode">
@@ -132,14 +144,16 @@ onMounted(() => {
 .btn-upload {
   width: 298px;
   height: 46px;
-  background: #F65189 0% 0% no-repeat padding-box;
+  background: #f65189 0% 0% no-repeat padding-box;
   border-radius: 6px;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
 }
 
 .btn-upload:hover:not(:disabled) {
@@ -154,14 +168,20 @@ onMounted(() => {
 
 .btn-upload-text {
   text-align: center;
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #FFFFFF;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #ffffff;
 }
 
 .btn-upload-hint {
   text-align: left;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #A4A4A4;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #a4a4a4;
   margin-top: 6px;
 }
 
@@ -172,7 +192,10 @@ onMounted(() => {
 }
 
 .label-small {
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin: 0;
 }
@@ -190,11 +213,13 @@ onMounted(() => {
 .asset-item {
   position: relative;
   aspect-ratio: 1;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #F6F6F6;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #f6f6f6;
   border-radius: 6px;
   cursor: grab;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .asset-item:hover {
@@ -218,7 +243,7 @@ onMounted(() => {
   position: absolute;
   top: -8px;
   right: -8px;
-  background: #E74C3C;
+  background: #e74c3c;
   border: none;
   border-radius: 50%;
   width: 24px;
@@ -241,7 +266,7 @@ onMounted(() => {
 }
 
 .btn-del:hover {
-  background: #C0392B;
+  background: #c0392b;
 }
 
 .icon-delete {
@@ -254,14 +279,20 @@ onMounted(() => {
   grid-column: 1 / -1;
   text-align: center;
   color: #999;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   padding: 20px;
 }
 
 .loading {
   text-align: center;
   color: #666;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   margin-top: 20px;
 }
 </style>

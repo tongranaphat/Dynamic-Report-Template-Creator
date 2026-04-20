@@ -47,7 +47,7 @@ const getAllAssets = asyncHandler(async (req, res) => {
         orderBy: { createdAt: 'desc' }
     });
 
-    const formattedAssets = assets.map(asset => ({
+    const formattedAssets = assets.map((asset) => ({
         url: asset.url,
         name: asset.filename,
         id: asset.id

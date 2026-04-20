@@ -18,7 +18,6 @@ describe('Variable Drag Pipeline', () => {
             }
         };
 
-        // Mount sidebar to test component methods
         const wrapper = mount(Sidebar, {
             props: {
                 isOpen: true,
@@ -30,7 +29,6 @@ describe('Variable Drag Pipeline', () => {
             }
         });
 
-        // Execute internal handler since we mocked the DOM event
         wrapper.vm.onDragStart(dummyEvent, 'test_var');
 
         expect(transferKey).toBe('test_var');

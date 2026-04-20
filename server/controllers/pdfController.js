@@ -90,7 +90,6 @@ const resetToOriginal = async (req, res) => {
             message: 'รีเซ็ตสำเร็จ ดึงไฟล์ต้นฉบับมาไว้ในพื้นที่ทำงานแล้ว',
             tempPath: `/uploads/temp/temp_${id}.pdf`
         });
-
     } catch (error) {
         console.error('[resetToOriginal] Error:', error);
         res.status(500).json({ error: 'การรีเซ็ตข้อมูลล้มเหลว: ' + error.message });
@@ -117,8 +116,7 @@ const upload = multer({
 
 const convertGDriveUrl = (url) => {
     if (!url || typeof url !== 'string') return url;
-    const fileIdMatch = url.match(/\/file\/d\/([^/]+)/)
-        || url.match(/[?&]id=([^&]+)/);
+    const fileIdMatch = url.match(/\/file\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/);
     if (fileIdMatch && fileIdMatch[1]) {
         return `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
     }
@@ -173,8 +171,12 @@ const importPdfUrl = async (req, res) => {
             });
         }
 
-        res.status(200).json({ ...cachedPdf, id: cachedPdf.OriginalFileId, fileId: cachedPdf.OriginalFileId, filepath: cachedPdf.FilePath });
-
+        res.status(200).json({
+            ...cachedPdf,
+            id: cachedPdf.OriginalFileId,
+            fileId: cachedPdf.OriginalFileId,
+            filepath: cachedPdf.FilePath
+        });
     } catch (error) {
         console.error('URL Import Error:', error.message);
         res.status(500).json({ error: 'Failed to import file from URL' });
@@ -223,8 +225,12 @@ const autoImportUniversal = async (req, res) => {
             }
         });
 
-        res.status(200).json({ ...cachedPdf, id: cachedPdf.OriginalFileId, fileId: cachedPdf.OriginalFileId, filepath: cachedPdf.FilePath });
-
+        res.status(200).json({
+            ...cachedPdf,
+            id: cachedPdf.OriginalFileId,
+            fileId: cachedPdf.OriginalFileId,
+            filepath: cachedPdf.FilePath
+        });
     } catch (error) {
         console.error('Auto Import Error:', error.message);
         res.status(500).json({ error: 'Failed to auto-import file' });
@@ -270,16 +276,19 @@ const checkPdfType = asyncHandler(async (req, res) => {
             const decodePdfString = (pdfStr) => {
                 if (!pdfStr) return null;
                 const bytes = pdfStr.asBytes();
-                if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
-                    return Buffer.from(bytes.slice(2)).toString('utf16le')
-                        .split('').map((c, i, a) => i % 2 === 0 ? a[i + 1] + c : '').join('');
+                if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+                    return Buffer.from(bytes.slice(2))
+                        .toString('utf16le')
+                        .split('')
+                        .map((c, i, a) => (i % 2 === 0 ? a[i + 1] + c : ''))
+                        .join('');
                 }
                 return Buffer.from(bytes).toString('utf-8');
             };
 
             const decodeBuffer = (buf) => {
                 if (!buf || buf.length < 2) return buf?.toString('utf-8') || null;
-                if (buf[0] === 0xFE && buf[1] === 0xFF) {
+                if (buf[0] === 0xfe && buf[1] === 0xff) {
                     const content = Buffer.from(buf.slice(2));
                     content.swap16();
                     return content.toString('utf16le');
@@ -428,7 +437,9 @@ const generatePDF = asyncHandler(async (req, res) => {
                 const jsonStr = JSON.stringify(pagesData);
                 const MAX_METADATA_BYTES = 50 * 1024;
                 if (Buffer.byteLength(jsonStr, 'utf-8') > MAX_METADATA_BYTES) {
-                    logger.warn(`Layout data too large to embed (${Math.round(Buffer.byteLength(jsonStr, 'utf-8') / 1024)}KB > 50KB). Metadata will be omitted.`);
+                    logger.warn(
+                        `Layout data too large to embed (${Math.round(Buffer.byteLength(jsonStr, 'utf-8') / 1024)}KB > 50KB). Metadata will be omitted.`
+                    );
                 } else {
                     const base64Str = Buffer.from(jsonStr, 'utf-8').toString('base64');
                     pdfDoc.setSubject(`layout:${base64Str}`);
@@ -487,7 +498,7 @@ const uploadPdf = async (req, res) => {
         });
         res.status(201).json({ ...savedPdf, id: savedPdf.OriginalFileId, filepath: savedPdf.FilePath });
     } catch (error) {
-        console.error("Upload DB Error:", error);
+        console.error('Upload DB Error:', error);
         res.status(500).json({ error: 'Failed to upload PDF' });
     }
 };
@@ -587,7 +598,11 @@ const savePdfState = async (req, res) => {
 
         let parsedState = editState;
         while (typeof parsedState === 'string') {
-            try { parsedState = JSON.parse(parsedState); } catch (e) { break; }
+            try {
+                parsedState = JSON.parse(parsedState);
+            } catch (e) {
+                break;
+            }
         }
         const updatedPdf = await prisma.pdfCache.update({
             where: { OriginalFileId },
@@ -603,7 +618,6 @@ const savePdfState = async (req, res) => {
             id: updatedPdf.OriginalFileId,
             filepath: updatedPdf.EditedFilePath
         });
-
     } catch (error) {
         console.error('Save PDF State Error:', error);
         res.status(500).json({ error: 'บันทึกข้อมูลไม่สำเร็จ' });

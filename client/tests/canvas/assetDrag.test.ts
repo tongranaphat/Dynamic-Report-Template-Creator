@@ -8,7 +8,6 @@ describe('Asset Drag Drop Pipeline', () => {
             addedAsset = url;
         });
 
-        // Mock drop handler extracted roughly from EditorView's logic
         const onDrop = (e) => {
             const asset = e.dataTransfer.getData('asset');
             if (asset) {

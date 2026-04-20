@@ -6,16 +6,13 @@ describe('History Integration', () => {
         const blocks: any[] = [];
         const history = new CanvasHistory(blocks);
 
-        // Simulate addImageToCanvas pushing the block and saving
         blocks.push({ type: 'image' } as any);
         history.push(blocks);
 
-        // Simulate addVariableToCanvas pushing the block and saving
         blocks.push({ type: 'text' } as any);
         history.push(blocks);
 
-        // Verify history stack size increased (initial + 2 actions)
         expect(history.canUndo()).toBe(true);
-        expect(history.undo().length).toBe(1); // 1 block from first action
+        expect(history.undo().length).toBe(1);
     });
 });

@@ -61,19 +61,24 @@ const progressLabel = computed(() => {
 .spinner {
   width: 44px;
   height: 44px;
-  border: 4px solid #E3E3E3;
-  border-top-color: #2196F3;
+  border: 4px solid #e3e3e3;
+  border-top-color: #2196f3;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   margin: 0 auto 20px;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .overlay-title {
-  font: normal normal bold 24px/32px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 24px/32px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #333;
   margin: 0 0 20px;
 }
@@ -81,25 +86,27 @@ const progressLabel = computed(() => {
 .progress-bar-track {
   width: 100%;
   height: 8px;
-  background: #E8E8E8;
+  background: #e8e8e8;
   border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #2196F3, #42A5F5);
+  background: linear-gradient(90deg, #2196f3, #42a5f5);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #666;
   margin: 12px 0 0;
 }
 
-/* Transition */
 .overlay-fade-enter-active,
 .overlay-fade-leave-active {
   transition: opacity 0.25s ease;

@@ -12,9 +12,7 @@ export const useLayers = () => {
     const objects = canvas.getObjects();
     const activeObject = canvas.getActiveObject();
 
-    const userObjects = objects.filter(
-      obj => obj.id !== 'page-bg' && obj.id !== 'page-bg-image'
-    );
+    const userObjects = objects.filter((obj) => obj.id !== 'page-bg' && obj.id !== 'page-bg-image');
 
     const mappedLayers = userObjects.map((obj, index) => {
       let label = 'Object';

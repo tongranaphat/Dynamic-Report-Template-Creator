@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useCanvasLegacy as useCanvas } from '../useCanvasLegacy.js';
 
-// Global mock for canvas objects
 let mockCanvasObjects = [];
 
-// Create mock fabric canvas instance (overrides global setup's simpler mock)
 function createMockFabricCanvas() {
   return {
     backgroundColor: '#fff',
     objects: mockCanvasObjects,
-    setBackgroundColor: vi.fn((color, callback) => { if (callback) callback(); }),
+    setBackgroundColor: vi.fn((color, callback) => {
+      if (callback) callback();
+    }),
     renderAll: vi.fn(),
     requestRenderAll: vi.fn(),
     toJSON: vi.fn((properties) => ({
@@ -17,13 +17,19 @@ function createMockFabricCanvas() {
       objects: [...mockCanvasObjects],
       background: '#fff'
     })),
-    loadFromJSON: vi.fn((json, callback) => { if (callback) callback(); }),
-    setBackgroundImage: vi.fn((img, callback) => { if (callback) callback(); }),
+    loadFromJSON: vi.fn((json, callback) => {
+      if (callback) callback();
+    }),
+    setBackgroundImage: vi.fn((img, callback) => {
+      if (callback) callback();
+    }),
     on: vi.fn(),
     off: vi.fn(),
     fire: vi.fn(),
     getPointer: vi.fn(() => ({ x: 100, y: 100 })),
-    add: vi.fn((obj) => { mockCanvasObjects.push(obj); }),
+    add: vi.fn((obj) => {
+      mockCanvasObjects.push(obj);
+    }),
     remove: vi.fn((obj) => {
       const index = mockCanvasObjects.indexOf(obj);
       if (index > -1) mockCanvasObjects.splice(index, 1);
@@ -36,7 +42,6 @@ function createMockFabricCanvas() {
   };
 }
 
-// Override global fabric mock with one that tracks mockCanvasObjects
 vi.mock('fabric', () => {
   const ITextMock = vi.fn().mockImplementation(function (text, options) {
     return { text, type: 'i-text', setControlsVisibility: vi.fn(), ...options };
@@ -62,10 +67,8 @@ vi.mock('fabric', () => {
   };
 });
 
-// Mock DOM
 const mockCanvasElement = { id: 'c', getContext: vi.fn() };
 
-// Helper: save history and wait for debounce
 function saveAndFlush(composable, uniqueId) {
   if (uniqueId !== undefined) {
     const fabricCanvas = composable.canvas.value;
@@ -89,7 +92,6 @@ describe('useCanvas', () => {
     global.document.getElementById = vi.fn((id) => (id === 'c' ? mockCanvasElement : null));
 
     canvasComposable = useCanvas();
-    // Reset module-level singleton state
     canvasComposable.canvas.value = null;
     canvasComposable.historyStack.value = [];
     canvasComposable.redoStack.value = [];
@@ -120,7 +122,6 @@ describe('useCanvas', () => {
       saveAndFlush(canvasComposable, 'state1');
       const lengthAfterFirst = canvasComposable.historyStack.value.length;
 
-      // Save same state again (toJSON returns same result — no uniqueId change)
       canvasComposable.saveHistory();
       vi.advanceTimersByTime(150);
 

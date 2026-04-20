@@ -12,7 +12,18 @@ const memoryStats = {
   eventListenersRemoved: 0
 };
 
-const CUSTOM_PROPS = ['id', 'selectable', 'name', 'data', 'textBaseline', 'angle', 'isSignatureBlock', 'isSignaturePrefix', 'linkedId', 'sigData'];
+const CUSTOM_PROPS = [
+  'id',
+  'selectable',
+  'name',
+  'data',
+  'textBaseline',
+  'angle',
+  'isSignatureBlock',
+  'isSignaturePrefix',
+  'linkedId',
+  'sigData'
+];
 
 const MAX_HISTORY_SIZE = 30;
 const HISTORY_DEBOUNCE_MS = 300;
@@ -102,7 +113,10 @@ export function useCanvas() {
       const json = canvas.value.toJSON(CUSTOM_PROPS);
       const jsonString = JSON.stringify(json);
 
-      if (historyStack.value.length > 0 && historyStack.value[historyStack.value.length - 1] === jsonString) {
+      if (
+        historyStack.value.length > 0 &&
+        historyStack.value[historyStack.value.length - 1] === jsonString
+      ) {
         return;
       }
 
@@ -126,9 +140,12 @@ export function useCanvas() {
       canvas.value.loadFromJSON(JSON.parse(previous), () => {
         canvas.value.renderAll();
         relinkSignatures();
-        if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
+        if (typeof _callbacks.saveCurrentPageState === 'function')
+          _callbacks.saveCurrentPageState();
 
-        setTimeout(() => { isHistoryLocked.value = false; }, 100);
+        setTimeout(() => {
+          isHistoryLocked.value = false;
+        }, 100);
       });
     }
   };
@@ -142,9 +159,12 @@ export function useCanvas() {
       canvas.value.loadFromJSON(JSON.parse(next), () => {
         canvas.value.renderAll();
         relinkSignatures();
-        if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
+        if (typeof _callbacks.saveCurrentPageState === 'function')
+          _callbacks.saveCurrentPageState();
 
-        setTimeout(() => { isHistoryLocked.value = false; }, 100);
+        setTimeout(() => {
+          isHistoryLocked.value = false;
+        }, 100);
       });
     }
   };
@@ -188,7 +208,7 @@ export function useCanvas() {
     ctx.font = `${fontSize}px ${fontFamily}`;
 
     const segmenter = new Intl.Segmenter('th-TH', { granularity: 'word' });
-    const words = Array.from(segmenter.segment(text)).map(s => s.segment);
+    const words = Array.from(segmenter.segment(text)).map((s) => s.segment);
 
     let lines = [];
     let currentLine = '';
@@ -225,9 +245,12 @@ export function useCanvas() {
   if (!fabric.Object.prototype.__customExportPatched) {
     const originalToObject = fabric.Object.prototype.toObject;
     fabric.Object.prototype.toObject = function (additionalProperties) {
-      return originalToObject.call(this, [
-        'id', 'name', 'isSignatureBlock', 'isSignaturePrefix', 'linkedId', 'sigData'
-      ].concat(additionalProperties || []));
+      return originalToObject.call(
+        this,
+        ['id', 'name', 'isSignatureBlock', 'isSignaturePrefix', 'linkedId', 'sigData'].concat(
+          additionalProperties || []
+        )
+      );
     };
     fabric.Object.prototype.__customExportPatched = true;
   }
@@ -246,10 +269,16 @@ export function useCanvas() {
 
       isSyncing = true;
       if (movedObj === prefixTextbox && sigGroup.canvas) {
-        sigGroup.set({ left: prefixTextbox.left, top: prefixTextbox.top + prefixTextbox.getScaledHeight() + GAP });
+        sigGroup.set({
+          left: prefixTextbox.left,
+          top: prefixTextbox.top + prefixTextbox.getScaledHeight() + GAP
+        });
         sigGroup.setCoords();
       } else if (movedObj === sigGroup && prefixTextbox.canvas) {
-        prefixTextbox.set({ left: sigGroup.left, top: sigGroup.top - prefixTextbox.getScaledHeight() - GAP });
+        prefixTextbox.set({
+          left: sigGroup.left,
+          top: sigGroup.top - prefixTextbox.getScaledHeight() - GAP
+        });
         prefixTextbox.setCoords();
       }
       isSyncing = false;
@@ -310,9 +339,10 @@ export function useCanvas() {
     let prefixTextbox = null;
 
     if (sigData.prefixText) {
-      const wrappedPrefix = (typeof wrapThaiText === 'function')
-        ? wrapThaiText(sigData.prefixText, maxTextWidth, fontSize, fontFamily)
-        : sigData.prefixText;
+      const wrappedPrefix =
+        typeof wrapThaiText === 'function'
+          ? wrapThaiText(sigData.prefixText, maxTextWidth, fontSize, fontFamily)
+          : sigData.prefixText;
 
       prefixTextbox = new fabric.Textbox(wrappedPrefix, {
         left: dropX,
@@ -337,8 +367,14 @@ export function useCanvas() {
       const centerX = 0;
 
       const balancer = new fabric.Rect({
-        left: centerX, top: currentInternalY, width: 250, height: 1,
-        fill: 'transparent', originX: 'center', originY: 'top', selectable: false
+        left: centerX,
+        top: currentInternalY,
+        width: 250,
+        height: 1,
+        fill: 'transparent',
+        originX: 'center',
+        originY: 'top',
+        selectable: false
       });
       objects.push(balancer);
 
@@ -353,22 +389,31 @@ export function useCanvas() {
       }
 
       const nameText = new fabric.Text(`( ${sigData.fullName} )`, {
-        fontSize: fontSize, fontFamily: fontFamily,
-        originX: 'center', originY: 'top', top: currentInternalY, left: centerX
+        fontSize: fontSize,
+        fontFamily: fontFamily,
+        originX: 'center',
+        originY: 'top',
+        top: currentInternalY,
+        left: centerX
       });
       objects.push(nameText);
 
       currentInternalY += nameText.height + 15;
 
       if (sigData.position) {
-        const wrappedPos = (typeof wrapThaiText === 'function')
-          ? wrapThaiText(sigData.position, maxTextWidth, fontSize, fontFamily)
-          : sigData.position;
+        const wrappedPos =
+          typeof wrapThaiText === 'function'
+            ? wrapThaiText(sigData.position, maxTextWidth, fontSize, fontFamily)
+            : sigData.position;
 
         const bottomText = new fabric.Text(wrappedPos, {
-          fontSize: fontSize, fontFamily: fontFamily,
-          originX: 'center', originY: 'top', textAlign: 'center',
-          top: currentInternalY, left: centerX
+          fontSize: fontSize,
+          fontFamily: fontFamily,
+          originX: 'center',
+          originY: 'top',
+          textAlign: 'center',
+          top: currentInternalY,
+          left: centerX
         });
         objects.push(bottomText);
       }
@@ -379,9 +424,15 @@ export function useCanvas() {
       }
 
       const sigGroup = new fabric.Group(objects, {
-        left: dropX, top: sigTopY, originX: 'center', originY: 'top',
-        isSignatureBlock: true, linkedId: sharedLinkedId, sigData: sigData,
-        id: `signature_${sharedLinkedId}`, name: `กลุ่มชื่อ: ${sigData.fullName}`
+        left: dropX,
+        top: sigTopY,
+        originX: 'center',
+        originY: 'top',
+        isSignatureBlock: true,
+        linkedId: sharedLinkedId,
+        sigData: sigData,
+        id: `signature_${sharedLinkedId}`,
+        name: `กลุ่มชื่อ: ${sigData.fullName}`
       });
 
       canvas.value.add(sigGroup);
@@ -421,7 +472,9 @@ export function useCanvas() {
                 canvas.value.setActiveObject(innerTarget);
                 canvas.value.requestRenderAll();
               } else {
-                const sel = new fabric.ActiveSelection(objectsInSelection, { canvas: canvas.value });
+                const sel = new fabric.ActiveSelection(objectsInSelection, {
+                  canvas: canvas.value
+                });
                 canvas.value.setActiveObject(sel);
                 canvas.value.requestRenderAll();
               }
@@ -446,10 +499,14 @@ export function useCanvas() {
         imageUrl = `${protocol}//${hostname}:${backendPort}${imageUrl}`;
       }
 
-      fabric.Image.fromURL(imageUrl, (img, isError) => {
-        if (!isError && img) buildAndLinkSignatureGroup(img);
-        else buildAndLinkSignatureGroup();
-      }, { crossOrigin: 'anonymous' });
+      fabric.Image.fromURL(
+        imageUrl,
+        (img, isError) => {
+          if (!isError && img) buildAndLinkSignatureGroup(img);
+          else buildAndLinkSignatureGroup();
+        },
+        { crossOrigin: 'anonymous' }
+      );
     } else {
       buildAndLinkSignatureGroup();
     }
@@ -460,7 +517,7 @@ export function useCanvas() {
     const objects = canvas.value.getObjects();
     const pairs = {};
 
-    objects.forEach(obj => {
+    objects.forEach((obj) => {
       if (obj.linkedId) {
         if (!pairs[obj.linkedId]) pairs[obj.linkedId] = {};
         if (obj.isSignaturePrefix) pairs[obj.linkedId].prefix = obj;
@@ -468,7 +525,7 @@ export function useCanvas() {
       }
     });
 
-    Object.values(pairs).forEach(pair => {
+    Object.values(pairs).forEach((pair) => {
       if (pair.prefix && pair.group) {
         const GAP = pair.group.sigData?.signatureImage ? 10 : 30;
         linkSignatureBlocks(canvas.value, pair.prefix, pair.group, GAP);
@@ -478,19 +535,24 @@ export function useCanvas() {
 
   const addImageToCanvas = async (url, x = 100, y = 100) => {
     if (!canvas.value) return;
-    fabric.Image.fromURL(url, (img) => {
-      img.set({ id: uuidv4(), left: x, top: y });
-      img.scaleToWidth(200);
+    fabric.Image.fromURL(
+      url,
+      (img) => {
+        img.set({ id: uuidv4(), left: x, top: y });
+        img.scaleToWidth(200);
 
-      if (typeof _callbacks.forceUnlockObject === 'function') {
-        _callbacks.forceUnlockObject(img);
-      }
+        if (typeof _callbacks.forceUnlockObject === 'function') {
+          _callbacks.forceUnlockObject(img);
+        }
 
-      canvas.value.add(img);
-      canvas.value.setActiveObject(img);
-      if (typeof _callbacks.saveCurrentPageState === 'function') _callbacks.saveCurrentPageState();
-      saveHistory();
-    }, { crossOrigin: 'anonymous' });
+        canvas.value.add(img);
+        canvas.value.setActiveObject(img);
+        if (typeof _callbacks.saveCurrentPageState === 'function')
+          _callbacks.saveCurrentPageState();
+        saveHistory();
+      },
+      { crossOrigin: 'anonymous' }
+    );
   };
 
   const removeSelectedObject = () => {
@@ -503,7 +565,9 @@ export function useCanvas() {
     }
   };
 
-  const onDragStart = (e, key) => { e.dataTransfer.setData('variable', key); };
+  const onDragStart = (e, key) => {
+    e.dataTransfer.setData('variable', key);
+  };
   const onDrop = (e) => {
     const key = e.dataTransfer.getData('variable');
     if (key) addVariableToCanvas(key);
@@ -513,10 +577,12 @@ export function useCanvas() {
     if (!canvas || !pages) return;
 
     const pageObjectMap = new Map();
-    pages.forEach((page, index) => { pageObjectMap.set(index, []); });
+    pages.forEach((page, index) => {
+      pageObjectMap.set(index, []);
+    });
 
     const objects = [...canvas.getObjects()];
-    objects.forEach(obj => {
+    objects.forEach((obj) => {
       if (!obj.nodeId && obj.id !== 'page-bg' && obj.id !== 'page-bg-image') {
         canvas.remove(obj);
       }
@@ -525,7 +591,7 @@ export function useCanvas() {
     const allObjects = canvas.getObjects();
 
     let globalMaxWidth = 0;
-    pages.forEach(p => {
+    pages.forEach((p) => {
       const w = p.width || CANVAS_CONSTANTS.PAGE_WIDTH;
       if (w > globalMaxWidth) globalMaxWidth = w;
     });
@@ -557,10 +623,10 @@ export function useCanvas() {
 
       const pageIndex = Math.max(0, Math.min(targetPageIndex, pages.length - 1));
       if (pageTopY === 0 && pageIndex > 0) {
-        // If we fallback to last page due to bottom overflow, calculate real top
         let tmpOffset = 0;
         for (let i = 0; i < pageIndex; i++) {
-          tmpOffset += (pages[i]?.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
+          tmpOffset +=
+            (pages[i]?.height || CANVAS_CONSTANTS.PAGE_HEIGHT) + CANVAS_CONSTANTS.PAGE_GAP;
         }
         pageTopY = tmpOffset;
       }
@@ -586,7 +652,8 @@ export function useCanvas() {
     });
 
     return pages.map((page, index) => ({
-      ...page, objects: pageObjectMap.get(index) || []
+      ...page,
+      objects: pageObjectMap.get(index) || []
     }));
   };
 
@@ -608,11 +675,12 @@ export function useCanvas() {
       const allObjects = c.getObjects();
       const hiddenForCapture = [];
 
-      allObjects.forEach(obj => {
+      allObjects.forEach((obj) => {
         const center = obj.getCenterPoint();
         const objPageIndex = Math.floor(center.y / (P_H + GAP));
         const isWrongPage = objPageIndex !== pageIndex;
-        const isOverlay = ALL_OVERLAY_TYPES.includes(obj.type) &&
+        const isOverlay =
+          ALL_OVERLAY_TYPES.includes(obj.type) &&
           obj.id !== 'page-bg-image' &&
           obj.id !== 'page-bg';
 
@@ -636,7 +704,10 @@ export function useCanvas() {
           height: captureHeight
         });
       } catch (canvasError) {
-        console.warn(`Canvas taint detected on page ${pageIndex + 1}, using fallback:`, canvasError);
+        console.warn(
+          `Canvas taint detected on page ${pageIndex + 1}, using fallback:`,
+          canvasError
+        );
 
         try {
           const fallbackCanvas = document.createElement('canvas');
@@ -654,11 +725,12 @@ export function useCanvas() {
         }
       }
 
-      hiddenForCapture.forEach(obj => { obj.visible = true; });
+      hiddenForCapture.forEach((obj) => {
+        obj.visible = true;
+      });
       c.renderAll();
 
       return dataUrl && dataUrl.length > 100 ? dataUrl : null;
-
     } catch (error) {
       console.error(`Error capturing page ${pageIndex + 1}:`, error);
       return null;
@@ -672,7 +744,7 @@ export function useCanvas() {
 
     const objects = canvas.getObjects();
 
-    objects.forEach(obj => {
+    objects.forEach((obj) => {
       try {
         if (obj.clipPath) {
           if (obj.clipPath.dispose && typeof obj.clipPath.dispose === 'function') {
@@ -705,7 +777,6 @@ export function useCanvas() {
 
         cleanedCount++;
         memoryStats.objectsDestroyed++;
-
       } catch (cleanupError) {
         console.error('Error cleaning up object:', cleanupError);
       }
@@ -719,17 +790,22 @@ export function useCanvas() {
     canvas.value.requestRenderAll();
   };
 
-
-
-  const zoomIn = () => { zoomLevel.value = Math.min(3, zoomLevel.value + 0.1); };
-  const zoomOut = () => { zoomLevel.value = Math.max(0.1, zoomLevel.value - 0.1); };
-  const fitToScreen = () => { zoomLevel.value = 1; };
+  const zoomIn = () => {
+    zoomLevel.value = Math.min(3, zoomLevel.value + 0.1);
+  };
+  const zoomOut = () => {
+    zoomLevel.value = Math.max(0.1, zoomLevel.value - 0.1);
+  };
+  const fitToScreen = () => {
+    zoomLevel.value = 1;
+  };
 
   const bringForward = (objOrId) => {
     if (!canvas.value) return;
-    const obj = typeof objOrId === 'string'
-      ? canvas.value.getObjects().find(o => o.id === objOrId || o.nodeId === objOrId)
-      : objOrId;
+    const obj =
+      typeof objOrId === 'string'
+        ? canvas.value.getObjects().find((o) => o.id === objOrId || o.nodeId === objOrId)
+        : objOrId;
     if (obj) {
       canvas.value.bringForward(obj);
       saveHistory();
@@ -738,9 +814,10 @@ export function useCanvas() {
 
   const sendBackwards = (objOrId) => {
     if (!canvas.value) return;
-    const obj = typeof objOrId === 'string'
-      ? canvas.value.getObjects().find(o => o.id === objOrId || o.nodeId === objOrId)
-      : objOrId;
+    const obj =
+      typeof objOrId === 'string'
+        ? canvas.value.getObjects().find((o) => o.id === objOrId || o.nodeId === objOrId)
+        : objOrId;
     if (obj) {
       canvas.value.sendBackwards(obj);
       saveHistory();
@@ -749,9 +826,10 @@ export function useCanvas() {
 
   const bringToFront = (objOrId) => {
     if (!canvas.value) return;
-    const obj = typeof objOrId === 'string'
-      ? canvas.value.getObjects().find(o => o.id === objOrId || o.nodeId === objOrId)
-      : objOrId;
+    const obj =
+      typeof objOrId === 'string'
+        ? canvas.value.getObjects().find((o) => o.id === objOrId || o.nodeId === objOrId)
+        : objOrId;
     if (obj) {
       canvas.value.bringToFront(obj);
       saveHistory();
@@ -760,9 +838,10 @@ export function useCanvas() {
 
   const sendToBack = (objOrId) => {
     if (!canvas.value) return;
-    const obj = typeof objOrId === 'string'
-      ? canvas.value.getObjects().find(o => o.id === objOrId || o.nodeId === objOrId)
-      : objOrId;
+    const obj =
+      typeof objOrId === 'string'
+        ? canvas.value.getObjects().find((o) => o.id === objOrId || o.nodeId === objOrId)
+        : objOrId;
     if (obj) {
       canvas.value.sendToBack(obj);
       saveHistory();
@@ -803,7 +882,7 @@ export function useCanvas() {
         if (canvas) {
           const objects = canvas.getObjects();
 
-          objects.forEach(obj => {
+          objects.forEach((obj) => {
             if (obj._cacheContext) {
               obj._cacheContext = null;
             }
@@ -825,7 +904,9 @@ export function useCanvas() {
     return { startCleanup, stopCleanup };
   };
 
-  const setHistoryLock = (status) => { isHistoryLocked.value = status; };
+  const setHistoryLock = (status) => {
+    isHistoryLocked.value = status;
+  };
 
   const updateCanvasDimensions = () => {
     if (canvas.value) {
@@ -834,18 +915,15 @@ export function useCanvas() {
     }
   };
 
-  /**
-   * Dispose canvas and clean up all timers / listeners.
-   * Call this from onUnmounted to prevent memory leaks.
-   */
   const dispose = () => {
-    // Clear pending timers
-    if (saveHistoryTimeout) { clearTimeout(saveHistoryTimeout); saveHistoryTimeout = null; }
+    if (saveHistoryTimeout) {
+      clearTimeout(saveHistoryTimeout);
+      saveHistoryTimeout = null;
+    }
 
-    // Detach all Fabric events and destroy the canvas
     if (canvas.value) {
       try {
-        canvas.value.off();  // remove all event listeners
+        canvas.value.off();
         canvas.value.dispose();
       } catch (e) {
         console.warn('Canvas dispose error (non-critical):', e);
@@ -853,11 +931,9 @@ export function useCanvas() {
       canvas.value = null;
     }
 
-    // Flush history to free memory
     historyStack.value = [];
     redoStack.value = [];
 
-    // Clear callbacks
     _callbacks.saveCurrentPageState = null;
     _callbacks.forceUnlockObject = null;
     _callbacks.renderAllPages = null;
@@ -874,7 +950,7 @@ export function useCanvas() {
     resetHistory,
     saveHistory,
     setHistoryLock,
-    setHistoryContext: () => { },
+    setHistoryContext: () => {},
     setCallbacks,
     canUndo: computed(() => historyStack.value.length > 1),
     canRedo: computed(() => redoStack.value.length > 0),

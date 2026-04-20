@@ -6,6 +6,4 @@ import EditorView from './views/EditorView.vue';
   <EditorView />
 </template>
 
-<style>
-/* Global styles are now in style.css */
-</style>
+<style></style>

@@ -2,38 +2,80 @@
   <aside class="sidebar-container" @mouseleave="handleMouseLeave">
     <div class="sidebar-rail">
       <div class="rail-items">
-        <button @click="handleTabClick('templates')" @mouseenter="handleMouseEnter('templates')"
-          :class="['rail-btn', { active: activeTab === 'templates' && isOpen, pinned: isPinned && activeTab === 'templates' }]">
+        <button
+          @click="handleTabClick('templates')"
+          @mouseenter="handleMouseEnter('templates')"
+          :class="[
+            'rail-btn',
+            {
+              active: activeTab === 'templates' && isOpen,
+              pinned: isPinned && activeTab === 'templates'
+            }
+          ]"
+        >
           <span class="rail-icon icon-dashboard"></span>
           <span class="rail-label">เทมเพลต</span>
         </button>
 
-        <button @click="handleTabClick('pages')" @mouseenter="handleMouseEnter('pages')"
-          :class="['rail-btn', { active: activeTab === 'pages' && isOpen, pinned: isPinned && activeTab === 'pages' }]">
+        <button
+          @click="handleTabClick('pages')"
+          @mouseenter="handleMouseEnter('pages')"
+          :class="[
+            'rail-btn',
+            { active: activeTab === 'pages' && isOpen, pinned: isPinned && activeTab === 'pages' }
+          ]"
+        >
           <span class="rail-icon icon-page"></span>
           <span class="rail-label">หน้า</span>
         </button>
 
-        <button @click="handleTabClick('data')" @mouseenter="handleMouseEnter('data')"
-          :class="['rail-btn', { active: activeTab === 'data' && isOpen, pinned: isPinned && activeTab === 'data' }]">
+        <button
+          @click="handleTabClick('data')"
+          @mouseenter="handleMouseEnter('data')"
+          :class="[
+            'rail-btn',
+            { active: activeTab === 'data' && isOpen, pinned: isPinned && activeTab === 'data' }
+          ]"
+        >
           <span class="rail-icon icon-data"></span>
           <span class="rail-label">ข้อมูล</span>
         </button>
 
-        <button @click="handleTabClick('layers')" @mouseenter="handleMouseEnter('layers')"
-          :class="['rail-btn', { active: activeTab === 'layers' && isOpen, pinned: isPinned && activeTab === 'layers' }]">
+        <button
+          @click="handleTabClick('layers')"
+          @mouseenter="handleMouseEnter('layers')"
+          :class="[
+            'rail-btn',
+            { active: activeTab === 'layers' && isOpen, pinned: isPinned && activeTab === 'layers' }
+          ]"
+        >
           <span class="rail-icon icon-layers"></span>
           <span class="rail-label">เลเยอร์</span>
         </button>
 
-        <button @click="handleTabClick('assets')" @mouseenter="handleMouseEnter('assets')"
-          :class="['rail-btn', { active: activeTab === 'assets' && isOpen, pinned: isPinned && activeTab === 'assets' }]">
+        <button
+          @click="handleTabClick('assets')"
+          @mouseenter="handleMouseEnter('assets')"
+          :class="[
+            'rail-btn',
+            { active: activeTab === 'assets' && isOpen, pinned: isPinned && activeTab === 'assets' }
+          ]"
+        >
           <span class="rail-icon icon-image"></span>
           <span class="rail-label">รูปภาพ</span>
         </button>
 
-        <button @click="handleTabClick('project')" @mouseenter="handleMouseEnter('project')"
-          :class="['rail-btn', { active: activeTab === 'project' && isOpen, pinned: isPinned && activeTab === 'project' }]">
+        <button
+          @click="handleTabClick('project')"
+          @mouseenter="handleMouseEnter('project')"
+          :class="[
+            'rail-btn',
+            {
+              active: activeTab === 'project' && isOpen,
+              pinned: isPinned && activeTab === 'project'
+            }
+          ]"
+        >
           <span class="rail-icon icon-project"></span>
           <span class="rail-label">โปรเจกต์</span>
         </button>
@@ -42,7 +84,6 @@
 
     <div class="sidebar-panel" :class="{ collapsed: !isOpen }">
       <div class="panel-header">
-
         <div class="panel-header-title" v-if="activeTab === 'templates'">
           <span class="panel-header-icon icon-dashboard-active"></span>
           <h3 class="panel-header-text">จัดการเทมเพลต</h3>
@@ -76,23 +117,37 @@
       <div class="panel-content">
         <div v-if="activeTab === 'pages'" class="tab-pane-pages">
           <div class="pages-list" @mouseleave="clearDragState">
-            <div v-for="(page, index) in pages" :key="page.id" :class="[
-              'page-item-sidebar',
-              {
-                active: isOpen && currentPageIndex === index,
-                disabled: !isCanvasReady,
-                dragging: draggedPageIndex === index,
-                'drag-target-top': dragOverIndex === index && dragPosition === 'top',
-                'drag-target-bottom': dragOverIndex === index && dragPosition === 'bottom'
-              }
-            ]" draggable="true" @dragstart="onPageDragStart($event, index)"
-              @dragover.prevent="onPageDragOver($event, index)" @drop="onPageDrop($event, index)"
-              @dragend="onPageDragEnd" @click="isCanvasReady ? $emit('page-click', index) : null">
+            <div
+              v-for="(page, index) in pages"
+              :key="page.id"
+              :class="[
+                'page-item-sidebar',
+                {
+                  active: isOpen && currentPageIndex === index,
+                  disabled: !isCanvasReady,
+                  dragging: draggedPageIndex === index,
+                  'drag-target-top': dragOverIndex === index && dragPosition === 'top',
+                  'drag-target-bottom': dragOverIndex === index && dragPosition === 'bottom'
+                }
+              ]"
+              draggable="true"
+              @dragstart="onPageDragStart($event, index)"
+              @dragover.prevent="onPageDragOver($event, index)"
+              @drop="onPageDrop($event, index)"
+              @dragend="onPageDragEnd"
+              @click="isCanvasReady ? $emit('page-click', index) : null"
+            >
               <div class="page-entry">
                 <div class="page-thumb">
-                  <img :src="page.background || getDefaultPageImage(index)" :alt="`Page ${index + 1}`" />
-                  <button class="del-page-btn" @click.stop="isCanvasReady ? $emit('delete-page', index) : null"
-                    v-if="pages.length > 1">
+                  <img
+                    :src="page.background || getDefaultPageImage(index)"
+                    :alt="`Page ${index + 1}`"
+                  />
+                  <button
+                    class="del-page-btn"
+                    @click.stop="isCanvasReady ? $emit('delete-page', index) : null"
+                    v-if="pages.length > 1"
+                  >
                     <span class="icon-delete"></span>
                   </button>
                 </div>
@@ -105,10 +160,12 @@
         </div>
 
         <div v-if="activeTab === 'templates'" class="tab-pane-templates">
-
           <div class="history-section">
             <div class="btn-history-header">ประวัติรายงาน</div>
-            <button @click="$emit('open-history')" :class="['btn-history', { 'active': isHistoryOpen }]">
+            <button
+              @click="$emit('open-history')"
+              :class="['btn-history', { active: isHistoryOpen }]"
+            >
               <span class="btn-history-icon"></span>
               <span class="btn-history-text">ประวัติการสร้างรายงาน</span>
             </button>
@@ -116,27 +173,48 @@
 
           <div class="template-save-pane">
             <div class="save-pane-inner">
-
               <div class="existing-templates-list">
-                <div v-if="templates.length === 0" class="hint" style="margin-top: 0; margin-bottom: 8px;">
-                  ยังไม่มีเทมเพลตที่บันทึกไว้</div>
+                <div
+                  v-if="templates.length === 0"
+                  class="hint"
+                  style="margin-top: 0; margin-bottom: 8px"
+                >
+                  ยังไม่มีเทมเพลตที่บันทึกไว้
+                </div>
                 <div class="template-list">
                   <div v-for="t in templates" :key="t._id" class="template-item-row">
-                    <span @click="$emit('load-template', t)" :class="['t-name', { disabled: !isCanvasReady }]">
+                    <span
+                      @click="$emit('load-template', t)"
+                      :class="['t-name', { disabled: !isCanvasReady }]"
+                    >
                       {{ sanitizeTemplateName(t.name) }}
                     </span>
-                    <button @click="isCanvasReady ? $emit('delete-template', t._id) : null" class="btn-del"
-                      :disabled="!isCanvasReady"><span class="icon-delete"></span></button>
+                    <button
+                      @click="isCanvasReady ? $emit('delete-template', t._id) : null"
+                      class="btn-del"
+                      :disabled="!isCanvasReady"
+                    >
+                      <span class="icon-delete"></span>
+                    </button>
                   </div>
                 </div>
               </div>
 
               <div class="template-label-small">ชื่อเทมเพลต / ชื่องาน:</div>
 
-              <input :value="templateName" @input="$emit('update:templateName', $event.target.value)"
-                placeholder="ตั้งชื่อเทมเพลต..." :disabled="isPreviewMode" class="template-name-input" />
+              <input
+                :value="templateName"
+                @input="$emit('update:templateName', $event.target.value)"
+                placeholder="ตั้งชื่อเทมเพลต..."
+                :disabled="isPreviewMode"
+                class="template-name-input"
+              />
 
-              <button @click="$emit('save-template')" class="template-save-btn" :disabled="isPreviewMode">
+              <button
+                @click="$emit('save-template')"
+                class="template-save-btn"
+                :disabled="isPreviewMode"
+              >
                 <span class="template-save-text">บันทึกเป็นแม่แบบ</span>
               </button>
             </div>
@@ -145,68 +223,89 @@
           <button v-if="currentTemplateId" @click="$emit('reset-canvas')" class="btn-new">
             + สร้างหน้ากระดาษใหม่
           </button>
-
         </div>
 
         <div v-if="activeTab === 'data'" class="tab-pane-data">
-
           <div class="data-section">
             <h4 class="label-small">ข้อความทั่วไป:</h4>
-            <button @click="handleAddCustomText" class="var-btn" :disabled="isPreviewMode" draggable="true"
-              @dragstart="onCustomTextDragStart($event)">
+            <button
+              @click="handleAddCustomText"
+              class="var-btn"
+              :disabled="isPreviewMode"
+              draggable="true"
+              @dragstart="onCustomTextDragStart($event)"
+            >
               <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
               <span class="var-btn-text">ข้อความอิสระ (พิมพ์เอง)</span>
             </button>
           </div>
 
-
           <div class="data-section" v-if="signatories.length > 0">
             <h4 class="label-small">บล็อกลายเซ็น:</h4>
             <div class="var-list">
-              <button v-for="sig in signatories" :key="sig.id" draggable="true"
-                @dragstart="onSignatureDragStart($event, sig)" @click="$emit('add-signature-block', sig)"
-                class="var-btn" :disabled="isPreviewMode"
-                :title="sig.position ? `${sig.fullName} (${sig.position})` : sig.fullName">
-
+              <button
+                v-for="sig in signatories"
+                :key="sig.id"
+                draggable="true"
+                @dragstart="onSignatureDragStart($event, sig)"
+                @click="$emit('add-signature-block', sig)"
+                class="var-btn"
+                :disabled="isPreviewMode"
+                :title="sig.position ? `${sig.fullName} (${sig.position})` : sig.fullName"
+              >
                 <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
                 <span class="var-btn-text">
                   {{ sig.position ? `${sig.fullName} (${sig.position})` : sig.fullName }}
                 </span>
-
               </button>
             </div>
           </div>
 
-          <div class="divider-line" style="margin-top: 15px;"></div>
+          <div class="divider-line" style="margin-top: 15px"></div>
 
           <div class="data-section">
             <h4 class="label-small">เลือกชุดข้อมูล:</h4>
             <div class="var-list">
               <div v-for="(group, category) in groupedVariables" :key="category" class="var-group">
                 <h5 class="category-header">{{ category }}</h5>
-                <button v-for="v in group" :key="v.key" @click="$emit('add-variable', v.key)" draggable="true"
-                  @dragstart="onDragStart($event, v.key)" class="var-btn" :disabled="isPreviewMode">
+                <button
+                  v-for="v in group"
+                  :key="v.key"
+                  @click="$emit('add-variable', v.key)"
+                  draggable="true"
+                  @dragstart="onDragStart($event, v.key)"
+                  class="var-btn"
+                  :disabled="isPreviewMode"
+                >
                   <div class="var-btn-icon-holder"><span class="var-btn-icon">{ }</span></div>
                   <span class="var-btn-text">{{ v.label }}</span>
                 </button>
               </div>
             </div>
           </div>
-
-
         </div>
 
-        <div v-if="activeTab === 'layers'" class="tab-pane-layers"
-          style="display: flex; flex-direction: column; align-items: center; padding-top: 15px;">
-          <div class="layers-section" style="width: 298px;">
+        <div
+          v-if="activeTab === 'layers'"
+          class="tab-pane-layers"
+          style="display: flex; flex-direction: column; align-items: center; padding-top: 15px"
+        >
+          <div class="layers-section" style="width: 298px">
             <div class="layers-list">
-
-              <div v-if="!layers || layers.length === 0" class="hint" style="text-align: center; margin-top: 10px;">
+              <div
+                v-if="!layers || layers.length === 0"
+                class="hint"
+                style="text-align: center; margin-top: 10px"
+              >
                 ไม่มีวัตถุในหน้านี้
               </div>
 
-              <button v-for="layer in layers" :key="layer.id" :class="['layer-item-btn', { active: layer.isActive }]"
-                @click="$emit('select-layer', layer.rawObject)">
+              <button
+                v-for="layer in layers"
+                :key="layer.id"
+                :class="['layer-item-btn', { active: layer.isActive }]"
+                @click="$emit('select-layer', layer.rawObject)"
+              >
                 {{ layer.label }} (ชั้นที่ {{ layer.index }})
               </button>
             </div>
@@ -214,28 +313,42 @@
         </div>
 
         <div v-if="activeTab === 'assets'" class="tab-pane">
-          <AssetManager :is-preview-mode="isPreviewMode" @select-asset="$emit('add-image', $event)" />
+          <AssetManager
+            :is-preview-mode="isPreviewMode"
+            @select-asset="$emit('add-image', $event)"
+          />
         </div>
 
         <div v-if="activeTab === 'project'" class="tab-pane-project">
-
           <div class="project-section">
             <h4 class="label">นำเข้าโปรเจกต์ / PDF / รูปภาพ</h4>
             <div class="upload-container">
-              <button class="btn-upload-dashed" @click.stop="$emit('import-workspace')" :disabled="!isCanvasReady">
+              <button
+                class="btn-upload-dashed"
+                @click.stop="$emit('import-workspace')"
+                :disabled="!isCanvasReady"
+              >
                 <span class="btn-upload-dashed-icon"></span>
                 <span class="btn-upload-dashed-text">นำเข้าโปรเจกต์</span>
               </button>
-              <button class="btn-upload-dashed" style="margin-top: 8px; border-color: #2196f3; background-image: none;"
-                @click.stop="promptForUrl" :disabled="!isCanvasReady">
-                <span class="btn-upload-dashed-text" style="color: #2196f3;">นำเข้าจาก URL</span>
+              <button
+                class="btn-upload-dashed"
+                style="margin-top: 8px; border-color: #2196f3; background-image: none"
+                @click.stop="promptForUrl"
+                :disabled="!isCanvasReady"
+              >
+                <span class="btn-upload-dashed-text" style="color: #2196f3">นำเข้าจาก URL</span>
               </button>
             </div>
             <p class="hint-text">รองรับไฟล์ : Json, Hybrid, PDF, รูปภาพ</p>
           </div>
 
           <div class="project-section">
-            <button @click="$emit('save-report')" class="btn-project-save" :disabled="isPreviewMode">
+            <button
+              @click="$emit('save-report')"
+              class="btn-project-save"
+              :disabled="isPreviewMode"
+            >
               <span class="btn-project-save-text">บันทึกโปรเจกต์</span>
             </button>
             <p class="hint-text">บันทึกลงประวัติและไฟล์ Hybrid PDF</p>
@@ -243,7 +356,10 @@
           <div class="project-section">
             <h4 class="label">คุณภาพ PDF:</h4>
             <div class="radio-group-list">
-              <div :class="['radio-card', { active: pdfQuality == '1' }]" @click="$emit('update:pdfQuality', '1')">
+              <div
+                :class="['radio-card', { active: pdfQuality == '1' }]"
+                @click="$emit('update:pdfQuality', '1')"
+              >
                 <div class="radio-circle">
                   <div class="radio-inner" v-if="pdfQuality == '1'"></div>
                 </div>
@@ -253,7 +369,10 @@
                 </div>
                 <div class="radio-badge">1x</div>
               </div>
-              <div :class="['radio-card', { active: pdfQuality == '2' }]" @click="$emit('update:pdfQuality', '2')">
+              <div
+                :class="['radio-card', { active: pdfQuality == '2' }]"
+                @click="$emit('update:pdfQuality', '2')"
+              >
                 <div class="radio-circle">
                   <div class="radio-inner" v-if="pdfQuality == '2'"></div>
                 </div>
@@ -263,7 +382,10 @@
                 </div>
                 <div class="radio-badge">2x</div>
               </div>
-              <div :class="['radio-card', { active: pdfQuality == '3' }]" @click="$emit('update:pdfQuality', '3')">
+              <div
+                :class="['radio-card', { active: pdfQuality == '3' }]"
+                @click="$emit('update:pdfQuality', '3')"
+              >
                 <div class="radio-circle">
                   <div class="radio-inner" v-if="pdfQuality == '3'"></div>
                 </div>
@@ -273,7 +395,10 @@
                 </div>
                 <div class="radio-badge">3x</div>
               </div>
-              <div :class="['radio-card', { active: pdfQuality == '4' }]" @click="$emit('update:pdfQuality', '4')">
+              <div
+                :class="['radio-card', { active: pdfQuality == '4' }]"
+                @click="$emit('update:pdfQuality', '4')"
+              >
                 <div class="radio-circle">
                   <div class="radio-inner" v-if="pdfQuality == '4'"></div>
                 </div>
@@ -289,8 +414,10 @@
           <div class="project-section">
             <h4 class="label">รูปแบบการส่งออก (Engine):</h4>
             <div class="radio-group-list">
-              <div :class="['radio-card', { active: pdfMode == 'flatten' }]"
-                @click="$emit('update:pdfMode', 'flatten')">
+              <div
+                :class="['radio-card', { active: pdfMode == 'flatten' }]"
+                @click="$emit('update:pdfMode', 'flatten')"
+              >
                 <div class="radio-circle">
                   <div class="radio-inner" v-if="pdfMode == 'flatten'"></div>
                 </div>
@@ -299,7 +426,10 @@
                   <div class="radio-subtitle">ถูกต้อง100%</div>
                 </div>
               </div>
-              <div :class="['radio-card', { active: pdfMode == 'vector' }]" @click="$emit('update:pdfMode', 'vector')">
+              <div
+                :class="['radio-card', { active: pdfMode == 'vector' }]"
+                @click="$emit('update:pdfMode', 'vector')"
+              >
                 <div class="radio-circle">
                   <div class="radio-inner" v-if="pdfMode == 'vector'"></div>
                 </div>
@@ -311,8 +441,12 @@
             </div>
           </div>
 
-          <div class="project-section" style="margin-top: 10px; margin-bottom: 30px;">
-            <button @click="$emit('generate-pdf')" class="btn-print-outline" :disabled="isGenerating || isPreviewMode">
+          <div class="project-section" style="margin-top: 10px; margin-bottom: 30px">
+            <button
+              @click="$emit('generate-pdf')"
+              class="btn-print-outline"
+              :disabled="isGenerating || isPreviewMode"
+            >
               <span class="btn-print-text">
                 {{ isGenerating ? 'กำลังสร้าง PDF...' : 'ส่งออกเป็นไฟล์ PDF' }}
               </span>
@@ -321,9 +455,20 @@
 
           <div class="danger-zone">
             <div class="danger-zone-title">พื้นที่อันตราย</div>
-            <button @click="$emit('reset-project')" class="btn-reset-project" title="ล้างข้อมูลการแก้ไขทั้งหมด">
-              <svg class="reset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
+            <button
+              @click="$emit('reset-project')"
+              class="btn-reset-project"
+              title="ล้างข้อมูลการแก้ไขทั้งหมด"
+            >
+              <svg
+                class="reset-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
                 <path d="M3 3v5h5"></path>
               </svg>
@@ -331,23 +476,34 @@
             </button>
             <p class="danger-hint">การกระทำนี้จะล้างการแก้ไขที่ยังไม่ได้บันทึกทั้งหมด</p>
           </div>
-
         </div>
       </div>
 
       <div class="panel-footer" v-if="activeTab === 'pages'">
         <div class="add-page-actions-sidebar">
-          <button class="add-pg-btn" @click="isCanvasReady ? $emit('add-page') : null" :disabled="!isCanvasReady">
+          <button
+            class="add-pg-btn"
+            @click="isCanvasReady ? $emit('add-page') : null"
+            :disabled="!isCanvasReady"
+          >
             + เพิ่มหน้าว่างใหม่
           </button>
-          <input type="file" ref="appendInput" @change="onAppendFileChange"
-            accept="application/pdf, image/jpeg, image/png, image/gif, image/webp" style="display: none" />
-          <button class="add-pg-btn secondary" @click="triggerAppendUpload" :disabled="!isCanvasReady">
+          <input
+            type="file"
+            ref="appendInput"
+            @change="onAppendFileChange"
+            accept="application/pdf, image/jpeg, image/png, image/gif, image/webp"
+            style="display: none"
+          />
+          <button
+            class="add-pg-btn secondary"
+            @click="triggerAppendUpload"
+            :disabled="!isCanvasReady"
+          >
             + นำเข้าหน้าใหม่
           </button>
         </div>
       </div>
-
     </div>
   </aside>
 </template>
@@ -358,7 +514,7 @@ import apiService from '../services/apiService';
 
 const sanitizeTemplateName = (name) => {
   if (!name) return 'Untitled Template';
-  return name.replace(/\.[^/.]+$/, "");
+  return name.replace(/\.[^/.]+$/, '');
 };
 
 const signatories = ref([]);
@@ -443,10 +599,10 @@ const props = defineProps({
 });
 
 const groupedVariables = ref({
-  "ข้อมูลเอกสาร": [
-    { key: "name", label: "ชื่อ" },
-    { key: "date", label: "วันที่" },
-    { key: "position", label: "ตำแหน่ง" }
+  ข้อมูลเอกสาร: [
+    { key: 'name', label: 'ชื่อ' },
+    { key: 'date', label: 'วันที่' },
+    { key: 'position', label: 'ตำแหน่ง' }
   ]
 });
 
@@ -549,7 +705,6 @@ const onCustomTextDragStart = (e) => {
   e.dataTransfer.setData('customText', 'true');
   e.dataTransfer.effectAllowed = 'copy';
 };
-
 </script>
 
 <script>
@@ -574,8 +729,8 @@ export default {
 .sidebar-rail {
   width: 85px;
   height: 100%;
-  background: #FFFFFF;
-  border-right: 1px solid #F3F3F3;
+  background: #ffffff;
+  border-right: 1px solid #f3f3f3;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -609,7 +764,7 @@ export default {
 
 .rail-btn.active,
 .rail-btn.pinned {
-  background: #FFF5F8;
+  background: #fff5f8;
 }
 
 .rail-icon {
@@ -653,21 +808,27 @@ export default {
 }
 
 .rail-label {
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin-top: 2px;
 }
 
 .rail-btn.active .rail-label {
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #F65189;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #f65189;
 }
 
 .sidebar-panel {
   width: 329px;
   height: 100%;
-  background: #FFFFFF;
-  border: 1px solid #F3F3F3;
+  background: #ffffff;
+  border: 1px solid #f3f3f3;
   display: flex;
   flex-direction: column;
   z-index: 51;
@@ -686,7 +847,7 @@ export default {
   align-items: center;
   justify-content: space-between;
   padding: 0 17px;
-  border-bottom: 1px solid #F3F3F3;
+  border-bottom: 1px solid #f3f3f3;
 }
 
 .panel-header-title {
@@ -716,7 +877,10 @@ export default {
 }
 
 .panel-header-text {
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin: 0;
 }
@@ -738,7 +902,7 @@ export default {
 
 .panel-footer {
   width: 100%;
-  background: #FFFFFF;
+  background: #ffffff;
   padding: 15px 0 25px 0;
   display: flex;
   justify-content: center;
@@ -764,8 +928,8 @@ export default {
 .page-item-sidebar {
   width: 298px;
   height: 108px;
-  background: #F9F9F9 0% 0% no-repeat padding-box;
-  border: 1px solid #F3F3F3;
+  background: #f9f9f9 0% 0% no-repeat padding-box;
+  border: 1px solid #f3f3f3;
   border-radius: 6px;
   margin-bottom: 14px;
   cursor: pointer;
@@ -777,8 +941,8 @@ export default {
 }
 
 .page-item-sidebar.active {
-  background: #F651891A 0% 0% no-repeat padding-box;
-  border: 1px solid #FFD5E3;
+  background: #f651891a 0% 0% no-repeat padding-box;
+  border: 1px solid #ffd5e3;
 }
 
 .page-entry {
@@ -792,8 +956,8 @@ export default {
   position: relative;
   width: 70px;
   height: 92px;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #F6F6F6;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #f6f6f6;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -811,7 +975,7 @@ export default {
   position: absolute;
   top: -8px;
   right: -8px;
-  background: #E74C3C;
+  background: #e74c3c;
   border: none;
   border-radius: 50%;
   width: 24px;
@@ -831,12 +995,15 @@ export default {
 }
 
 .del-page-btn:hover {
-  background: #C0392B;
+  background: #c0392b;
 }
 
 .page-title {
   text-align: left;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   color: #000000;
 }
@@ -851,15 +1018,18 @@ export default {
 .add-pg-btn {
   width: 298px;
   height: 46px;
-  background: #F65189 0% 0% no-repeat padding-box;
+  background: #f65189 0% 0% no-repeat padding-box;
   border-radius: 6px;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: left;
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #FFFFFF;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #ffffff;
   cursor: pointer;
   transition: opacity 0.2s;
 }
@@ -874,13 +1044,13 @@ export default {
 }
 
 .add-pg-btn.secondary {
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #F65189;
-  color: #F65189;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #f65189;
+  color: #f65189;
 }
 
 .add-pg-btn.secondary:hover:not(:disabled) {
-  background: #FFF5F8;
+  background: #fff5f8;
   opacity: 1;
 }
 
@@ -890,11 +1060,11 @@ export default {
 }
 
 .page-item-sidebar.drag-target-top {
-  border-top: 3px solid #F65189;
+  border-top: 3px solid #f65189;
 }
 
 .page-item-sidebar.drag-target-bottom {
-  border-bottom: 3px solid #F65189;
+  border-bottom: 3px solid #f65189;
 }
 
 .tab-pane-templates {
@@ -912,7 +1082,10 @@ export default {
   width: 81px;
   height: 26px;
   text-align: left;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin-bottom: 9px;
   white-space: nowrap;
@@ -921,8 +1094,8 @@ export default {
 .btn-history {
   width: 259px;
   height: 40px;
-  background: #FFFFFF;
-  border: 1px solid #F65189;
+  background: #ffffff;
+  border: 1px solid #f65189;
   border-radius: 5px;
   display: flex;
   align-items: center;
@@ -940,15 +1113,18 @@ export default {
 }
 
 .btn-history-text {
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #F65189;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #f65189;
 }
 
 .template-save-pane {
   width: 298px;
   min-height: 192px;
-  background: #F9F9F9 0% 0% no-repeat padding-box;
-  border: 1px solid #E8E8E8;
+  background: #f9f9f9 0% 0% no-repeat padding-box;
+  border: 1px solid #e8e8e8;
   border-radius: 5px;
   margin-top: 18px;
   display: flex;
@@ -976,7 +1152,10 @@ export default {
 }
 
 .template-item-title {
-  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin-bottom: 5px;
 }
@@ -985,7 +1164,10 @@ export default {
   width: 120px;
   height: 24px;
   text-align: left;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin-top: 0px;
 }
@@ -994,7 +1176,10 @@ export default {
   width: 70px;
   height: 20px;
   text-align: left;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin-top: 0px;
   margin-bottom: 15px;
@@ -1003,25 +1188,28 @@ export default {
 .template-name-input {
   width: 268px;
   height: 46px;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #E3E3E3;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #e3e3e3;
   border-radius: 5px;
   margin-top: 6px;
   padding: 0 13px;
   text-align: left;
-  font: normal normal normal 14px/18px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 14px/18px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   box-sizing: border-box;
 }
 
 .template-name-input::placeholder {
-  color: #BEBEBE;
+  color: #bebebe;
 }
 
 .template-save-btn {
   width: 268px;
   height: 46px;
-  background: #F65189 0% 0% no-repeat padding-box;
+  background: #f65189 0% 0% no-repeat padding-box;
   border-radius: 5px;
   border: none;
   margin-top: 14px;
@@ -1039,13 +1227,19 @@ export default {
 .template-save-text {
   height: 24px;
   text-align: left;
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #FFFFFF;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #ffffff;
 }
 
 .t-name {
   text-align: left;
-  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   cursor: pointer;
   white-space: nowrap;
@@ -1068,7 +1262,7 @@ export default {
 }
 
 .btn-del {
-  background: #E74C3C;
+  background: #e74c3c;
   border: none;
   border-radius: 50%;
   width: 23px;
@@ -1095,7 +1289,6 @@ export default {
   background-size: contain;
 }
 
-
 .tab-pane-data {
   display: flex;
   flex-direction: column;
@@ -1110,13 +1303,16 @@ export default {
 .data-section:first-child {
   padding-bottom: 18px;
   margin-bottom: 15px;
-  border-bottom: 1px solid #F3F3F3;
+  border-bottom: 1px solid #f3f3f3;
 }
 
 .label {
   text-align: left;
-  font: "TH Sarabun New", "Sarabun", sans-serif;
-  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font: 'TH Sarabun New', 'Sarabun', sans-serif;
+  font:
+    normal normal normal 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin: 0 0 10px 0;
   display: block;
@@ -1124,7 +1320,10 @@ export default {
 
 .category-header {
   text-align: left;
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   opacity: 1;
   margin: 10px 0 10px 0;
@@ -1145,20 +1344,22 @@ export default {
 .var-btn {
   width: 298px;
   height: 46px;
-  background: #FFF9FB 0% 0% no-repeat padding-box;
-  border: 1px solid #FFD5E3;
+  background: #fff9fb 0% 0% no-repeat padding-box;
+  border: 1px solid #ffd5e3;
   border-radius: 6px;
   display: flex;
   align-items: center;
   padding: 0 8px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .var-btn:hover:not(:disabled) {
-  background: #FFF9FB 0% 0% no-repeat padding-box;
-  border: 1px solid #FFD5E3;
+  background: #fff9fb 0% 0% no-repeat padding-box;
+  border: 1px solid #ffd5e3;
   transform: translateY(-2px);
   box-shadow: 0 4px 6px rgba(246, 81, 137, 0.06);
 }
@@ -1166,7 +1367,7 @@ export default {
 .var-btn-icon-holder {
   width: 35px;
   height: 35px;
-  background: #FFDFE9 0% 0% no-repeat padding-box;
+  background: #ffdfe9 0% 0% no-repeat padding-box;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -1176,12 +1377,18 @@ export default {
 }
 
 .var-btn-icon {
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #F65189;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #f65189;
 }
 
 .var-btn-text {
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   text-align: left;
   white-space: nowrap;
@@ -1278,8 +1485,8 @@ export default {
   width: 298px;
   height: 46px;
   margin-top: 17px;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px dashed #F65189;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px dashed #f65189;
   border-radius: 5px;
   opacity: 1;
   display: flex;
@@ -1287,13 +1494,16 @@ export default {
   justify-content: center;
   cursor: pointer;
   text-align: center;
-  font: normal normal bold 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #F65189;
+  font:
+    normal normal bold 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #f65189;
   transition: all 0.2s ease;
 }
 
 .btn-new:hover {
-  background: #FFF5F8;
+  background: #fff5f8;
 }
 
 .btn-upload {
@@ -1335,23 +1545,24 @@ select {
 }
 
 .btn-history:hover {
-  background: #FFF5F8;
+  background: #fff5f8;
 }
 
 .btn-history.active {
-  background: #F65189;
+  background: #f65189;
 }
 
 .btn-history.active .btn-history-icon {
-  background: transparent url('../assets/icons/history_white.png') center/contain no-repeat;
+  background: transparent url('../assets/icons/history.png') center/contain no-repeat;
+  filter: brightness(0) invert(1);
 }
 
 .btn-history.active .btn-history-text {
-  color: #FFFFFF;
+  color: #ffffff;
 }
 
 .template-item-row:hover .t-name {
-  color: #F65189;
+  color: #f65189;
   text-decoration: underline;
 }
 
@@ -1372,7 +1583,6 @@ select {
   background-image: url('../assets/icons/image-active.png');
 }
 
-
 .tab-pane-project {
   display: flex;
   flex-direction: column;
@@ -1391,7 +1601,7 @@ select {
 .btn-upload-dashed {
   width: 298px;
   height: 46px;
-  background-color: #F8F9FA;
+  background-color: #f8f9fa;
   background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='5' ry='5' stroke='%23DEE2E6' stroke-width='2.5' stroke-dasharray='5, 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
   border-radius: 6px;
   border: none;
@@ -1404,7 +1614,7 @@ select {
 }
 
 .btn-upload-dashed:hover:not(:disabled) {
-  background-color: #F1F3F5;
+  background-color: #f1f3f5;
 }
 
 .btn-upload-dashed-icon {
@@ -1438,28 +1648,36 @@ select {
 }
 
 .btn-upload-dashed-text {
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #546267;
 }
 
 .hint-text {
   text-align: left;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #A4A4A4;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #a4a4a4;
   margin: 6px 0 0 0;
 }
 
 .btn-project-save {
   width: 298px;
   height: 46px;
-  background: #F65189 0% 0% no-repeat padding-box;
+  background: #f65189 0% 0% no-repeat padding-box;
   border-radius: 6px;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .btn-project-save:hover:not(:disabled) {
@@ -1468,14 +1686,17 @@ select {
 }
 
 .btn-project-save-text {
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #FFFFFF;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #ffffff;
 }
 
 .divider-line {
   width: 298px;
   height: 1px;
-  background: #F3F3F3;
+  background: #f3f3f3;
   margin-bottom: 25px;
 }
 
@@ -1488,8 +1709,8 @@ select {
 .radio-card {
   width: 298px;
   height: 62px;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #E3E3E3;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #e3e3e3;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -1505,19 +1726,19 @@ select {
 }
 
 .radio-card:hover:not(.active) {
-  border-color: #FFD5E3;
+  border-color: #ffd5e3;
 }
 
 .radio-card.active {
-  background: #FFF9FB 0% 0% no-repeat padding-box;
-  border: 1px solid #FFD5E3;
+  background: #fff9fb 0% 0% no-repeat padding-box;
+  border: 1px solid #ffd5e3;
 }
 
 .radio-circle {
   width: 20px;
   height: 20px;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #E3E3E3;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #e3e3e3;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1527,13 +1748,13 @@ select {
 }
 
 .radio-card.active .radio-circle {
-  border: 1px solid #F65189;
+  border: 1px solid #f65189;
 }
 
 .radio-inner {
   width: 12px;
   height: 12px;
-  background: #F65189 0% 0% no-repeat padding-box;
+  background: #f65189 0% 0% no-repeat padding-box;
   border-radius: 50%;
 }
 
@@ -1546,7 +1767,10 @@ select {
 
 .radio-title {
   text-align: left;
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   line-height: 1;
   margin-bottom: 2px;
@@ -1554,34 +1778,40 @@ select {
 
 .radio-subtitle {
   text-align: left;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #4D4D4D;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #4d4d4d;
   line-height: 1;
 }
 
 .radio-badge {
   width: 48px;
   height: 24px;
-  background: #ECECEC 0% 0% no-repeat padding-box;
+  background: #ececec 0% 0% no-repeat padding-box;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
 
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #4D4D4D;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #4d4d4d;
 }
 
 .radio-card.active .radio-badge {
-  background: #FFD5E3 0% 0% no-repeat padding-box;
-  color: #F65189;
+  background: #ffd5e3 0% 0% no-repeat padding-box;
+  color: #f65189;
 }
 
 .btn-print-outline {
   width: 298px;
   height: 46px;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
-  border: 1px solid #F65189;
+  background: #ffffff 0% 0% no-repeat padding-box;
+  border: 1px solid #f65189;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -1591,7 +1821,7 @@ select {
 }
 
 .btn-print-outline:hover:not(:disabled) {
-  background: #FFF5F8;
+  background: #fff5f8;
 }
 
 .btn-print-outline:disabled {
@@ -1601,8 +1831,11 @@ select {
 }
 
 .btn-print-text {
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #F65189;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #f65189;
 }
 
 .btn-print-outline:disabled .btn-print-text {
@@ -1650,26 +1883,29 @@ select {
   width: 100%;
   height: 46px;
   padding: 0 15px;
-  background: #F9F9F9;
-  border: 1px solid #E3E3E3;
+  background: #f9f9f9;
+  border: 1px solid #e3e3e3;
   border-radius: 6px;
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
-  font: normal normal normal 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #333;
   display: flex;
   align-items: center;
 }
 
 .layer-item-btn:hover {
-  background: #F0F0F0;
+  background: #f0f0f0;
 }
 
 .layer-item-btn.active {
-  background: #FFF5F8;
-  border-color: #F65189;
-  color: #F65189;
+  background: #fff5f8;
+  border-color: #f65189;
+  color: #f65189;
   font-weight: bold;
 }
 
@@ -1686,7 +1922,7 @@ select {
   font-size: 18px;
   color: #d32f2f;
   font-weight: bold;
-  font-family: "TH Sarabun New", "Sarabun", sans-serif;
+  font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
 }
 
 .btn-reset-project {
@@ -1701,7 +1937,7 @@ select {
   color: #f44336;
   border-radius: 6px;
   font-size: 18px;
-  font-family: "TH Sarabun New", "Sarabun", sans-serif;
+  font-family: 'TH Sarabun New', 'Sarabun', sans-serif;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease-in-out;

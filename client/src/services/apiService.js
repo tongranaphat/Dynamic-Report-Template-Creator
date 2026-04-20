@@ -1,14 +1,22 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
+const currentOrigin = window.location.origin;
+
+let envApiUrl = import.meta.env.VITE_API_URL || '/api';
+
+if (envApiUrl.includes('localhost') || envApiUrl.includes('127.0.0.1')) {
+  envApiUrl = '/api';
+}
+
+const API_BASE = `${currentOrigin.replace(/:\d+$/, '')}:4010${envApiUrl}`;
 const BACKEND_BASE = API_BASE.replace('/api', '');
 
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
-  },
+    'Content-Type': 'application/json'
+  }
 });
 
 api.interceptors.request.use(
@@ -33,7 +41,6 @@ api.interceptors.response.use(
 );
 
 export const apiService = {
-  // ─── Variables ──────────────────────────────────────────
   async getVariables() {
     const response = await api.get('/variables');
     return response.data;
@@ -44,13 +51,11 @@ export const apiService = {
     return response.data;
   },
 
-  // ─── Signatories ───────────────────────────────────────
   async getSignatories() {
     const response = await api.get('/signatories');
     return response.data;
   },
 
-  // ─── Templates ─────────────────────────────────────────
   async getTemplates(userId = null) {
     const params = userId ? { userId } : {};
     const response = await api.get('/templates', { params });
@@ -82,7 +87,6 @@ export const apiService = {
     return response.data;
   },
 
-  // ─── Reports (History) ─────────────────────────────────
   async getReports() {
     const response = await api.get('/reports');
     return response.data;
@@ -108,7 +112,6 @@ export const apiService = {
     return response.data;
   },
 
-  // ─── Report Instances ──────────────────────────────────
   async createReportInstance(reportInstanceData) {
     const response = await api.post('/report-instances', reportInstanceData);
     return response.data;
@@ -135,7 +138,6 @@ export const apiService = {
     return response.data;
   },
 
-  // ─── Assets ────────────────────────────────────────────
   async getAssets() {
     const response = await api.get('/assets');
     return response.data;
@@ -153,7 +155,6 @@ export const apiService = {
     return response.data;
   },
 
-  // ─── PDF Operations ────────────────────────────────────
   async importPdfFromUrl(url) {
     const response = await api.post('/pdf/import-url', { url });
     return response.data;
@@ -200,7 +201,6 @@ export const apiService = {
     return response.data;
   },
 
-  // ─── Utilities ─────────────────────────────────────────
   async downloadBlob(url) {
     const fullUrl = url.startsWith('http') ? url : `${BACKEND_BASE}${url}`;
     const response = await api.get(fullUrl, { responseType: 'blob', baseURL: '' });
@@ -212,7 +212,6 @@ export const apiService = {
     return response.data;
   },
 
-  /** Get the backend base URL (without /api) */
   getBackendBase() {
     return BACKEND_BASE;
   }

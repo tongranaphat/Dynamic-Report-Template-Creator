@@ -57,9 +57,7 @@ const getVariables = asyncHandler(async (req, res) => {
         where: {
             OR: [{ scope: 'GLOBAL' }, { scope: 'USER' }]
         },
-        orderBy: [
-            { label: 'asc' }
-        ]
+        orderBy: [{ label: 'asc' }]
     });
 
     if (variables.length === 0) {
@@ -79,7 +77,7 @@ const getVariables = asyncHandler(async (req, res) => {
             { id: '13', key: 'grade_level', label: 'ระดับชั้น', scope: 'GLOBAL' }
         ];
 
-        const categorizedMockVariables = mockVariables.map(v => {
+        const categorizedMockVariables = mockVariables.map((v) => {
             let category = 'GENERAL';
             if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
                 category = 'STUDENT INFO';
@@ -98,7 +96,7 @@ const getVariables = asyncHandler(async (req, res) => {
         return res.json(categorizedMockVariables);
     }
 
-    const categorizedVariables = variables.map(v => {
+    const categorizedVariables = variables.map((v) => {
         let category = 'GENERAL';
         if (v.key.includes('student') || v.key.includes('school_year') || v.key.includes('student_class')) {
             category = 'STUDENT INFO';

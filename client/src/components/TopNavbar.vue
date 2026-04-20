@@ -1,15 +1,15 @@
 <template>
   <header class="top-navbar">
     <div class="navbar-left">
-      <h1 class="app-title" @click="$emit('go-home')" style="cursor: pointer;" title="หน้าหลัก">สร้างเทมเพลตรายงาน</h1>
+      <h1 class="app-title" @click="$emit('go-home')" style="cursor: pointer" title="หน้าหลัก">
+        สร้างเทมเพลตรายงาน
+      </h1>
     </div>
 
     <div class="navbar-right">
       <div class="undo-redo-group">
-        <button @click="$emit('undo')" class="action-btn-text" title="ย้อนกลับ">
-        </button>
-        <button @click="$emit('redo')" class="action-btn-text" title="ทำซ้ำ">
-        </button>
+        <button @click="$emit('undo')" class="action-btn-text" title="ย้อนกลับ"></button>
+        <button @click="$emit('redo')" class="action-btn-text" title="ทำซ้ำ"></button>
       </div>
       <div class="zoom-group">
         <button @click="$emit('zoom-out')" class="btn-zoom-out" title="ซูมออก">
@@ -42,11 +42,10 @@
         <button @click="$emit('toggle-preview')" class="preview-btn" :disabled="isGenerating">
           <span :class="isPreviewMode ? 'icon-edit' : 'icon-eye'"></span>
           <span class="preview-text">
-            {{ isGenerating ? 'สร้าง...' : (isPreviewMode ? 'แก้ไข' : 'ดูตัวอย่าง') }}
+            {{ isGenerating ? 'สร้าง...' : isPreviewMode ? 'แก้ไข' : 'ดูตัวอย่าง' }}
           </span>
         </button>
       </div>
-
     </div>
   </header>
 </template>
@@ -67,14 +66,7 @@ defineProps({
   }
 });
 
-defineEmits([
-  'go-home',
-  'undo',
-  'redo',
-  'zoom-in',
-  'zoom-out',
-  'toggle-preview'
-]);
+defineEmits(['go-home', 'undo', 'redo', 'zoom-in', 'zoom-out', 'toggle-preview']);
 </script>
 
 <style scoped>
@@ -84,9 +76,9 @@ defineEmits([
   left: 0;
   right: 0;
   height: 69px;
-  background: #FFFFFF;
-  border-top: 3.5px solid #2196F3;
-  border-bottom: 1px solid #E3E3E3;
+  background: #ffffff;
+  border-top: 3.5px solid #2196f3;
+  border-bottom: 1px solid #e3e3e3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -106,7 +98,10 @@ defineEmits([
 
 .app-title {
   text-align: left;
-  font: normal normal bold 26px/34px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 26px/34px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   color: #000000;
   opacity: 1;
@@ -145,14 +140,14 @@ defineEmits([
 .zoom-out-icon {
   width: 13px;
   height: 1px;
-  background: #4D4D4D;
+  background: #4d4d4d;
 }
 
 .zoom-value-box {
   width: 72px;
   height: 39px;
-  background: #FFFFFF;
-  border: 1px solid #E3E3E3;
+  background: #ffffff;
+  border: 1px solid #e3e3e3;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -163,7 +158,10 @@ defineEmits([
   width: 35px;
   height: 26px;
   text-align: center;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   margin-top: 1px;
 }
@@ -182,9 +180,9 @@ defineEmits([
 
 .zoom-in-icon::before,
 .zoom-in-icon::after {
-  content: "";
+  content: '';
   position: absolute;
-  background: #4D4D4D;
+  background: #4d4d4d;
 }
 
 .zoom-in-icon::before {
@@ -238,7 +236,10 @@ defineEmits([
 .action-text {
   height: 26px;
   text-align: left;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   color: #000000;
   white-space: nowrap;
 }
@@ -246,7 +247,7 @@ defineEmits([
 .divider-v {
   width: 1px;
   height: 49px;
-  background: #E3E3E3;
+  background: #e3e3e3;
   margin: 0 32px 0 46px;
 }
 
@@ -258,7 +259,7 @@ defineEmits([
 .preview-btn {
   width: 105px;
   height: 39px;
-  background: #F65189;
+  background: #f65189;
   border-radius: 6px;
   border: none;
   display: flex;
@@ -291,8 +292,11 @@ defineEmits([
 .preview-text {
   height: 26px;
   text-align: left;
-  font: normal normal normal 20px/28px "TH Sarabun New", "Sarabun", sans-serif;
-  color: #FFFFFF;
+  font:
+    normal normal normal 20px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
+  color: #ffffff;
   white-space: nowrap;
 }
 </style>

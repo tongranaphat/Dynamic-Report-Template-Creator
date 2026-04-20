@@ -22,22 +22,17 @@ const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
 
-
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost:5173'];
-
-app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
-        }
-        return callback(null, true);
-    },
-    credentials: true
-}));
+app.use(
+    cors({
+        origin: function (origin, callback) {
+            callback(null, true);
+        },
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Machine-ID', 'Accept', 'Origin', 'X-Requested-With'],
+        credentials: true,
+        optionsSuccessStatus: 200
+    })
+);
 
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
@@ -52,12 +47,24 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    next();
-}, express.static(uploadsDir));
+app.use(
+    '/uploads',
+    (req, res, next) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        next();
+    },
+    express.static(uploadsDir)
+);
+
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'Dynamic Report API is running perfectly! 🚀',
+        endpoints: '/api'
+    });
+});
 
 app.use('/api', healthRoutes);
 app.use('/api', templateRoutes);

@@ -1,6 +1,9 @@
 import { ref, computed, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import * as pdfjsLib from 'pdfjs-dist';
+
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 import { fabric } from 'fabric';
 import { useEditorStore } from '../stores/editorStore';
 import { apiService } from '../services/apiService';
@@ -10,14 +13,14 @@ import { CANVAS_CONSTANTS } from '../constants/canvas';
 export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const { resetHistory, saveHistory, setHistoryLock } = canvasHelpers;
 
-  // Callback injection — EditorView will set these after defining the functions
   const _templateCallbacks = {
     saveCurrentPageState: null,
     renderAllPages: null
   };
 
   const setTemplateCallbacks = (cbs = {}) => {
-    if (cbs.saveCurrentPageState) _templateCallbacks.saveCurrentPageState = cbs.saveCurrentPageState;
+    if (cbs.saveCurrentPageState)
+      _templateCallbacks.saveCurrentPageState = cbs.saveCurrentPageState;
     if (cbs.renderAllPages) _templateCallbacks.renderAllPages = cbs.renderAllPages;
   };
 
@@ -39,7 +42,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const currentBackground = ref(null);
   const originalObjectStates = ref({});
   const isPagesSidebarOpen = ref(false);
-
 
   const cleanFabricObject = (obj) => {
     if (!obj) return obj;
@@ -136,7 +138,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
             const binaryString = atob(base64Str);
             let jsonStr;
 
-            if (binaryString.charCodeAt(0) === 0xFE && binaryString.charCodeAt(1) === 0xFF) {
+            if (binaryString.charCodeAt(0) === 0xfe && binaryString.charCodeAt(1) === 0xff) {
               const buf = new Uint8Array(binaryString.length - 2);
               for (let i = 2; i < binaryString.length; i++) buf[i - 2] = binaryString.charCodeAt(i);
               jsonStr = new TextDecoder('utf-16be').decode(buf);
@@ -174,7 +176,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
         const cvs = document.createElement('canvas');
         cvs.width = viewportForImage.width;
         cvs.height = viewportForImage.height;
-        await page.render({ canvasContext: cvs.getContext('2d'), viewport: viewportForImage }).promise;
+        await page.render({ canvasContext: cvs.getContext('2d'), viewport: viewportForImage })
+          .promise;
         images.push({
           dataUrl: cvs.toDataURL('image/jpeg', 0.8),
           width: origViewport.width,
@@ -188,13 +191,13 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     return images;
   };
 
-
   const fetchVariables = editorStore.fetchVariables;
   const fetchTemplates = editorStore.fetchTemplates;
 
   const saveReport = async (isSilent = false) => {
     if (!canvas.value) return;
-    if (typeof _templateCallbacks.saveCurrentPageState === 'function') _templateCallbacks.saveCurrentPageState();
+    if (typeof _templateCallbacks.saveCurrentPageState === 'function')
+      _templateCallbacks.saveCurrentPageState();
 
     const pagesData = preparePagesForSave();
     const payload = {
@@ -202,7 +205,7 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       templateId: currentTemplateId.value,
       name: templateName.value || 'Untitled Project',
       pages: pagesData,
-      pageDimensions: pages.value.map(p => ({ width: p.width, height: p.height })),
+      pageDimensions: pages.value.map((p) => ({ width: p.width, height: p.height })),
       status: 'DRAFT'
     };
 
@@ -218,13 +221,14 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
   const saveTemplate = async (isSilent = false) => {
     if (!canvas.value) return;
-    if (typeof _templateCallbacks.saveCurrentPageState === 'function') _templateCallbacks.saveCurrentPageState();
+    if (typeof _templateCallbacks.saveCurrentPageState === 'function')
+      _templateCallbacks.saveCurrentPageState();
 
     const pagesData = preparePagesForSave();
     const payload = {
       name: templateName.value || 'Untitled Template',
       pages: pagesData,
-      pageDimensions: pages.value.map(p => ({ width: p.width, height: p.height })),
+      pageDimensions: pages.value.map((p) => ({ width: p.width, height: p.height })),
       userId: getMachineId()
     };
 
@@ -232,19 +236,17 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       if (currentTemplateId.value) {
         await apiService.updateTemplate(currentTemplateId.value, payload);
         if (!isSilent) {
-
           showNotification('Template Updated successfully!', 'success');
         }
       } else {
         const response = await apiService.saveTemplate(payload);
         const templateId = response?.data?.id || response?.id || response;
-        currentTemplateId.value = typeof templateId === 'string' ? templateId : String(templateId || '');
+        currentTemplateId.value =
+          typeof templateId === 'string' ? templateId : String(templateId || '');
         if (!isSilent) {
-
           showNotification('Template Saved successfully!', 'success');
         }
       }
-
     } catch (e) {
       const errorMsg = 'Save Template failed: ' + (e.response?.data || e.message);
       if (!isSilent) {
@@ -258,7 +260,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const loadTemplate = async (t) => {
     if (!canvas.value) return;
 
-    currentTemplateId.value = typeof (t._id || t.id) === 'string' ? (t._id || t.id) : String(t._id || t.id || '');
+    currentTemplateId.value =
+      typeof (t._id || t.id) === 'string' ? t._id || t.id : String(t._id || t.id || '');
     currentReportId.value = null;
     templateName.value = t.name;
     isPreviewMode.value = false;
@@ -275,10 +278,6 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
 
       if (typeof _templateCallbacks.renderAllPages === 'function') {
         _templateCallbacks.renderAllPages();
-      }
-
-      if (typeof window !== 'undefined' && window.history) {
-        window.history.pushState({}, '', `/template/${currentTemplateId.value}`);
       }
     } catch (error) {
       console.error('Error loading template:', error);
@@ -319,14 +318,12 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     canvas.value.requestRenderAll();
   };
 
-
   const addBlankPage = () => {
     if (pages.value.length > 0 && typeof _templateCallbacks.saveCurrentPageState === 'function') {
       _templateCallbacks.saveCurrentPageState();
     }
     editorStore.addBlankPage();
   };
-
 
   const deleteTemplate = async (id) => {
     if (!confirm('Delete this template?')) return;
@@ -471,7 +468,9 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     const trimmed = name.trim();
     if (!trimmed) return;
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
-      alert(`Invalid variable name "${trimmed}". Use letters, numbers, and underscores only. Must start with a letter or underscore.`);
+      alert(
+        `Invalid variable name "${trimmed}". Use letters, numbers, and underscores only. Must start with a letter or underscore.`
+      );
       return;
     }
     const alreadyExists = variables.value.some((v) => v.key === trimmed);
@@ -495,10 +494,12 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       try {
         const options = {
           suggestedName: defaultFileName,
-          types: [{
-            description: 'PDF File',
-            accept: { 'application/pdf': ['.pdf'] }
-          }]
+          types: [
+            {
+              description: 'PDF File',
+              accept: { 'application/pdf': ['.pdf'] }
+            }
+          ]
         };
         const fileHandle = await window.showSaveFilePicker(options);
         const writable = await fileHandle.createWritable();
@@ -573,95 +574,131 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
       if (currentTemplateId.value) {
         await apiService.updateTemplate(currentTemplateId.value, payload);
         if (!isSilent) {
-
           showNotification('Template Updated successfully!', 'success');
         }
       } else {
         const response = await apiService.saveTemplate(payload);
         const templateId = response?.data?.id || response?.id || response;
-        currentTemplateId.value = typeof templateId === 'string' ? templateId : String(templateId || '');
+        currentTemplateId.value =
+          typeof templateId === 'string' ? templateId : String(templateId || '');
         if (!isSilent) {
-
           showNotification('Template Saved successfully!', 'success');
         }
       }
     } catch (e) {
       console.warn('Silent DB save failed:', e);
-
     }
   };
 
-  const handleUnifiedImport = async (e) => {
-    try {
-      const [fileHandle] = await window.showOpenFilePicker({
-        types: [
-          {
-            description: 'All Supported Configuration',
-            accept: {
-              'application/pdf': ['.pdf'],
-              'application/json': ['.json', '.drt'],
-              'image/*': ['.png', '.jpg', '.jpeg']
-            }
-          }
-        ],
-        multiple: false
-      });
-
-      const file = await fileHandle.getFile();
-      currentFileHandle.value = fileHandle;
-
-      if (!isWorkspaceEmpty()) {
-        if (!confirm('Replace current workspace?')) return;
-      }
-
-      if (
-        file.type === 'application/json' ||
-        file.name.endsWith('.json') ||
-        file.name.endsWith('.drt')
-      ) {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        await loadProjectData(data, file.name);
-        return;
-      }
-
-      if (file.type === 'application/pdf') {
-        const formData = new FormData();
-        formData.append('file', file);
+  const handleUnifiedImport = async () => {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.pdf,.json,.drt,.png,.jpg,.jpeg';
+      input.onchange = async (evt) => {
+        const file = evt.target.files[0];
+        if (!file) return resolve(false);
         try {
-          const res = await apiService.uploadPdf(formData);
-          const savedFileId = res.id;
+          if (!isWorkspaceEmpty()) {
+            if (!confirm('Replace current workspace?')) return resolve(false);
+          }
 
-          window.history.pushState({}, '', `/pdf/${savedFileId}`);
-          window.location.reload();
-        } catch (error) {
-          console.error('Upload failed:', error);
-        }
-        return;
-      }
+          if (
+            file.type === 'application/json' ||
+            file.name.endsWith('.json') ||
+            file.name.endsWith('.drt')
+          ) {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            await loadProjectData(data, file.name);
+            return resolve(true);
+          }
 
-      if (file.type.startsWith('image/')) {
-        await resetCanvas();
-        const reader = new FileReader();
-        reader.onload = (f) => {
-          pages.value = [
-            {
-              id: Date.now(),
-              background: f.target.result,
-              objects: [],
-              originalBackgroundType: 'Picture'
+          if (file.type === 'application/pdf') {
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+              const res = await apiService.uploadPdf(formData);
+              const savedFileId = res.id;
+
+              const backendUrl = apiService.getBackendBase();
+              const workspaceData = await apiService.prepareWorkspace(savedFileId);
+
+              await resetCanvas();
+
+              if (workspaceData.editState) {
+                let parsedState = workspaceData.editState;
+                while (typeof parsedState === 'string') parsedState = JSON.parse(parsedState);
+                pages.value = sanitizePagesData(parsedState);
+              } else {
+                const blobData = await apiService.downloadBlob(workspaceData.tempPath);
+                const downloadedFile = new File([blobData], file.name, { type: 'application/pdf' });
+                const images = await processPdfToImages(downloadedFile);
+                if (images.length > 0) {
+                  pages.value = images.map((imgObj, idx) => ({
+                    id: Date.now() + idx,
+                    background: imgObj.dataUrl,
+                    width: imgObj.width,
+                    height: imgObj.height,
+                    objects: [],
+                    originalBackgroundType: 'PDF'
+                  }));
+                }
+              }
+
+              currentPageIndex.value = 0;
+              templateName.value = file.name.replace(/\.pdf$/i, '');
+
+              if (typeof window !== 'undefined' && window.history) {
+                window.history.pushState({}, '', `/pdf/${savedFileId}`);
+              }
+            } catch (uploadError) {
+              console.error('Upload failed:', uploadError);
+
+              await resetCanvas();
+              const images = await processPdfToImages(file);
+              if (images.length > 0) {
+                pages.value = images.map((imgObj, idx) => ({
+                  id: Date.now() + idx,
+                  background: imgObj.dataUrl,
+                  width: imgObj.width,
+                  height: imgObj.height,
+                  objects: [],
+                  originalBackgroundType: 'PDF'
+                }));
+                currentPageIndex.value = 0;
+              }
             }
-          ];
-          currentPageIndex.value = 0;
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Import Failed', err);
-        alert('Import Failed: ' + err.message);
-      }
-    }
+            return resolve(true);
+          }
+
+          if (file.type.startsWith('image/')) {
+            await resetCanvas();
+            const reader = new FileReader();
+            reader.onload = (f) => {
+              pages.value = [
+                {
+                  id: Date.now(),
+                  background: f.target.result,
+                  objects: [],
+                  originalBackgroundType: 'Picture'
+                }
+              ];
+              currentPageIndex.value = 0;
+            };
+            reader.readAsDataURL(file);
+            return resolve(true);
+          }
+
+          resolve(false);
+        } catch (err) {
+          console.error('Import Failed:', err);
+          alert('Import Failed: ' + err.message);
+          resolve(false);
+        }
+      };
+      input.click();
+    });
   };
 
   const loadProjectData = async (data, filename) => {
@@ -741,6 +778,5 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     processPdfToImages,
     saveFileWithFallback,
     setTemplateCallbacks
-
   };
 }

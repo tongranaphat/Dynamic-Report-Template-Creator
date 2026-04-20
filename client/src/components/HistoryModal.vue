@@ -1,7 +1,6 @@
 <template>
   <div class="modal-overlay" @click="$emit('close')">
     <div class="modal-content" @click.stop>
-
       <div class="modal-header">
         <h2 class="modal-header-text">ประวัติการสร้างรายงาน</h2>
         <button class="close-btn" @click="$emit('close')">×</button>
@@ -16,16 +15,15 @@
           <table class="history-table">
             <thead>
               <tr class="table-row header-row">
-                <th class="cell-center-bold" style="width: 60px;">#</th>
-                <th class="cell-center-bold" style="width: 160px;">วันที่สร้าง</th>
+                <th class="cell-center-bold" style="width: 60px">#</th>
+                <th class="cell-center-bold" style="width: 160px">วันที่สร้าง</th>
                 <th class="cell-center-bold">ชื่อเทมเพลต</th>
-                <th class="cell-center-bold" style="width: 120px;">สถานะ</th>
-                <th class="cell-center-bold" style="width: 180px;">จัดการ</th>
+                <th class="cell-center-bold" style="width: 120px">สถานะ</th>
+                <th class="cell-center-bold" style="width: 180px">จัดการ</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(instance, index) in reportInstances" :key="instance.id" class="table-row">
-
                 <td class="cell-center">{{ index + 1 }}</td>
                 <td class="cell-center">{{ formatDate(instance.createdAt) }}</td>
 
@@ -56,7 +54,6 @@
           </table>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -160,7 +157,7 @@ const editReport = (instance) => {
 
 .modal-content {
   position: relative;
-  background: #FFFFFF 0% 0% no-repeat padding-box;
+  background: #ffffff 0% 0% no-repeat padding-box;
   border-radius: 0;
   margin-top: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -177,7 +174,7 @@ const editReport = (instance) => {
   display: flex;
   align-items: center;
   padding: 20px 30px;
-  border-bottom: 1px solid #E3E3E3;
+  border-bottom: 1px solid #e3e3e3;
   width: 100%;
   box-sizing: border-box;
 }
@@ -185,7 +182,10 @@ const editReport = (instance) => {
 .modal-header h2,
 .modal-header-text {
   text-align: left;
-  font: normal normal bold 25px/35px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 25px/35px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   color: #000000;
   margin: 0;
@@ -214,7 +214,7 @@ const editReport = (instance) => {
 }
 
 .close-btn:hover {
-  color: #E74C3C;
+  color: #e74c3c;
 }
 
 .modal-body {
@@ -228,7 +228,10 @@ const editReport = (instance) => {
   text-align: center;
   padding: 40px;
   color: #666;
-  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
 }
 
 .table-container {
@@ -243,25 +246,28 @@ const editReport = (instance) => {
 
 .history-table th,
 .history-table td {
-  border: 1px solid #E3E3E3;
+  border: 1px solid #e3e3e3;
   padding: 0 10px;
   vertical-align: middle;
 }
 
 .table-row {
   height: 53px;
-  border: 1px solid #E3E3E3;
+  border: 1px solid #e3e3e3;
   opacity: 1;
   transition: background-color 0.2s;
 }
 
 .table-row:hover:not(.header-row) {
-  background-color: #F9F9F9;
+  background-color: #f9f9f9;
 }
 
 .cell-center-bold {
   text-align: center;
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   color: #000000;
   opacity: 1;
@@ -269,7 +275,10 @@ const editReport = (instance) => {
 
 .cell-center {
   text-align: center;
-  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   color: #000000;
   opacity: 1;
@@ -277,7 +286,10 @@ const editReport = (instance) => {
 
 .cell-left {
   text-align: left;
-  font: normal normal normal 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal normal 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   color: #000000;
   padding-left: 15px !important;
@@ -285,21 +297,24 @@ const editReport = (instance) => {
 }
 
 .status-text {
-  font: normal normal bold 21px/28px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 21px/28px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
   opacity: 1;
 }
 
 .status-text.inuse {
-  color: #349A53;
+  color: #349a53;
 }
 
 .status-text.draft {
-  color: #F39C12;
+  color: #f39c12;
 }
 
 .status-text.failed {
-  color: #E74C3C;
+  color: #e74c3c;
 }
 
 .action-buttons {
@@ -330,7 +345,7 @@ const editReport = (instance) => {
 .btn-edit {
   width: 71px;
   height: 30px;
-  background: #427EB1 0% 0% no-repeat padding-box;
+  background: #427eb1 0% 0% no-repeat padding-box;
   border-radius: 6px;
 }
 
@@ -343,7 +358,7 @@ const editReport = (instance) => {
 .btn-delete {
   width: 55px;
   height: 30px;
-  background: #E74C3C 0% 0% no-repeat padding-box;
+  background: #e74c3c 0% 0% no-repeat padding-box;
   border-radius: 6px;
 }
 
@@ -357,14 +372,17 @@ const editReport = (instance) => {
   padding: 0 10px;
   height: 30px;
   border-radius: 6px;
-  background: #2E7D32;
+  background: #2e7d32;
 }
 
 .btn-action-text {
   text-align: left;
-  font: normal normal bold 18px/24px "TH Sarabun New", "Sarabun", sans-serif;
+  font:
+    normal normal bold 18px/24px 'TH Sarabun New',
+    'Sarabun',
+    sans-serif;
   letter-spacing: 0px;
-  color: #FFFFFF;
+  color: #ffffff;
   opacity: 1;
 }
 
