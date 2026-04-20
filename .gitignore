@@ -19,12 +19,15 @@ build
 out
 
 # Environment Variables
+.env
 .env.*
 !.env.example
 !.env.sample
 
 # Server Uploads (User Data)
+server/uploads/*
 !server/uploads/.gitkeep
+client/src/assets/uploads/* 
 
 # Editor directories and files
 .vscode/*
