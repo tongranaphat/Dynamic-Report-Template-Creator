@@ -101,7 +101,7 @@ import HistoryModal from '../components/HistoryModal.vue';
 import { useCanvas } from '../composables/useCanvas';
 import { useTemplate } from '../composables/useTemplate';
 import { useCanvasEvents } from '../composables/useCanvasEvents';
-import { useRealTime } from '../composables/useRealTime';
+
 import { useEditablePdf } from '../composables/useEditablePdf';
 import { usePreviewData } from '../composables/usePreviewData';
 import { useEditorStore } from '../stores/editorStore';
@@ -145,7 +145,7 @@ const triggerTempCleanup = () => {
   const idToClean = activePdfId || (currentPdfId.value !== 'pdf' ? currentPdfId.value : null);
 
   if (idToClean && idToClean !== 'pdf') {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
     const url = `${apiUrl}/pdf/cleanup-temp/${idToClean}`;
 
     if (navigator.sendBeacon) {
@@ -161,7 +161,7 @@ const triggerTempCleanup = () => {
 const fetchReports = async () => {
   try {
     const res = await axios.get(
-      `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/reports`
+      `${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/reports`
     );
     reportHistory.value = res.data;
   } catch (e) {
@@ -177,7 +177,7 @@ const openHistoryModal = async () => {
 const openReportFromHistory = async (instance) => {
   if (!confirm('การดำเนินการนี้จะแทนที่โปรเจกต์ปัจจุบัน คุณต้องการดำเนินการต่อหรือไม่?')) return;
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
     const res = await axios.get(`${apiUrl}/reports/${instance.id}`);
 
     if (res.data) {
@@ -208,7 +208,7 @@ const openReportFromHistory = async (instance) => {
 const handleDeleteReport = async (instance) => {
   if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายงาน "${instance.name}"?`)) return;
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
     await axios.delete(`${apiUrl}/reports/${instance.id}`);
     await fetchReports();
   } catch (e) {
@@ -231,7 +231,7 @@ const handleUrlImport = async (url) => {
 
     const filepath = response.data.FilePath || response.data.filepath;
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
     const backendUrl = apiUrl.replace('/api', '');
 
     const fileResponse = await fetch(`${backendUrl}${filepath}`);
@@ -356,7 +356,8 @@ const {
   unifiedSave,
   handleUnifiedImport,
   ensureFileHandle,
-  processPdfToImages
+  processPdfToImages,
+  saveFileWithFallback
 } = useTemplate(canvas, zoomLevel, canvasHelpers);
 
 if (setHistoryContext) setHistoryContext(pages, currentPageIndex);
@@ -368,7 +369,6 @@ const { initCanvasEvents } = useCanvasEvents(
   saveHistory,
   setHistoryLock
 );
-const { connect, emitUpdate } = useRealTime();
 const { generateHybridPdfBlob, captureCanvasPageSafe } = useEditablePdf();
 
 const { getMockData } = usePreviewData();
@@ -613,7 +613,7 @@ const handleSaveProject = async () => {
             pdfUrl: savedData.filepath || null,
             templateId: currentTemplateId.value || null
           };
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
           await axios.post(`${apiUrl}/reports`, historyPayload);
 
           if (typeof fetchReports === 'function') fetchReports();
@@ -799,16 +799,20 @@ const handleExport = async () => {
 
       const pdfBlob = await generateHybridPdfBlob(canvasImages, exportProjectData, variableMap, null, 'report', pdfMode.value);
 
-      const options = {
-        suggestedName: `${templateName.value || 'report'}.pdf`
-      };
-      const newHandle = await window.showSaveFilePicker(options);
+      const defaultFileName = `${templateName.value || 'report'}.pdf`;
+      const saveResult = await saveFileWithFallback(pdfBlob, defaultFileName);
 
-      const writable = await newHandle.createWritable();
-      await writable.write(pdfBlob);
-      await writable.close();
+      if (!saveResult.success) {
+        if (saveResult.aborted) {
+          return;
+        }
+        throw new Error('Save failed');
+      }
 
-      currentFileHandle.value = newHandle;
+      const newHandle = saveResult.handle;
+      if (newHandle) {
+        currentFileHandle.value = newHandle;
+      }
 
       try {
         const finalName = templateName.value || 'Untitled Report';
@@ -817,11 +821,11 @@ const handleExport = async () => {
           name: finalName,
           pages: pages.value,
           data: JSON.stringify(pages.value),
-          pdfUrl: newHandle.name || null,
+          pdfUrl: newHandle ? newHandle.name : defaultFileName,
           templateId: currentTemplateId.value || null
         };
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
         const response = await axios.post(`${apiUrl}/reports`, historyPayload);
 
         if (response.data && response.data.id) {
@@ -1534,7 +1538,7 @@ const handleRouteChange = async () => {
     if (externalUrl.startsWith('http:/') && !externalUrl.startsWith('http://')) externalUrl = externalUrl.replace('http:/', 'http://');
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-url`, { url: externalUrl });
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/pdf/import-url`, { url: externalUrl });
 
       const newPdfId = response.data.OriginalFileId || response.data.id || response.data.fileId;
 
@@ -1555,7 +1559,7 @@ const handleRouteChange = async () => {
   if (localPathMatch && localPathMatch[1]) {
     const localPath = localPathMatch[1];
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/pdf/import-local`, { localPath });
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/pdf/import-local`, { localPath });
 
       const newPdfId = response.data.OriginalFileId || response.data.id;
       if (newPdfId) {
@@ -1581,7 +1585,7 @@ const handleRouteChange = async () => {
     filepathParam = '/' + filepathParam.replace(/^\/+/, '');
 
     try {
-      const fileUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace('/api', '')}${filepathParam}`;
+      const fileUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:4010/api').replace('/api', '')}${filepathParam}`;
       const blobRes = await axios.get(fileUrl, { responseType: 'blob' });
 
       const filename = originalUrlParam || filepathParam.split('/').pop() || 'document.pdf';
@@ -1616,7 +1620,7 @@ const handleRouteChange = async () => {
     activePdfId = fileId;
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
       const backendUrl = apiUrl.replace('/api', '');
 
       const workspaceData = await apiService.prepareWorkspace(fileId);
@@ -1668,7 +1672,7 @@ const handleRouteChange = async () => {
   if (templateMatch && templateMatch[1]) {
     const templateId = templateMatch[1];
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/templates/${templateId}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/templates/${templateId}`);
 
       await loadTemplateWrapper(res.data);
     } catch (error) {
@@ -1681,7 +1685,7 @@ const handleRouteChange = async () => {
   if (historyMatch && historyMatch[1]) {
     const instanceId = historyMatch[1];
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/reports/${instanceId}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/reports/${instanceId}`);
       if (res.data) {
         const r = res.data;
         currentReportId.value = r.id;
@@ -1790,18 +1794,7 @@ onMounted(async () => {
     pages.value = [{ id: 0, background: null, objects: [] }];
   renderAllPages();
 
-  const roomId = currentTemplateId.value || 'default_room';
-  connect(roomId, (remoteJson) => {
-    loadFromSocket(remoteJson);
-  });
   connectionStatus.value = 'connected';
-  if (canvas.value) {
-    canvas.value.on('canvas:changed-by-user', (e) => {
-      if (!isRemoteUpdating) {
-        emitUpdate(roomId, e.json);
-      }
-    });
-  }
 
   const handleWheel = (e) => {
     if (e.ctrlKey) {

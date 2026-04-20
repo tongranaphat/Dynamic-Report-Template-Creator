@@ -105,7 +105,7 @@ const getStatusDisplay = (instance) => {
 const downloadReport = async (instance) => {
   if (instance.pdfUrl) {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
       const baseUrl = apiUrl.replace('/api', '');
       const fileUrl = `${baseUrl}${instance.pdfUrl}`;
 

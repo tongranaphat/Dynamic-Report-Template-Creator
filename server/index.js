@@ -4,12 +4,11 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
-const { Server } = require('socket.io');
+
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
 
 const logger = require('./utils/logger');
-const socketHandler = require('./sockets/socketHandler');
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
 const templateRoutes = require('./routes/templateRoutes');
@@ -22,12 +21,7 @@ const signatoryRoutes = require('./routes/signatoryRoutes');
 const app = express();
 const server = http.createServer(app);
 const prisma = new PrismaClient();
-const io = new Server(server, {
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
-    }
-});
+
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
@@ -74,14 +68,13 @@ app.use('/api', signatoryRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
-socketHandler(io);
 
 const startServer = async () => {
     try {
         await prisma.$connect();
         logger.success('Connected to Database');
 
-        const PORT = process.env.PORT || 3000;
+        const PORT = process.env.PORT || 4010;
 
         server.listen(PORT, () => {
             logger.success(`Server running on port ${PORT}`);
@@ -109,4 +102,4 @@ if (require.main === module) {
     startServer();
 }
 
-module.exports = { app, server, io };
+module.exports = { app, server };

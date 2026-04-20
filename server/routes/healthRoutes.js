@@ -44,7 +44,7 @@ router.get(
             },
             environment: {
                 NODE_ENV: process.env.NODE_ENV || 'development',
-                PORT: process.env.PORT || 3000,
+                PORT: process.env.PORT || 4010,
                 CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173'
             },
             timestamp: new Date().toISOString()

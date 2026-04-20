@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4010/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -118,7 +118,7 @@ export const apiService = {
   },
 
   importPdfFromUrl: async (url) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
     return await axios.post(`${apiUrl}/pdf/import-url`, { url });
   },
 

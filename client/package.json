@@ -33,7 +33,6 @@
     "prosemirror-model": "^1.25.4",
     "prosemirror-state": "^1.4.4",
     "prosemirror-view": "^1.41.6",
-    "socket.io-client": "^4.8.3",
     "uuid": "^13.0.0",
     "serve": "^14.2.6",
     "vue": "^3.5.24"

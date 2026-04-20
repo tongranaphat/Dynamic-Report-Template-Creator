@@ -10,7 +10,7 @@ import { CANVAS_CONSTANTS } from '../constants/canvas';
 
 export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
   const { resetHistory, saveHistory, setHistoryLock } = canvasHelpers;
-  const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:4010/api';
 
   const editorStore = useEditorStore();
   const {
@@ -169,9 +169,9 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
         cvs.height = viewportForImage.height;
         await page.render({ canvasContext: cvs.getContext('2d'), viewport: viewportForImage }).promise;
         images.push({
-            dataUrl: cvs.toDataURL('image/jpeg', 0.8),
-            width: origViewport.width,
-            height: origViewport.height
+          dataUrl: cvs.toDataURL('image/jpeg', 0.8),
+          width: origViewport.width,
+          height: origViewport.height
         });
       }
     } catch (e) {
@@ -484,6 +484,47 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     return `data:image/svg+xml;base64,${btoa('<svg width="79" height="112" xmlns="http://www.w3.org/2000/svg"><rect width="79" height="112" fill="white"/></svg>')}`;
   };
 
+  const saveFileWithFallback = async (blob, defaultFileName) => {
+    if (window.showSaveFilePicker) {
+      try {
+        const options = {
+          suggestedName: defaultFileName,
+          types: [{
+            description: 'PDF File',
+            accept: { 'application/pdf': ['.pdf'] }
+          }]
+        };
+        const fileHandle = await window.showSaveFilePicker(options);
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+
+        return { success: true, handle: fileHandle };
+      } catch (err) {
+        if (err.name === 'AbortError') return { success: false, aborted: true };
+        console.warn('File picker failed, falling back to classic download:', err);
+      }
+    }
+
+    try {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = defaultFileName;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      return { success: true, handle: null };
+    } catch (fallbackErr) {
+      console.error('Classic download failed:', fallbackErr);
+      return { success: false, aborted: false };
+    }
+  };
 
   const currentFileHandle = ref(null);
 
@@ -691,7 +732,8 @@ export function useTemplate(canvas, zoomLevel, canvasHelpers = {}) {
     unifiedSave,
     handleUnifiedImport,
     ensureFileHandle,
-    processPdfToImages
+    processPdfToImages,
+    saveFileWithFallback
 
   };
 }

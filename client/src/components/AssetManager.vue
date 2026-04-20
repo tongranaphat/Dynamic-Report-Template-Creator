@@ -42,10 +42,10 @@ const assets = ref([]);
 const loading = ref(false);
 
 const fetchAssets = async () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
   loading.value = true;
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/assets`);
+    const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/assets`);
     assets.value = res.data;
   } catch (err) {
     console.error('Failed to load assets', err);
@@ -63,8 +63,8 @@ const uploadAsset = async (event) => {
 
   loading.value = true;
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/assets/upload`, formData, {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
+    const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:4010/api'}/assets/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
@@ -85,7 +85,7 @@ const uploadAsset = async (event) => {
 
 const deleteAsset = async (asset) => {
   if (!confirm('ยืนยันระบบกำจัดการลบรูปภาพนี้?')) return;
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
 
   const targetId = asset.id || asset.url.split('/').pop();
   if (targetId) {

@@ -700,20 +700,7 @@ export function useCanvas() {
     canvas.value.requestRenderAll();
   };
 
-  const loadFromSocket = (json) => {
-    if (!canvas.value) return;
 
-    canvas.value.loadFromJSON(json, () => {
-      canvas.value.renderAll();
-      relinkSignatures();
-
-      document.fonts.ready.then(() => {
-        if (canvas.value) canvas.value.requestRenderAll();
-      });
-
-      canvas.value.fire('history:restored');
-    });
-  };
 
   const zoomIn = () => { zoomLevel.value = Math.min(3, zoomLevel.value + 0.1); };
   const zoomOut = () => { zoomLevel.value = Math.max(0.1, zoomLevel.value - 0.1); };
@@ -851,7 +838,7 @@ export function useCanvas() {
     onDrop,
     capturePageAsImage,
     updateCanvasZoom,
-    loadFromSocket,
+
     zoomIn,
     zoomOut,
     fitToScreen,
