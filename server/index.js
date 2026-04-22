@@ -61,7 +61,7 @@ app.use(
 app.get('/', (req, res) => {
     res.status(200).json({
         status: 'success',
-        message: 'Dynamic Report API is running perfectly! 🚀',
+        message: 'Dynamic Report API is running perfectly!',
         endpoints: '/api'
     });
 });
