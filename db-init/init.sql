@@ -219,9 +219,7 @@ COPY public."Template" (id, name, pages, preview, background, "isMaster", "owner
 -- Data for Name: User; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public."User" (id, username, password) FROM stdin;
 
-\.
 
 
 --

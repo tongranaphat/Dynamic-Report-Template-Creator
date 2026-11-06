@@ -44,7 +44,7 @@ const ensureUserExists = async (userId) => {
         create: {
             id: userId,
             username: userId,
-            password: 'REDACTED_CREDENTIAL'
+            password: process.env.SEED_USER_PASSWORD || require('crypto').randomBytes(32).toString('hex')
         }
     });
     return user ? user.id : null;

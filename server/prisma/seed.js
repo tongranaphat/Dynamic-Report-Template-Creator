@@ -45,9 +45,9 @@ async function main() {
             });
         };
 
-        const adminUser = await upsertUser('admin', 'REDACTED_CREDENTIAL');
-        const teacherUser = await upsertUser('teacher1', 'REDACTED_CREDENTIAL');
-        const studentUser = await upsertUser('student1', 'REDACTED_CREDENTIAL');
+        const adminUser = await upsertUser('admin', process.env.SEED_ADMIN_PASSWORD || require('crypto').randomBytes(32).toString('hex'));
+        const teacherUser = await upsertUser('teacher1', process.env.SEED_TEACHER1_PASSWORD || require('crypto').randomBytes(32).toString('hex'));
+        const studentUser = await upsertUser('student1', process.env.SEED_STUDENT1_PASSWORD || require('crypto').randomBytes(32).toString('hex'));
 
         console.log(`Users ready: admin, teacher1, student1`);
 
