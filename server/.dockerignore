@@ -1,0 +1,15 @@
+node_modules
+.git
+.env
+.env.*
+.env-*
+.env_*
+**/.env
+**/.env.*
+**/.env-*
+**/.env_*
+*.pem
+*.key
+npm-debug.log*
+uploads
+coverage

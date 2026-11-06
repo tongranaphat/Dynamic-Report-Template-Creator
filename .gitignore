@@ -65,3 +65,13 @@ verify-*.js
 find_missing_file.js
 restore_file.js
 cleanup.js
+
+# Local configuration and credentials
+.env
+.env.*
+.env-*
+.env_*
+!.env.example
+!.env.sample
+*.pem
+*.key
